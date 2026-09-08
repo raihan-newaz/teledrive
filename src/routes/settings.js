@@ -297,18 +297,36 @@ router.get('/export-db', async (req, res) => {
 
 /**
  * POST /api/settings/import-db
- * Upload and restore teledrive.db
+ * Upload and restore teledrive.db with integrity validation
  */
 router.post('/import-db', uploadDb.single('database'), async (req, res) => {
+  let uploadedPath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No database file provided' });
     }
-    const uploadedPath = req.file.path;
+    uploadedPath = req.file.path;
     const dbPath = path.join(__dirname, '../../data/teledrive.db');
     
+    // 1. Validate SQLite database file structure before replacing
+    const fileBuffer = await fsPromises.readFile(uploadedPath);
+    const initSqlJs = require('sql.js');
+    const SQL = await initSqlJs();
+    const testDb = new SQL.Database(fileBuffer);
+    
+    // Check tables
+    const testStmt = testDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'");
+    const hasFilesTable = testStmt.step();
+    testStmt.free();
+    testDb.close();
+
+    if (!hasFilesTable) {
+      throw new Error('Invalid TeleDrive database format');
+    }
+
+    // 2. Safe to replace active database
     await fsPromises.copyFile(uploadedPath, dbPath);
-    await fsPromises.unlink(uploadedPath);
+    try { await fsPromises.unlink(uploadedPath); } catch (e) {}
     await db.initialize();
 
     return res.json({
@@ -316,8 +334,11 @@ router.post('/import-db', uploadDb.single('database'), async (req, res) => {
       message: 'Database imported and restored successfully!'
     });
   } catch (error) {
+    if (uploadedPath && fs.existsSync(uploadedPath)) {
+      try { await fsPromises.unlink(uploadedPath); } catch (e) {}
+    }
     console.error('Error importing database:', error);
-    return res.status(500).json({ error: error.message || 'Failed to import database' });
+    return res.status(400).json({ error: error.message || 'Failed to import database: Invalid SQLite file' });
   }
 });
 
