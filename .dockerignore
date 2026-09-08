@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+data
+data/cache
+data/tmp
+data/session.txt
+data/teledrive.db
+*.log
+README.md

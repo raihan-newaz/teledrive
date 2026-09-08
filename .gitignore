@@ -1,0 +1,32 @@
+# Dependency directories
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment and Secrets (CRITICAL: Never commit to GitHub)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Runtime Application Data, Databases & Encrypted Sessions
+data/
+data/cache/
+data/tmp/
+data/session.txt
+data/teledrive.db*
+*.db
+*.dec
+
+# Logs and temporary files
+logs/
+*.log
+scratch/
+test_*.js
+
+# OS and Editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

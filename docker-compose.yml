@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  teledrive:
+    build: .
+    container_name: teledrive
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    volumes:
+      # Persistent SQLite Database, Cache & Session Storage
+      - ./data:/app/data
+      # Configuration and Encryption Keys
+      - ./.env:/app/.env
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/setup/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
