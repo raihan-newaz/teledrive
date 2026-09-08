@@ -1012,18 +1012,11 @@ const App = {
   },
 
   initSettings() {
-    // Open Settings button in toolbar & sidebar
+    // Open Settings button in toolbar
     const settingsBtn = document.getElementById('settings-btn');
-    const sidebarSettingsLink = document.getElementById('sidebar-settings-link');
 
     if (settingsBtn) {
       settingsBtn.onclick = (e) => {
-        e.preventDefault();
-        this.openSettings();
-      };
-    }
-    if (sidebarSettingsLink) {
-      sidebarSettingsLink.onclick = (e) => {
         e.preventDefault();
         this.openSettings();
       };
