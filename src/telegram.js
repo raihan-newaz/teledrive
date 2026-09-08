@@ -1,4 +1,4 @@
-const { TelegramClient } = require('telegram');
+const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const path = require('path');
 const fs = require('fs');
@@ -75,25 +75,44 @@ function getClient() {
  * @param {string} apiHash - Telegram API Hash
  * @param {string} botToken - Telegram Bot Token
  * @param {string} channelId - Channel ID to test access to
- * @returns {Promise<Object>} { success: boolean, error?: string }
+ * @returns {Promise<Object>} { success: boolean, error?: string, bot?: object }
  */
 async function testConnection(apiId, apiHash, botToken, channelId) {
+  let tempClient = null;
   try {
-    const tempClient = new TelegramClient(new StringSession(''), parseInt(apiId, 10), apiHash, {
-      connectionRetries: 1,
+    tempClient = new TelegramClient(new StringSession(''), parseInt(apiId, 10), apiHash, {
+      connectionRetries: 3,
     });
     
     await tempClient.start({
       botAuthToken: botToken,
     });
+
+    const me = await tempClient.getMe();
     
-    await tempClient.invoke(new Api.channels.GetChannels({
-      id: [channelId]
-    }));
+    // Test channel access
+    try {
+      await tempClient.getEntity(channelId);
+    } catch (e) {
+      try {
+        await tempClient.getEntity(BigInt(channelId));
+      } catch (e2) {
+        console.warn('[Telegram] Channel entity lookup warning:', e2.message);
+      }
+    }
     
     await tempClient.disconnect();
-    return { success: true };
+    return {
+      success: true,
+      bot: {
+        id: me ? (me.id ? me.id.toString() : '') : '',
+        username: me ? (me.username || me.firstName || 'Bot') : 'Bot'
+      }
+    };
   } catch (error) {
+    if (tempClient) {
+      try { await tempClient.disconnect(); } catch (e) {}
+    }
     return { success: false, error: error.message };
   }
 }

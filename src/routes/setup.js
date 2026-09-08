@@ -57,9 +57,9 @@ router.post('/validate', async (req, res) => {
         const valid = result.success;
 
         if (valid) {
-            return res.json({ valid: true });
+            return res.json({ valid: true, bot: result.bot || null });
         } else {
-            return res.status(400).json({ valid: false, error: 'Telegram validation failed with provided credentials' });
+            return res.status(400).json({ valid: false, error: result.error || 'Telegram validation failed with provided credentials' });
         }
     } catch (error) {
         console.error('Validation error:', error);
