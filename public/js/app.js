@@ -1234,9 +1234,36 @@ const App = {
     // Export Database button
     const btnExportDb = document.getElementById('btn-export-db');
     if (btnExportDb) {
-      btnExportDb.onclick = () => {
-        UI.showToast('Generating database backup...', 'info');
-        window.open(API.getExportDbUrl(), '_blank');
+      btnExportDb.onclick = async () => {
+        try {
+          UI.showToast('Generating database backup...', 'info');
+          const res = await fetch('/api/settings/export-db', {
+            headers: {
+              'Authorization': `Bearer ${API.token || ''}`
+            }
+          });
+          if (!res.ok) {
+            let errorMsg = 'Failed to download database';
+            try {
+              const err = await res.json();
+              errorMsg = err.error || errorMsg;
+            } catch (e) {}
+            throw new Error(errorMsg);
+          }
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = `teledrive-backup-${new Date().toISOString().slice(0, 10)}.db`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+          UI.showToast('Database exported successfully!', 'success');
+        } catch (e) {
+          UI.showToast('Export failed: ' + e.message, 'error');
+        }
       };
     }
 
