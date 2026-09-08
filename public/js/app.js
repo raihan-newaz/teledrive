@@ -256,7 +256,9 @@ const App = {
     // Apply view mode
     if (this.viewMode === 'list') {
       fileContainer.classList.add('list-view');
+      fileContainer.classList.remove('grid-view');
     } else {
+      fileContainer.classList.add('grid-view');
       fileContainer.classList.remove('list-view');
     }
   },

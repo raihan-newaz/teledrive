@@ -173,36 +173,61 @@
   }
 
   /* 6. File & Folder Grid Cards (Strict 2-Column Mobile Layout) */
-  .grid-view .file-grid,
-  .folder-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+  .file-grid,
+  #folders-grid,
+  #files-grid,
+  .file-container:not(.list-view) .file-grid,
+  .file-container:not(.list-view) #folders-grid,
+  .file-container:not(.list-view) #files-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
+    width: 100% !important;
+  }
+  .file-card,
+  .folder-card {
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   .folder-card {
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 10px 10px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
   }
   .folder-name {
-    font-size: 12px;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
   .file-card {
-    padding: 8px;
-    border-radius: 10px;
+    padding: 8px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
   .file-thumb {
-    height: 105px;
-    border-radius: 8px;
+    width: 100% !important;
+    height: 105px !important;
+    border-radius: 8px !important;
+    object-fit: cover !important;
   }
   .file-name {
-    font-size: 12px;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
   .file-info-text {
-    font-size: 10px;
+    font-size: 10px !important;
   }
   .file-menu-btn {
     opacity: 1 !important;
-    width: 32px;
-    height: 32px;
+    width: 30px !important;
+    height: 30px !important;
   }
 
   /* 7. Bottom Navigation Bar */
