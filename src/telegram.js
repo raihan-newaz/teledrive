@@ -17,7 +17,11 @@ async function initialize(apiId, apiHash, botToken) {
     throw new Error('API ID, API Hash, and Bot Token are required');
   }
 
-  const sessionFile = path.join(__dirname, '../../data/session.txt');
+  const dataDir = path.join(__dirname, '../data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  const sessionFile = path.join(dataDir, 'session.txt');
   let sessionStr = process.env.SESSION_STRING || '';
   if (!sessionStr && fs.existsSync(sessionFile)) {
     try {

@@ -95,6 +95,7 @@ CHANNEL_ID=${channelId}
 MASTER_PASSWORD_HASH=${masterPasswordHash}
 ENCRYPTION_KEY=${encryptionKey}
 JWT_SECRET=${jwtSecret}
+PORT=${process.env.PORT || 3000}
 `;
 
         const envPath = getEnvPath();
@@ -103,21 +104,25 @@ JWT_SECRET=${jwtSecret}
         await fs.writeFile(envPath, envContent);
 
         // Load them into the current process environment dynamically
-        process.env.API_ID = apiId;
+        process.env.API_ID = apiId.toString();
         process.env.API_HASH = apiHash;
         process.env.BOT_TOKEN = botToken;
-        process.env.CHANNEL_ID = channelId;
+        process.env.CHANNEL_ID = channelId.toString();
         process.env.MASTER_PASSWORD_HASH = masterPasswordHash;
         process.env.ENCRYPTION_KEY = encryptionKey;
         process.env.JWT_SECRET = jwtSecret;
 
-        // Initialize telegram client (as requested)
-    await telegram.initialize(parseInt(apiId), apiHash, botToken);
+        // Initialize telegram client
+        try {
+            await telegram.initialize(parseInt(apiId, 10), apiHash, botToken);
+        } catch (tgErr) {
+            console.warn('[Setup] Telegram client init warning:', tgErr.message);
+        }
 
-        return res.json({ success: true });
+        return res.json({ success: true, message: 'Setup completed successfully!' });
     } catch (error) {
         console.error('Setup completion error:', error);
-        res.status(500).json({ error: 'Failed to complete setup' });
+        res.status(500).json({ error: error.message || 'Failed to complete setup' });
     }
 });
 

@@ -19,13 +19,13 @@ const config = {
  */
 function isSetupComplete() {
   return !!(
-    config.apiId &&
-    config.apiHash &&
-    config.botToken &&
-    config.channelId &&
-    config.masterPasswordHash &&
-    config.encryptionKey &&
-    config.jwtSecret
+    process.env.API_ID &&
+    process.env.API_HASH &&
+    process.env.BOT_TOKEN &&
+    process.env.CHANNEL_ID &&
+    process.env.MASTER_PASSWORD_HASH &&
+    process.env.ENCRYPTION_KEY &&
+    process.env.JWT_SECRET
   );
 }
 
