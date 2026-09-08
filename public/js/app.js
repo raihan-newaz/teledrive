@@ -16,26 +16,34 @@ const App = {
   activeFilter: 'all',
 
   async init() {
-    this.initTheme();
-    this.initEventListeners();
-    this.initSidebar();
-    this.initBottomNav();
-    this.initSearch();
-    this.initFileContainerEvents();
-    this.initDragAndDropMove();
-    this.initContextMenu();
-    this.initModals();
-    this.initUpload();
-    this.initSettings();
-
-    // Check setup status
     try {
-      const setupStatus = await API.getSetupStatus();
-      if (!setupStatus.isComplete) {
+      this.initTheme();
+
+      // Check setup status first
+      let setupStatus = null;
+      try {
+        setupStatus = await API.getSetupStatus();
+      } catch (e) {
+        console.warn('Could not fetch setup status, showing setup wizard:', e);
+      }
+
+      if (!setupStatus || !setupStatus.isComplete) {
         this.showScreen('setup');
         Setup.init();
         return;
       }
+
+      // If setup is complete, initialize app listeners & UI
+      this.initEventListeners();
+      this.initSidebar();
+      this.initBottomNav();
+      this.initSearch();
+      this.initFileContainerEvents();
+      this.initDragAndDropMove();
+      this.initContextMenu();
+      this.initModals();
+      this.initUpload();
+      this.initSettings();
 
       // Check auth
       if (API.token) {
@@ -58,9 +66,12 @@ const App = {
   },
 
   showScreen(screen) {
-    document.getElementById('setup-screen').style.display = screen === 'setup' ? 'flex' : 'none';
-    document.getElementById('login-screen').style.display = screen === 'login' ? 'flex' : 'none';
-    document.getElementById('app-screen').style.display = screen === 'app' ? 'flex' : 'none';
+    const setupEl = document.getElementById('setup-screen');
+    const loginEl = document.getElementById('login-screen');
+    const appEl = document.getElementById('app-screen');
+    if (setupEl) setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
+    if (loginEl) loginEl.style.display = screen === 'login' ? 'flex' : 'none';
+    if (appEl) appEl.style.display = screen === 'app' ? 'flex' : 'none';
   },
 
   // ─── View & Navigation ─────────────────────────────────────────────
