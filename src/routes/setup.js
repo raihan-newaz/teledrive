@@ -10,11 +10,6 @@ const { isSetupComplete } = require('../config');
 const router = express.Router();
 
 /**
- * Helper to get the path of the .env file
- */
-const getEnvPath = () => path.join(__dirname, '../../.env');
-
-/**
  * GET /status
  * Checks if all required configuration is present
  */
