@@ -146,7 +146,11 @@ const Upload = {
           const overallLoaded = start + e.loaded;
           item.progress = Math.min(99, Math.round((overallLoaded / totalSize) * 100));
           const chunkPct = Math.round((e.loaded / e.total) * 100);
-          this.updateItemProgressUI(item, chunkPct);
+          if (chunkPct >= 100) {
+            this.updateItemProgressUI(item, chunkPct, `🔒 Processing Part ${chunkIndex + 1}/${totalChunks}...`);
+          } else {
+            this.updateItemProgressUI(item, chunkPct);
+          }
         }
       };
 
@@ -218,13 +222,15 @@ const Upload = {
     }).join('');
   },
 
-  updateItemProgressUI(item, chunkPct) {
+  updateItemProgressUI(item, chunkPct, customText) {
     const el = document.getElementById(`item-${item.id}`);
     if (el) {
       const status = el.querySelector('.upload-item-status');
       const fill = el.querySelector('.upload-progress-fill');
       if (status) {
-        if (item.totalParts && item.totalParts > 1) {
+        if (customText) {
+          status.textContent = `${customText} (${item.progress}%)`;
+        } else if (item.totalParts && item.totalParts > 1) {
           status.textContent = `⬆️ Part ${item.currentPart || 1}/${item.totalParts} (${chunkPct || item.progress}%) · ${item.progress}%`;
         } else {
           status.textContent = `⬆️ ${item.progress}%`;

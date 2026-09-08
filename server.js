@@ -81,6 +81,12 @@ async function startServer() {
       console.log(`  ╚══════════════════════════════════════════╝\n`);
     });
 
+    // Disable socket timeouts for large file chunk uploads and streaming
+    server.timeout = 0;
+    server.requestTimeout = 0;
+    server.keepAliveTimeout = 120000;
+    server.headersTimeout = 125000;
+
     // Initialize Telegram client if setup is complete (in background)
     if (isSetupComplete()) {
       console.log('[Telegram] Initializing Telegram client...');
