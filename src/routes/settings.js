@@ -9,9 +9,14 @@ const db = require('../db');
 const router = express.Router();
 router.use(authMiddleware);
 
-const envPath = path.join(__dirname, '../../.env');
-const cacheDir = path.join(__dirname, '../../data/cache');
-const sessionFile = path.join(__dirname, '../../data/session.txt');
+const dataDir = path.join(__dirname, '../../data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+const dataEnvPath = path.join(dataDir, '.env');
+const rootEnvPath = path.join(__dirname, '../../.env');
+const cacheDir = path.join(dataDir, 'cache');
+const sessionFile = path.join(dataDir, 'session.txt');
 
 /**
  * Utility to calculate folder size in bytes
@@ -41,11 +46,19 @@ function getDirectorySize(dirPath) {
  * Helper to update .env key-value pairs
  */
 async function updateEnvVariables(updates) {
+  let targetPath = dataEnvPath;
   let content = '';
-  try {
-    content = await fsPromises.readFile(envPath, 'utf8');
-  } catch (e) {
-    content = '';
+
+  if (fs.existsSync(dataEnvPath)) {
+    targetPath = dataEnvPath;
+    try { content = await fsPromises.readFile(dataEnvPath, 'utf8'); } catch (e) {}
+  } else if (fs.existsSync(rootEnvPath)) {
+    try {
+      if (!fs.statSync(rootEnvPath).isDirectory()) {
+        targetPath = rootEnvPath;
+        content = await fsPromises.readFile(rootEnvPath, 'utf8');
+      }
+    } catch (e) {}
   }
 
   const lines = content.split('\n');
@@ -70,7 +83,7 @@ async function updateEnvVariables(updates) {
     }
   }
 
-  await fsPromises.writeFile(envPath, lines.join('\n').trim() + '\n');
+  await fsPromises.writeFile(targetPath, lines.join('\n').trim() + '\n');
 }
 
 /**

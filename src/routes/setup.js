@@ -98,10 +98,22 @@ JWT_SECRET=${jwtSecret}
 PORT=${process.env.PORT || 3000}
 `;
 
-        const envPath = getEnvPath();
+        // Save to persistent data/.env directory
+        const dataDir = path.join(__dirname, '../../data');
+        if (!fs.existsSync(dataDir)) {
+            await fs.mkdir(dataDir, { recursive: true });
+        }
+        const dataEnvPath = path.join(dataDir, '.env');
+        await fs.writeFile(dataEnvPath, envContent);
 
-        // Write or overwrite .env
-        await fs.writeFile(envPath, envContent);
+        // Also update root .env if it is a normal file
+        const rootEnvPath = path.join(__dirname, '../../.env');
+        try {
+            const rootStats = await fs.stat(rootEnvPath);
+            if (!rootStats.isDirectory()) {
+                await fs.writeFile(rootEnvPath, envContent);
+            }
+        } catch (e) {}
 
         // Load them into the current process environment dynamically
         process.env.API_ID = apiId.toString();

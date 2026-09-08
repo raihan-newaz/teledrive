@@ -1,4 +1,15 @@
-require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
+const dotenv = require('dotenv');
+
+const dataEnv = path.join(__dirname, '../data/.env');
+const rootEnv = path.join(__dirname, '../.env');
+if (fs.existsSync(dataEnv)) dotenv.config({ path: dataEnv });
+if (fs.existsSync(rootEnv)) {
+  try {
+    if (!fs.statSync(rootEnv).isDirectory()) dotenv.config({ path: rootEnv });
+  } catch (e) {}
+}
 const crypto = require('crypto');
 
 const config = {
