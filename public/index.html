@@ -13,9 +13,24 @@
 <body>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 0. APP INITIAL LOADER / SPLASH (PREVENTS FLASH/GLITCH ON RELOAD)          -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="app-loader" class="screen app-loader-screen">
+    <div class="app-loader-content">
+      <div class="app-loader-logo">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="var(--accent-color)">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+        </svg>
+      </div>
+      <h2 class="app-loader-title">TeleDrive</h2>
+      <div class="app-loader-line"><div class="app-loader-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <!-- 1. SETUP WIZARD SCREEN                                                    -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <div id="setup-screen" class="screen">
+  <div id="setup-screen" class="screen" style="display:none;">
     <div class="auth-container">
       <div class="auth-card setup-card">
         <div class="auth-header">

@@ -66,9 +66,12 @@ const App = {
   },
 
   showScreen(screen) {
+    const loaderEl = document.getElementById('app-loader');
     const setupEl = document.getElementById('setup-screen');
     const loginEl = document.getElementById('login-screen');
     const appEl = document.getElementById('app-screen');
+    
+    if (loaderEl) loaderEl.style.display = 'none';
     if (setupEl) setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
     if (loginEl) loginEl.style.display = screen === 'login' ? 'flex' : 'none';
     if (appEl) appEl.style.display = screen === 'app' ? 'flex' : 'none';
