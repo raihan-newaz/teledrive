@@ -629,8 +629,16 @@ const App = {
     UI.showModal('file-info-modal');
   },
 
-  refreshCurrentView() {
-    this.navigateToView(this.currentView);
+  async refreshCurrentView() {
+    if (this.currentView === 'drive') {
+      await this.loadFolderContents(this.currentFolderId);
+    } else if (this.currentView === 'starred') {
+      await this.loadStarredFiles();
+    } else if (this.currentView === 'recent') {
+      await this.loadRecentFiles();
+    } else if (this.currentView === 'trash') {
+      await this.loadTrashedFiles();
+    }
     this.loadStorageStats();
   },
 
