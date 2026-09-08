@@ -13,8 +13,8 @@ const dataDir = path.join(__dirname, '../../data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
+const configEnvPath = path.join(dataDir, 'config.env');
 const dataEnvPath = path.join(dataDir, '.env');
-const rootEnvPath = path.join(__dirname, '../../.env');
 const cacheDir = path.join(dataDir, 'cache');
 const sessionFile = path.join(dataDir, 'session.txt');
 
@@ -46,19 +46,12 @@ function getDirectorySize(dirPath) {
  * Helper to update .env key-value pairs
  */
 async function updateEnvVariables(updates) {
-  let targetPath = dataEnvPath;
   let content = '';
 
-  if (fs.existsSync(dataEnvPath)) {
-    targetPath = dataEnvPath;
+  if (fs.existsSync(configEnvPath)) {
+    try { content = await fsPromises.readFile(configEnvPath, 'utf8'); } catch (e) {}
+  } else if (fs.existsSync(dataEnvPath)) {
     try { content = await fsPromises.readFile(dataEnvPath, 'utf8'); } catch (e) {}
-  } else if (fs.existsSync(rootEnvPath)) {
-    try {
-      if (!fs.statSync(rootEnvPath).isDirectory()) {
-        targetPath = rootEnvPath;
-        content = await fsPromises.readFile(rootEnvPath, 'utf8');
-      }
-    } catch (e) {}
   }
 
   const lines = content.split('\n');
@@ -83,7 +76,9 @@ async function updateEnvVariables(updates) {
     }
   }
 
-  await fsPromises.writeFile(targetPath, lines.join('\n').trim() + '\n');
+  const finalContent = lines.join('\n').trim() + '\n';
+  await fsPromises.writeFile(configEnvPath, finalContent);
+  try { await fsPromises.writeFile(dataEnvPath, finalContent); } catch (e) {}
 }
 
 /**

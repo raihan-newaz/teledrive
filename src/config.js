@@ -2,8 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
 
+const configEnv = path.join(__dirname, '../data/config.env');
 const dataEnv = path.join(__dirname, '../data/.env');
 const rootEnv = path.join(__dirname, '../.env');
+if (fs.existsSync(configEnv)) dotenv.config({ path: configEnv });
 if (fs.existsSync(dataEnv)) dotenv.config({ path: dataEnv });
 if (fs.existsSync(rootEnv)) {
   try {

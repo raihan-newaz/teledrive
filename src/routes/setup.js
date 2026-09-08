@@ -98,22 +98,15 @@ JWT_SECRET=${jwtSecret}
 PORT=${process.env.PORT || 3000}
 `;
 
-        // Save to persistent data/.env directory
+        // Save to persistent data directory (config.env & .env)
         const dataDir = path.join(__dirname, '../../data');
-        if (!fs.existsSync(dataDir)) {
-            await fs.mkdir(dataDir, { recursive: true });
+        const fsSync = require('fs');
+        if (!fsSync.existsSync(dataDir)) {
+            fsSync.mkdirSync(dataDir, { recursive: true });
         }
-        const dataEnvPath = path.join(dataDir, '.env');
-        await fs.writeFile(dataEnvPath, envContent);
-
-        // Also update root .env if it is a normal file
-        const rootEnvPath = path.join(__dirname, '../../.env');
-        try {
-            const rootStats = await fs.stat(rootEnvPath);
-            if (!rootStats.isDirectory()) {
-                await fs.writeFile(rootEnvPath, envContent);
-            }
-        } catch (e) {}
+        
+        fsSync.writeFileSync(path.join(dataDir, 'config.env'), envContent);
+        fsSync.writeFileSync(path.join(dataDir, '.env'), envContent);
 
         // Load them into the current process environment dynamically
         process.env.API_ID = apiId.toString();
