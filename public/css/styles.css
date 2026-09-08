@@ -598,6 +598,45 @@ input:focus {
   color: var(--text-disabled);
 }
 
+/* Trash Info & Action Banner */
+.trash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.trash-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.btn-danger-sm {
+  background: #ea4335;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.btn-danger-sm:hover {
+  background: #d93025;
+  box-shadow: var(--shadow-sm);
+}
+
 /* Action Bar */
 .action-bar {
   background: var(--bg-active);

@@ -522,7 +522,82 @@ router.patch('/:id', (req, res) => {
 });
 
 /**
- * DELETE /:id — Soft delete
+ * Permanently deletes a single file (all chunks from Telegram, local cache, and SQLite DB)
+ */
+async function permanentlyDeleteFile(file) {
+  if (!file) return;
+
+  // 1. Delete all chunk parts from Telegram if chunked, or single message if not chunked
+  if (file.is_chunked === 1) {
+    const chunks = db.getFileChunks(file.id);
+    for (const ch of chunks) {
+      try {
+        await telegram.deleteFile(ch.telegram_message_id);
+      } catch (tgError) {
+        console.warn(`[Delete] Telegram chunk delete error (${ch.chunk_index}):`, tgError.message);
+      }
+    }
+    db.deleteFileChunks(file.id);
+  } else if (file.telegram_message_id) {
+    try {
+      await telegram.deleteFile(file.telegram_message_id);
+    } catch (tgError) {
+      console.warn('[Delete] Telegram delete error:', tgError.message);
+    }
+  }
+
+  // 2. Remove local decrypted cache
+  const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+  await fsPromises.unlink(cachedPath).catch(() => {});
+
+  // 3. Remove file record from database
+  db.run('DELETE FROM files WHERE id = ?', [file.id]);
+}
+
+/**
+ * 30-Day Automated Trash Purge Worker
+ * Automatically removes items that have been in Trash for more than 30 days.
+ */
+async function purgeExpiredTrash() {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const expiredFiles = db.all('SELECT * FROM files WHERE is_trashed = 1 AND trashed_at IS NOT NULL AND trashed_at <= ?', [thirtyDaysAgo]);
+
+    if (expiredFiles.length > 0) {
+      console.log(`[Auto-Purge] Found ${expiredFiles.length} file(s) in Trash older than 30 days. Purging...`);
+      for (const file of expiredFiles) {
+        await permanentlyDeleteFile(file);
+      }
+      console.log(`[Auto-Purge] Successfully purged ${expiredFiles.length} expired file(s) from Telegram and database.`);
+    }
+  } catch (err) {
+    console.error('[Auto-Purge] Error during 30-day trash auto-purge:', err);
+  }
+}
+
+// Run 30-day auto-purge every 6 hours
+setInterval(purgeExpiredTrash, 6 * 3600 * 1000).unref();
+// Run on startup
+setTimeout(purgeExpiredTrash, 30 * 1000).unref();
+
+/**
+ * DELETE /trash/empty — Empty all files currently in Trash
+ */
+router.delete('/trash/empty', async (req, res) => {
+  try {
+    const trashedFiles = db.getTrashedFiles();
+    for (const file of trashedFiles) {
+      await permanentlyDeleteFile(file);
+    }
+    res.json({ success: true, count: trashedFiles.length });
+  } catch (error) {
+    console.error('Empty trash error:', error);
+    res.status(500).json({ error: 'Failed to empty trash: ' + error.message });
+  }
+});
+
+/**
+ * DELETE /:id — Move to Trash (Soft delete, keeps file intact on Telegram)
  */
 router.delete('/:id', (req, res) => {
   try {
@@ -535,36 +610,14 @@ router.delete('/:id', (req, res) => {
 });
 
 /**
- * DELETE /:id/permanent — Hard delete (deletes all chunks from Telegram & DB)
+ * DELETE /:id/permanent — Hard delete (Manually deletes all parts from Telegram & DB)
  */
 router.delete('/:id/permanent', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
 
-    // Delete chunked parts from Telegram if multi-chunk
-    if (file.is_chunked === 1) {
-      const chunks = db.getFileChunks(file.id);
-      for (const ch of chunks) {
-        try {
-          await telegram.deleteFile(ch.telegram_message_id);
-        } catch (tgError) {
-          console.warn(`[Delete] Telegram chunk delete error (${ch.chunk_index}):`, tgError.message);
-        }
-      }
-      db.deleteFileChunks(file.id);
-    } else if (file.telegram_message_id) {
-      try {
-        await telegram.deleteFile(file.telegram_message_id);
-      } catch (tgError) {
-        console.warn('Telegram delete error:', tgError.message);
-      }
-    }
-
-    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-    await fsPromises.unlink(cachedPath).catch(() => {});
-
-    db.run('DELETE FROM files WHERE id = ?', [req.params.id]);
+    await permanentlyDeleteFile(file);
     res.json({ success: true });
   } catch (error) {
     console.error('Permanent delete error:', error);

@@ -159,6 +159,10 @@ const API = {
     return this.request('DELETE', `/api/files/${id}/permanent`);
   },
 
+  async emptyTrash() {
+    return this.request('DELETE', '/api/files/trash/empty');
+  },
+
   async restoreFile(id) {
     return this.request('POST', `/api/files/${id}/restore`);
   },

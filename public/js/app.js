@@ -202,6 +202,12 @@ const App = {
     const filesGrid = document.getElementById('files-grid');
     const emptyState = document.getElementById('empty-state');
 
+    // Update Trash Banner visibility
+    const trashBanner = document.getElementById('trash-banner');
+    if (trashBanner) {
+      trashBanner.style.display = this.currentView === 'trash' ? 'flex' : 'none';
+    }
+
     // Build Maps for instant, error-free lookup
     this.foldersMap.clear();
     this.filesMap.clear();
@@ -700,6 +706,27 @@ const App = {
     const newFolderBtn = document.getElementById('new-folder-btn');
     if (newFolderBtn) {
       newFolderBtn.onclick = () => this.openCreateFolderModal();
+    }
+
+    // Empty Trash button
+    const emptyTrashBtn = document.getElementById('btn-empty-trash');
+    if (emptyTrashBtn) {
+      emptyTrashBtn.onclick = async () => {
+        if (!this.files || this.files.length === 0) {
+          UI.showToast('Trash is already empty', 'info');
+          return;
+        }
+        if (confirm('Are you sure you want to permanently delete all items in Trash? They will be permanently removed from Telegram.')) {
+          try {
+            UI.showToast('Emptying trash...', 'info');
+            const res = await API.emptyTrash();
+            UI.showToast(`Permanently deleted ${res.count || 0} item(s) from Telegram`, 'success');
+            this.refreshCurrentView();
+          } catch (e) {
+            UI.showToast('Failed to empty trash: ' + e.message, 'error');
+          }
+        }
+      };
     }
 
     // Filter chips

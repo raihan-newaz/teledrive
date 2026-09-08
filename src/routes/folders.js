@@ -30,7 +30,7 @@ async function getBreadcrumbs(folderId) {
 }
 
 /**
- * Recursive delete helper
+ * Recursive delete helper — safely moves files to Trash instead of hard deleting from Telegram
  * @param {string} folderId 
  * @returns {Promise<Object>} Object with counts
  */
@@ -38,19 +38,16 @@ async function deleteFolderRecursive(folderId) {
     let deletedFiles = 0;
     let deletedFolders = 0;
 
-    // Delete files in this folder
-    const files = await db.all('SELECT * FROM files WHERE folder_id = ?', [folderId]);
+    const now = new Date().toISOString();
+
+    // Move files in this folder to Trash (keeps files safe on Telegram)
+    const files = await db.all('SELECT id FROM files WHERE folder_id = ?', [folderId]);
     for (const file of files) {
-        try {
-            await telegram.deleteFile(file.telegram_message_id);
-            await db.run('DELETE FROM files WHERE id = ?', [file.id]);
-            deletedFiles++;
-        } catch (e) {
-            console.error(`Failed to delete file ${file.id}`, e);
-        }
+        db.run('UPDATE files SET is_trashed = 1, trashed_at = ?, folder_id = NULL WHERE id = ?', [now, file.id]);
+        deletedFiles++;
     }
 
-    // Recursively delete subfolders
+    // Recursively process subfolders
     const subfolders = await db.all('SELECT id FROM folders WHERE parent_id = ?', [folderId]);
     for (const sub of subfolders) {
         const res = await deleteFolderRecursive(sub.id);
@@ -58,7 +55,7 @@ async function deleteFolderRecursive(folderId) {
         deletedFolders += res.deletedFolders;
     }
 
-    // Delete the folder itself
+    // Delete the empty folder metadata
     await db.run('DELETE FROM folders WHERE id = ?', [folderId]);
     deletedFolders++;
 
