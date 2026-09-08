@@ -194,5 +194,15 @@ const API = {
 
   async clearCache() {
     return this.request('POST', '/api/settings/clear-cache');
+  },
+
+  getExportDbUrl() {
+    return '/api/settings/export-db';
+  },
+
+  async importDatabase(file) {
+    const formData = new FormData();
+    formData.append('database', file);
+    return this.request('POST', '/api/settings/import-db', formData);
   }
 };

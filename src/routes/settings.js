@@ -261,4 +261,56 @@ router.post('/clear-cache', async (req, res) => {
   }
 });
 
+const multer = require('multer');
+const tmpDbDir = path.join(__dirname, '../../data/tmp');
+if (!fs.existsSync(tmpDbDir)) {
+  fs.mkdirSync(tmpDbDir, { recursive: true });
+}
+const uploadDb = multer({ dest: tmpDbDir });
+
+/**
+ * GET /api/settings/export-db
+ * Download teledrive.db backup file
+ */
+router.get('/export-db', async (req, res) => {
+  try {
+    const dbPath = path.join(__dirname, '../../data/teledrive.db');
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'Database file not found' });
+    }
+    const filename = `teledrive-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/x-sqlite3');
+    return res.sendFile(dbPath);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to export database' });
+  }
+});
+
+/**
+ * POST /api/settings/import-db
+ * Upload and restore teledrive.db
+ */
+router.post('/import-db', uploadDb.single('database'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No database file provided' });
+    }
+    const uploadedPath = req.file.path;
+    const dbPath = path.join(__dirname, '../../data/teledrive.db');
+    
+    await fsPromises.copyFile(uploadedPath, dbPath);
+    await fsPromises.unlink(uploadedPath);
+    await db.initialize();
+
+    return res.json({
+      success: true,
+      message: 'Database imported and restored successfully!'
+    });
+  } catch (error) {
+    console.error('Error importing database:', error);
+    return res.status(500).json({ error: error.message || 'Failed to import database' });
+  }
+});
+
 module.exports = router;

@@ -1230,6 +1230,47 @@ const App = {
         }
       };
     }
+
+    // Export Database button
+    const btnExportDb = document.getElementById('btn-export-db');
+    if (btnExportDb) {
+      btnExportDb.onclick = () => {
+        UI.showToast('Generating database backup...', 'info');
+        window.open(API.getExportDbUrl(), '_blank');
+      };
+    }
+
+    // Import Database trigger & upload
+    const btnImportTrigger = document.getElementById('btn-import-db-trigger');
+    const inputImportDb = document.getElementById('import-db-file');
+    if (btnImportTrigger && inputImportDb) {
+      btnImportTrigger.onclick = () => inputImportDb.click();
+
+      inputImportDb.onchange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        if (!confirm(`Are you sure you want to restore database from "${file.name}"? This will overwrite the current database file.`)) {
+          inputImportDb.value = '';
+          return;
+        }
+
+        btnImportTrigger.disabled = true;
+        btnImportTrigger.innerHTML = '<span>⏳ Restoring Database...</span>';
+
+        try {
+          const res = await API.importDatabase(file);
+          UI.showToast(res.message || 'Database restored successfully!', 'success');
+          setTimeout(() => window.location.reload(), 1200);
+        } catch (err) {
+          UI.showToast('Import failed: ' + err.message, 'error');
+        } finally {
+          btnImportTrigger.disabled = false;
+          btnImportTrigger.innerHTML = '<span>⬆️ Choose & Restore DB</span>';
+          inputImportDb.value = '';
+        }
+      };
+    }
   },
 
   async openSettings() {
