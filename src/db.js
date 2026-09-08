@@ -49,15 +49,34 @@ async function initialize() {
       size INTEGER,
       folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
       telegram_message_id INTEGER,
-      iv TEXT NOT NULL,
-      salt TEXT NOT NULL,
+      iv TEXT,
+      salt TEXT,
       is_starred INTEGER DEFAULT 0,
       is_trashed INTEGER DEFAULT 0,
+      is_chunked INTEGER DEFAULT 0,
+      total_chunks INTEGER DEFAULT 1,
       trashed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS file_chunks (
+      id TEXT PRIMARY KEY,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      telegram_message_id INTEGER NOT NULL,
+      size INTEGER NOT NULL,
+      iv TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Safe migrations for existing databases
+  try { db.run('ALTER TABLE files ADD COLUMN is_chunked INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN total_chunks INTEGER DEFAULT 1;'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -212,6 +231,35 @@ function getStorageStats() {
 }
 
 /**
+ * Gets all chunks for a chunked file ordered by chunk_index ASC
+ * @param {string} fileId - The file ID
+ * @returns {Array} Array of chunk records
+ */
+function getFileChunks(fileId) {
+  return all('SELECT * FROM file_chunks WHERE file_id = ? ORDER BY chunk_index ASC', [fileId]);
+}
+
+/**
+ * Adds a chunk record to the database
+ * @param {Object} chunk - { id, fileId, chunkIndex, telegramMessageId, size, iv, salt }
+ */
+function addFileChunk(chunk) {
+  run(
+    `INSERT INTO file_chunks (id, file_id, chunk_index, telegram_message_id, size, iv, salt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [chunk.id, chunk.fileId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, new Date().toISOString()]
+  );
+}
+
+/**
+ * Deletes all chunks for a file
+ * @param {string} fileId - The file ID
+ */
+function deleteFileChunks(fileId) {
+  run('DELETE FROM file_chunks WHERE file_id = ?', [fileId]);
+}
+
+/**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
  */
@@ -227,6 +275,9 @@ module.exports = {
   all,
   getDb,
   getFile,
+  getFileChunks,
+  addFileChunk,
+  deleteFileChunks,
   getFolder,
   getFolderContents,
   searchFiles,
