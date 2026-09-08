@@ -172,11 +172,11 @@
     white-space: nowrap;
   }
 
-  /* 6. File & Folder Grid Cards */
+  /* 6. File & Folder Grid Cards (Strict 2-Column Mobile Layout) */
   .grid-view .file-grid,
   .folder-grid {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
   }
   .folder-card {
     padding: 10px 12px;
@@ -190,8 +190,8 @@
     border-radius: 10px;
   }
   .file-thumb {
-    height: 85px;
-    border-radius: 6px;
+    height: 105px;
+    border-radius: 8px;
   }
   .file-name {
     font-size: 12px;
