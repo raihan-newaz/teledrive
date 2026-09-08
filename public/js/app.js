@@ -1012,13 +1012,23 @@ const App = {
   },
 
   initSettings() {
-    // Open Settings button in toolbar
-    const settingsBtn = document.getElementById('settings-btn');
-
-    if (settingsBtn) {
-      settingsBtn.onclick = (e) => {
+    // Open Settings button in sidebar
+    const sidebarSettingsLink = document.getElementById('sidebar-settings-link');
+    if (sidebarSettingsLink) {
+      sidebarSettingsLink.onclick = (e) => {
         e.preventDefault();
         this.openSettings();
+      };
+    }
+
+    // Settings Logout Button
+    const settingsLogoutBtn = document.getElementById('settings-logout-btn');
+    if (settingsLogoutBtn) {
+      settingsLogoutBtn.onclick = async () => {
+        UI.hideAllModals();
+        await API.logout();
+        UI.showToast('Logged out', 'info');
+        this.showScreen('login');
       };
     }
 
