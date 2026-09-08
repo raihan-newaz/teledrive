@@ -170,3 +170,10 @@ const Setup = {
     }
   }
 };
+
+// Initialize Setup wizard if DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => Setup.init());
+} else {
+  Setup.init();
+}
