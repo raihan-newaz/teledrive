@@ -112,6 +112,10 @@ const API = {
     } catch (e) {
       // Ignore
     }
+    this.folderTokens = {};
+    try {
+      sessionStorage.clear();
+    } catch (e) {}
     this.setToken(null);
   },
 

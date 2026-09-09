@@ -354,15 +354,28 @@ const UI = {
     const safeName = folder.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const isSelected = this.selectedItems.has(folderIdStr) || this.selectedItems.has(folder.id);
     const selectedClass = isSelected ? ' selected' : '';
-    const isLocked = Boolean(folder.is_locked);
-    const lockBadge = isLocked ? `<span class="folder-lock-badge" title="Password Protected Folder">🔒</span>` : '';
+    const hasLock = Boolean(folder.is_locked);
+    const isUnlocked = typeof App !== 'undefined' && App.unlockedFolders && App.unlockedFolders.has(folderIdStr);
+
+    let lockBadge = '';
+    let iconFill = '#5f6368';
+    if (hasLock) {
+      if (isUnlocked) {
+        lockBadge = `<span class="folder-lock-badge unlocked" title="Unlocked Folder (Protected by Password)">🔓</span>`;
+        iconFill = '#34a853';
+      } else {
+        lockBadge = `<span class="folder-lock-badge" title="Password Protected Folder (Locked)">🔒</span>`;
+        iconFill = '#ea4335';
+      }
+    }
+
     return `
-      <div class="folder-card${selectedClass}${isLocked ? ' is-locked' : ''}" data-id="${folderIdStr}" data-type="folder" data-locked="${isLocked ? '1' : '0'}" draggable="true">
+      <div class="folder-card${selectedClass}${hasLock ? ' is-locked' : ''}${isUnlocked ? ' is-unlocked' : ''}" data-id="${folderIdStr}" data-type="folder" data-locked="${hasLock ? '1' : '0'}" data-unlocked="${isUnlocked ? '1' : '0'}" draggable="true">
         <button class="card-select-btn icon-btn" title="Select folder" data-id="${folderIdStr}" data-type="folder" aria-label="Select">
           <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         <div class="folder-icon-wrap">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="${isLocked ? '#ea4335' : '#5f6368'}">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="${iconFill}">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
           </svg>
           ${lockBadge}
@@ -439,15 +452,20 @@ const UI = {
   },
 
   // ─── Breadcrumbs ───────────────────────────────────────────────────
-  renderBreadcrumbs(breadcrumbs) {
+  renderBreadcrumbs(breadcrumbs, currentFolder = null) {
     const container = document.getElementById('breadcrumb');
     if (!container) return;
+
+    let relockBtnHtml = '';
+    if (currentFolder && Boolean(currentFolder.is_locked)) {
+      relockBtnHtml = ` <button type="button" class="btn-relock-folder" id="btn-header-relock" data-folder-id="${currentFolder.id}" title="Lock and exit this folder">🔒 Lock Folder</button>`;
+    }
 
     container.innerHTML = breadcrumbs.map((b, idx) => {
       const isLast = idx === breadcrumbs.length - 1;
       const safeName = b.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       if (isLast) {
-        return `<span class="breadcrumb-item active">${safeName}</span>`;
+        return `<span class="breadcrumb-item active">${safeName}</span>${relockBtnHtml}`;
       }
       return `
         <a class="breadcrumb-item" href="#" data-folder-id="${b.id || ''}">${safeName}</a>
@@ -463,6 +481,17 @@ const UI = {
         App.navigateToFolder(fid);
       };
     });
+
+    const relockBtn = container.querySelector('#btn-header-relock');
+    if (relockBtn) {
+      relockBtn.onclick = (e) => {
+        e.preventDefault();
+        const fid = relockBtn.getAttribute('data-folder-id');
+        if (fid && typeof App !== 'undefined' && App.relockFolder) {
+          App.relockFolder(fid);
+        }
+      };
+    }
   },
 
   // ─── Folder Tree for Move Modal ────────────────────────────────────
@@ -533,14 +562,30 @@ const UI = {
     if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
     const lockFolderBtn = menu.querySelector('[data-action="lock-folder"]');
     const lockFolderText = document.getElementById('ctx-lock-folder-text');
+    const relockFolderBtn = menu.querySelector('[data-action="relock-folder"]');
     if (lockFolderBtn) {
       if (!isTrashed && item.type === 'folder') {
-        lockFolderBtn.style.display = 'flex';
-        if (lockFolderText) {
-          lockFolderText.textContent = item.is_locked ? 'Unlock / Remove Lock' : 'Lock Folder';
+        const isProtected = Boolean(item.is_locked);
+        const isUnlocked = typeof App !== 'undefined' && App.unlockedFolders && App.unlockedFolders.has(String(item.id));
+
+        if (isProtected) {
+          if (isUnlocked) {
+            if (relockFolderBtn) relockFolderBtn.style.display = 'flex';
+            lockFolderBtn.style.display = 'flex';
+            if (lockFolderText) lockFolderText.textContent = 'Manage / Remove Password';
+          } else {
+            if (relockFolderBtn) relockFolderBtn.style.display = 'none';
+            lockFolderBtn.style.display = 'flex';
+            if (lockFolderText) lockFolderText.textContent = 'Unlock Folder';
+          }
+        } else {
+          if (relockFolderBtn) relockFolderBtn.style.display = 'none';
+          lockFolderBtn.style.display = 'flex';
+          if (lockFolderText) lockFolderText.textContent = 'Lock Folder (Set Password)';
         }
       } else {
         lockFolderBtn.style.display = 'none';
+        if (relockFolderBtn) relockFolderBtn.style.display = 'none';
       }
     }
 

@@ -280,7 +280,7 @@ const App = {
       this.files = data.files || [];
       this.breadcrumbs = data.breadcrumbs || [{ id: null, name: 'My Drive' }];
       this.renderContents();
-      UI.renderBreadcrumbs(this.breadcrumbs);
+      UI.renderBreadcrumbs(this.breadcrumbs, data.currentFolder);
     } catch (e) {
       UI.showToast('Failed to load files: ' + e.message, 'error');
     } finally {
@@ -816,6 +816,10 @@ const App = {
           this.openLockFolderModal(itemData);
         }
       }
+    } else if (action === 'relock-folder') {
+      if (itemData.type === 'folder') {
+        this.relockFolder(itemData.id);
+      }
     } else if (action === 'move') {
       this.openMoveModal(itemData);
     } else if (action === 'trash') {
@@ -1100,8 +1104,8 @@ const App = {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.onclick = async () => {
-        sessionStorage.removeItem('teledrive_current_folder');
-        sessionStorage.removeItem('teledrive_current_view');
+        this.unlockedFolders.clear();
+        sessionStorage.clear();
         try {
           const url = new URL(window.location.href);
           url.searchParams.delete('folder');
@@ -1963,6 +1967,29 @@ const App = {
     setTimeout(() => { if (unlockPassInput) unlockPassInput.focus(); }, 100);
   },
 
+  relockFolder(folderId) {
+    if (!folderId) return;
+    const fid = String(folderId);
+    this.unlockedFolders.delete(fid);
+    delete API.folderTokens[fid];
+    try {
+      sessionStorage.removeItem('teledrive_unlocked_' + fid);
+      sessionStorage.removeItem('teledrive_ftok_' + fid);
+    } catch (e) {}
+
+    UI.showToast('Folder locked 🔒', 'info');
+
+    if (this.currentFolderId === fid) {
+      let parentId = null;
+      if (this.breadcrumbs && this.breadcrumbs.length >= 2) {
+        parentId = this.breadcrumbs[this.breadcrumbs.length - 2].id;
+      }
+      this.navigateToFolder(parentId);
+    } else {
+      this.refreshCurrentView();
+    }
+  },
+
   async openDeleteModal(item) {
     if (!item) return;
     this.selectedItem = item;
@@ -2008,8 +2035,8 @@ const App = {
     const settingsLogoutBtn = document.getElementById('settings-logout-btn');
     if (settingsLogoutBtn) {
       settingsLogoutBtn.onclick = async () => {
-        sessionStorage.removeItem('teledrive_current_folder');
-        sessionStorage.removeItem('teledrive_current_view');
+        this.unlockedFolders.clear();
+        sessionStorage.clear();
         try {
           const url = new URL(window.location.href);
           url.searchParams.delete('folder');
