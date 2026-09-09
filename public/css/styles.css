@@ -2812,6 +2812,30 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent-color);
 }
 
+.pref-control {
+  display: flex;
+  align-items: center;
+}
+
+.settings-select {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  min-width: 180px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.settings-select:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
 /* Toggle Switch */
 .toggle-switch {
   position: relative;

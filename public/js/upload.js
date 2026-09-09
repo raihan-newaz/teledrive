@@ -5,9 +5,18 @@ const Upload = {
   queue: [],
   isUploading: false,
 
-  // 300MB chunk size & 2x parallel streams — optimal for large multi-GB uploads to Telegram
-  CHUNK_SIZE: 300 * 1024 * 1024,
-  CONCURRENT_CHUNKS: 2,
+  // Dynamic user-configurable chunk size (up to 1.9GB) & concurrency
+  get CHUNK_SIZE() {
+    const saved = localStorage.getItem('teledrive_chunk_size');
+    const parsed = parseInt(saved, 10);
+    return (!isNaN(parsed) && parsed > 0) ? parsed : 300 * 1024 * 1024;
+  },
+
+  get CONCURRENT_CHUNKS() {
+    const saved = localStorage.getItem('teledrive_concurrent_chunks');
+    const parsed = parseInt(saved, 10);
+    return (!isNaN(parsed) && parsed >= 1) ? Math.min(parsed, 6) : 2;
+  },
 
   // Folder creation caches for fast idempotent folder uploads
   _folderCache: new Map(),

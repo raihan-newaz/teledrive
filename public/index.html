@@ -960,6 +960,44 @@
           </label>
         </div>
       </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <h4>Upload & Transfer Performance</h4>
+          <p>Configure multi-part chunking size and upload throughput for large files</p>
+        </div>
+        <div class="pref-row">
+          <div class="pref-info">
+            <strong>Upload Chunk Size</strong>
+            <span>Files larger than this size will be split into encrypted parts (Max 1.9 GB Telegram limit)</span>
+          </div>
+          <div class="pref-control">
+            <select id="pref-chunk-size" class="settings-select">
+              <option value="52428800">50 MB (Slow/Mobile Networks)</option>
+              <option value="104857600">100 MB (Standard)</option>
+              <option value="314572800" selected>300 MB (Default / Balanced)</option>
+              <option value="524288000">500 MB (High Speed Fiber)</option>
+              <option value="1073741824">1.0 GB (Ultra Fast)</option>
+              <option value="1610612736">1.5 GB (Heavy Multi-GB Files)</option>
+              <option value="2039480320">1.9 GB (Max Telegram Limit)</option>
+            </select>
+          </div>
+        </div>
+        <div class="pref-row">
+          <div class="pref-info">
+            <strong>Parallel Upload Streams</strong>
+            <span>Number of chunks uploaded simultaneously</span>
+          </div>
+          <div class="pref-control">
+            <select id="pref-concurrent-chunks" class="settings-select">
+              <option value="1">1x Stream (Minimal memory usage)</option>
+              <option value="2" selected>2x Streams (Recommended / Fast)</option>
+              <option value="3">3x Streams (High speed connection)</option>
+              <option value="4">4x Streams (Max parallel throughput)</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TAB 4: STORAGE & CACHE -->

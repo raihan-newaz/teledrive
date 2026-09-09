@@ -2263,6 +2263,26 @@ const App = {
       };
     }
 
+    // Upload & Chunk Size Preferences
+    const prefChunkSize = document.getElementById('pref-chunk-size');
+    const prefConcurrent = document.getElementById('pref-concurrent-chunks');
+
+    if (prefChunkSize) {
+      prefChunkSize.value = localStorage.getItem('teledrive_chunk_size') || '314572800';
+      prefChunkSize.onchange = () => {
+        localStorage.setItem('teledrive_chunk_size', prefChunkSize.value);
+        UI.showToast('Upload chunk size preference saved!', 'success');
+      };
+    }
+
+    if (prefConcurrent) {
+      prefConcurrent.value = localStorage.getItem('teledrive_concurrent_chunks') || '2';
+      prefConcurrent.onchange = () => {
+        localStorage.setItem('teledrive_concurrent_chunks', prefConcurrent.value);
+        UI.showToast('Parallel upload streams preference saved!', 'success');
+      };
+    }
+
     // Clear Cache Action
     const btnClearCache = document.getElementById('btn-clear-cache');
     if (btnClearCache) {
@@ -2384,6 +2404,16 @@ const App = {
     const listBtn = document.getElementById('view-pref-list');
     if (gridBtn) gridBtn.classList.toggle('active', this.viewMode === 'grid');
     if (listBtn) listBtn.classList.toggle('active', this.viewMode === 'list');
+
+    // Sync upload preferences
+    const prefChunkSize = document.getElementById('pref-chunk-size');
+    const prefConcurrent = document.getElementById('pref-concurrent-chunks');
+    if (prefChunkSize) {
+      prefChunkSize.value = localStorage.getItem('teledrive_chunk_size') || '314572800';
+    }
+    if (prefConcurrent) {
+      prefConcurrent.value = localStorage.getItem('teledrive_concurrent_chunks') || '2';
+    }
 
     // Fetch and populate live settings data
     try {
