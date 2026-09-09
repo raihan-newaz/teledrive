@@ -508,4 +508,33 @@
     width: auto;
     max-width: calc(100vw - 24px);
   }
+
+  /* 14. Mobile Card Touch Fix — Disable drag so taps work as clicks */
+  .folder-card,
+  .file-card {
+    -webkit-user-drag: none !important;
+    -webkit-touch-callout: none !important;
+    touch-action: manipulation !important;
+  }
+  .folder-card *,
+  .file-card * {
+    -webkit-user-drag: none !important;
+  }
+
+  /* Make 3-dot more button always visible on mobile (no hover) */
+  .item-more-btn {
+    opacity: 1 !important;
+  }
+
+  /* 15. Hamburger Sidebar Toggle — Ensure tappable on mobile */
+  #sidebar-toggle {
+    position: relative;
+    z-index: 10;
+    min-width: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
 }

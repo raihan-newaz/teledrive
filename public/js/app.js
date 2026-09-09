@@ -315,6 +315,22 @@ const App = {
     const fileContainer = document.getElementById('file-container');
     if (!fileContainer) return;
 
+    // Detect touch device
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    // On touch devices, disable draggable to prevent drag from eating taps
+    if (isTouchDevice) {
+      const disableDrag = () => {
+        fileContainer.querySelectorAll('[draggable="true"]').forEach(el => {
+          el.removeAttribute('draggable');
+        });
+      };
+      // Disable on current cards and also after re-renders
+      disableDrag();
+      const observer = new MutationObserver(disableDrag);
+      observer.observe(fileContainer, { childList: true, subtree: true });
+    }
+
     // Click handler (delegated)
     fileContainer.addEventListener('click', (e) => {
       // 1. Check if selection checkbox button was clicked
@@ -442,6 +458,62 @@ const App = {
         }
       }
     });
+
+    // ─── Mobile Touch Tap Handler (Backup for click events) ────────
+    // On some mobile browsers, draggable elements or touch-callout can
+    // swallow click events. This touchend handler ensures taps always work.
+    if (isTouchDevice) {
+      let touchStartTime = 0;
+      let touchStartX = 0;
+      let touchStartY = 0;
+
+      fileContainer.addEventListener('touchstart', (e) => {
+        touchStartTime = Date.now();
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+      }, { passive: true });
+
+      fileContainer.addEventListener('touchend', (e) => {
+        const elapsed = Date.now() - touchStartTime;
+        // Only treat as tap if it was a quick touch (< 300ms) without drag
+        if (elapsed > 300) return;
+
+        const touch = e.changedTouches[0];
+        const dx = Math.abs(touch.clientX - touchStartX);
+        const dy = Math.abs(touch.clientY - touchStartY);
+        // If finger moved more than 10px, it's a scroll/drag, not a tap
+        if (dx > 10 || dy > 10) return;
+
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (!target) return;
+
+        // Skip if tapping on interactive buttons (they handle their own click)
+        if (target.closest('.card-select-btn') || target.closest('.item-more-btn')) return;
+
+        const folderCard = target.closest('.folder-card');
+        if (folderCard) {
+          e.preventDefault();
+          const id = folderCard.getAttribute('data-id');
+          this.lastSelectedId = id;
+          if (UI.selectedItems.size > 0) UI.clearSelection();
+          this.navigateToFolder(id);
+          return;
+        }
+
+        const fileCard = target.closest('.file-card');
+        if (fileCard) {
+          e.preventDefault();
+          const id = fileCard.getAttribute('data-id');
+          this.lastSelectedId = id;
+          const file = this.filesMap.get(id);
+          if (file) {
+            Preview.open(file);
+          }
+          return;
+        }
+      }, { passive: false });
+    }
 
     // Context menu / right-click handler (delegated)
     fileContainer.addEventListener('contextmenu', (e) => {
@@ -1201,14 +1273,35 @@ const App = {
     const overlay = document.getElementById('sidebar-overlay');
 
     if (sidebarToggle && sidebar && overlay) {
-      sidebarToggle.onclick = () => {
+      const toggleSidebar = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         sidebar.classList.toggle('open');
         overlay.classList.toggle('open');
       };
-      overlay.onclick = () => {
+      const closeSidebar = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         sidebar.classList.remove('open');
         overlay.classList.remove('open');
       };
+
+      sidebarToggle.addEventListener('click', toggleSidebar);
+      overlay.addEventListener('click', closeSidebar);
+
+      // Also bind touchend for mobile reliability
+      sidebarToggle.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      }, { passive: false });
+      overlay.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      }, { passive: false });
     }
 
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
