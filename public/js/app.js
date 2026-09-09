@@ -72,10 +72,28 @@ const App = {
           await API.verifyAuth();
           this.showScreen('app');
           try {
-            await this.navigateToFolder(null);
+            // Restore active folder or view from URL query / hash / sessionStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            const folderFromUrl = urlParams.get('folder');
+            const viewFromUrl = urlParams.get('view');
+            const hash = window.location.hash || '';
+            const folderFromHash = hash.startsWith('#folder=') ? hash.substring(8) : null;
+            const viewFromHash = hash.startsWith('#view=') ? hash.substring(6) : null;
+
+            const targetFolder = folderFromUrl || folderFromHash || sessionStorage.getItem('teledrive_current_folder') || null;
+            const targetView = viewFromUrl || viewFromHash || sessionStorage.getItem('teledrive_current_view') || 'drive';
+
+            if (targetFolder && targetFolder !== 'null') {
+              await this.navigateToFolder(targetFolder);
+            } else if (targetView && targetView !== 'drive') {
+              await this.navigateToView(targetView);
+            } else {
+              await this.navigateToFolder(null);
+            }
             this.loadStorageStats();
           } catch (loadErr) {
             console.warn('Initial load contents warning:', loadErr);
+            await this.navigateToFolder(null);
           }
         } catch (authErr) {
           this.showScreen('login');
@@ -149,29 +167,70 @@ const App = {
   },
 
   // ─── View & Navigation ─────────────────────────────────────────────
-  async navigateToFolder(folderId) {
-    if (folderId) {
-      const folder = this.foldersMap.get(String(folderId));
-      if (folder && folder.is_locked && !this.unlockedFolders.has(String(folderId))) {
+  async navigateToFolder(folderId, updateUrl = true) {
+    const fid = (folderId && folderId !== 'null') ? String(folderId) : null;
+    if (fid) {
+      const folder = this.foldersMap.get(fid);
+      if (folder && folder.is_locked && !this.unlockedFolders.has(fid)) {
         this.openUnlockFolderModal(folder, false);
         return;
       }
     }
     this.currentView = 'drive';
-    this.currentFolderId = folderId;
+    this.currentFolderId = fid;
     this.updateSidebarActive('drive');
     UI.clearSelection();
-    await this.loadFolderContents(folderId);
+
+    if (fid) {
+      sessionStorage.setItem('teledrive_current_folder', fid);
+    } else {
+      sessionStorage.removeItem('teledrive_current_folder');
+    }
+    sessionStorage.setItem('teledrive_current_view', 'drive');
+
+    if (updateUrl) {
+      try {
+        const url = new URL(window.location.href);
+        if (fid) {
+          url.searchParams.set('folder', fid);
+          url.searchParams.delete('view');
+        } else {
+          url.searchParams.delete('folder');
+          url.searchParams.delete('view');
+        }
+        window.history.replaceState({ folderId: fid, view: 'drive' }, '', url.toString());
+      } catch (e) {}
+    }
+
+    await this.loadFolderContents(fid);
   },
 
-  async navigateToView(view) {
+  async navigateToView(view, updateUrl = true) {
     this.currentView = view;
     UI.clearSelection();
     this.updateSidebarActive(view);
 
+    sessionStorage.setItem('teledrive_current_view', view);
+    if (view !== 'drive') {
+      sessionStorage.removeItem('teledrive_current_folder');
+    }
+
+    if (updateUrl) {
+      try {
+        const url = new URL(window.location.href);
+        if (view !== 'drive') {
+          url.searchParams.set('view', view);
+          url.searchParams.delete('folder');
+        } else {
+          url.searchParams.delete('view');
+        }
+        window.history.replaceState({ view }, '', url.toString());
+      } catch (e) {}
+    }
+
     switch (view) {
       case 'drive':
-        await this.navigateToFolder(null);
+        await this.navigateToFolder(null, false);
         break;
       case 'starred':
         await this.loadStarredFiles();
@@ -986,7 +1045,16 @@ const App = {
           UI.showToast('Login successful!', 'success');
           if (pwdInput) pwdInput.value = '';
           this.showScreen('app');
-          await this.navigateToFolder(null);
+          const urlParams = new URLSearchParams(window.location.search);
+          const targetFolder = urlParams.get('folder') || sessionStorage.getItem('teledrive_current_folder') || null;
+          const targetView = urlParams.get('view') || sessionStorage.getItem('teledrive_current_view') || 'drive';
+          if (targetFolder && targetFolder !== 'null') {
+            await this.navigateToFolder(targetFolder);
+          } else if (targetView && targetView !== 'drive') {
+            await this.navigateToView(targetView);
+          } else {
+            await this.navigateToFolder(null);
+          }
           this.loadStorageStats();
         } catch (err) {
           UI.showToast(err.message || 'Invalid master password', 'error');
@@ -1001,10 +1069,34 @@ const App = {
       };
     }
 
+    // Browser history popstate (Back/Forward buttons)
+    window.addEventListener('popstate', async () => {
+      if (this.currentView) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const folder = urlParams.get('folder');
+        const view = urlParams.get('view');
+        if (folder) {
+          await this.navigateToFolder(folder, false);
+        } else if (view && view !== 'drive') {
+          await this.navigateToView(view, false);
+        } else {
+          await this.navigateToFolder(null, false);
+        }
+      }
+    });
+
     // Logout button
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.onclick = async () => {
+        sessionStorage.removeItem('teledrive_current_folder');
+        sessionStorage.removeItem('teledrive_current_view');
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('folder');
+          url.searchParams.delete('view');
+          window.history.replaceState({}, '', url.pathname);
+        } catch (e) {}
         await API.logout();
         UI.showToast('Logged out', 'info');
         this.showScreen('login');
@@ -1879,6 +1971,14 @@ const App = {
     const settingsLogoutBtn = document.getElementById('settings-logout-btn');
     if (settingsLogoutBtn) {
       settingsLogoutBtn.onclick = async () => {
+        sessionStorage.removeItem('teledrive_current_folder');
+        sessionStorage.removeItem('teledrive_current_view');
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('folder');
+          url.searchParams.delete('view');
+          window.history.replaceState({}, '', url.pathname);
+        } catch (e) {}
         UI.hideAllModals();
         await API.logout();
         UI.showToast('Logged out', 'info');
