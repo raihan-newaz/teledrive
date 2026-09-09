@@ -6,7 +6,7 @@ TeleDrive is an open-source, Google Drive-like personal cloud storage web applic
 
 ## ✨ Key Features
 
-- ☁️ **Unlimited Free Storage**: Utilizes Telegram's unlimited cloud storage infrastructure (up to 2GB per individual file).
+- ☁️ **Unlimited Free Storage**: Utilizes Telegram's unlimited cloud storage infrastructure with multi-part chunking for any file size.
 - 🔐 **Zero-Knowledge Encryption**: All files are encrypted locally with **AES-256-GCM** using unique per-file salts and initialization vectors before upload. Telegram servers only ever receive encrypted ciphertext.
 - ⚡ **Real-time Progressive Streaming**: Watch videos in a custom YouTube-style player with instant playback and seek support without waiting for full downloads.
 - 🎵 **Spotify-Style Audio Player**: Stream music and podcasts with waveforms, progress scrubbing, and volume controls.
