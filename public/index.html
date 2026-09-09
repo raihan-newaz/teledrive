@@ -13,6 +13,14 @@
   <link rel="stylesheet" href="/css/themes.css?v=2.0">
   <link rel="stylesheet" href="/css/styles.css?v=2.0">
   <link rel="stylesheet" href="/css/responsive.css?v=2.0">
+  <script>
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('teledrive_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
 

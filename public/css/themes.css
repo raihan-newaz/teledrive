@@ -66,3 +66,25 @@
     --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
   }
 }
+
+/* Smooth theme transition without glitch */
+html.theme-transition,
+html.theme-transition body,
+html.theme-transition .header,
+html.theme-transition .toolbar,
+html.theme-transition .sidebar,
+html.theme-transition .app-body,
+html.theme-transition .main-content,
+html.theme-transition .file-container,
+html.theme-transition .file-card,
+html.theme-transition .folder-card,
+html.theme-transition .modal,
+html.theme-transition .search-bar,
+html.theme-transition .search-bar input,
+html.theme-transition .icon-btn,
+html.theme-transition .bottom-nav {
+  transition: background-color 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}

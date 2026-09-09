@@ -2518,10 +2518,13 @@ const App = {
   },
 
   setTheme(theme) {
+    document.documentElement.classList.add('theme-transition');
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('teledrive_theme', theme);
     this.updateThemeToggleIcon(theme);
-    UI.showToast(`Theme set to ${theme}`, 'info');
+    setTimeout(() => {
+      document.documentElement.classList.remove('theme-transition');
+    }, 250);
   },
 
   initTheme() {
