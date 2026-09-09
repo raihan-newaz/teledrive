@@ -315,7 +315,7 @@
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   }
   .settings-modal-header {
     padding: 14px 16px !important;
@@ -327,8 +327,7 @@
   }
   .settings-header-titles h3 {
     font-size: 16px !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
-    font-weight: 500 !important;
+    font-family: 'Google Sans', sans-serif !important;
   }
   .settings-tabs {
     padding: 0 10px !important;
@@ -343,7 +342,7 @@
     padding: 10px 10px !important;
     font-size: 12px !important;
     gap: 6px !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
   }
   .settings-tab-pane {
     flex: 1 1 auto !important;
@@ -362,8 +361,7 @@
   }
   .settings-section-title h4 {
     font-size: 14px !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
-    font-weight: 500 !important;
+    font-family: 'Google Sans', sans-serif !important;
   }
   .form-row-2 {
     grid-template-columns: 1fr !important;
@@ -400,7 +398,7 @@
     display: flex !important;
     flex-direction: column !important;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4) !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   }
   .share-modal-header {
     margin-bottom: 16px !important;
@@ -408,8 +406,7 @@
   }
   .share-modal-title-wrap h3 {
     font-size: 16px !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
-    font-weight: 500 !important;
+    font-family: 'Google Sans', sans-serif !important;
   }
   .share-modal-subtitle {
     font-size: 12px !important;
@@ -432,7 +429,7 @@
   .share-modal-actions button {
     height: 44px !important;
     font-size: 14px !important;
-    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-family: 'Google Sans', sans-serif !important;
     font-weight: 500 !important;
   }
 
@@ -507,34 +504,5 @@
     right: 12px;
     width: auto;
     max-width: calc(100vw - 24px);
-  }
-
-  /* 14. Mobile Card Touch Fix — Disable drag so taps work as clicks */
-  .folder-card,
-  .file-card {
-    -webkit-user-drag: none !important;
-    -webkit-touch-callout: none !important;
-    touch-action: manipulation !important;
-  }
-  .folder-card *,
-  .file-card * {
-    -webkit-user-drag: none !important;
-  }
-
-  /* Make 3-dot more button always visible on mobile (no hover) */
-  .item-more-btn {
-    opacity: 1 !important;
-  }
-
-  /* 15. Hamburger Sidebar Toggle — Ensure tappable on mobile */
-  #sidebar-toggle {
-    position: relative;
-    z-index: 10;
-    min-width: 40px;
-    min-height: 40px;
-    flex-shrink: 0;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
   }
 }

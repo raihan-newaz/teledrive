@@ -241,8 +241,8 @@ const App = {
     // Build Maps for instant, error-free lookup
     this.foldersMap.clear();
     this.filesMap.clear();
-    this.folders.forEach(f => this.foldersMap.set(f.id, { ...f, type: 'folder' }));
-    this.files.forEach(f => this.filesMap.set(f.id, { ...f, type: 'file' }));
+    this.folders.forEach(f => this.foldersMap.set(String(f.id), { ...f, type: 'folder' }));
+    this.files.forEach(f => this.filesMap.set(String(f.id), { ...f, type: 'file' }));
 
     // Filter files
     let filteredFiles = this.files;
@@ -324,7 +324,7 @@ const App = {
       const selectBtn = e.target.closest('.card-select-btn');
       if (selectBtn) {
         e.stopPropagation();
-        const id = selectBtn.getAttribute('data-id');
+        const id = String(selectBtn.getAttribute('data-id'));
         const type = selectBtn.getAttribute('data-type');
         const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
         UI.toggleSelection(id, type, item);
@@ -336,7 +336,7 @@ const App = {
       const moreBtn = e.target.closest('.item-more-btn');
       if (moreBtn) {
         e.stopPropagation();
-        const id = moreBtn.getAttribute('data-id');
+        const id = String(moreBtn.getAttribute('data-id'));
         const type = moreBtn.getAttribute('data-type');
         const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
         if (item) {
@@ -350,7 +350,7 @@ const App = {
         const card = e.target.closest('.file-card, .folder-card');
         if (card) {
           e.stopPropagation();
-          const id = card.getAttribute('data-id');
+          const id = String(card.getAttribute('data-id'));
           const type = card.getAttribute('data-type');
           const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
           UI.toggleSelection(id, type, item);
@@ -365,14 +365,14 @@ const App = {
         if (card) {
           e.stopPropagation();
           const allCards = Array.from(fileContainer.querySelectorAll('.file-card, .folder-card'));
-          const lastIdx = allCards.findIndex(c => c.getAttribute('data-id') === this.lastSelectedId);
+          const lastIdx = allCards.findIndex(c => String(c.getAttribute('data-id')) === String(this.lastSelectedId));
           const currIdx = allCards.findIndex(c => c === card);
           if (lastIdx !== -1 && currIdx !== -1) {
             const start = Math.min(lastIdx, currIdx);
             const end = Math.max(lastIdx, currIdx);
             for (let i = start; i <= end; i++) {
               const c = allCards[i];
-              const cid = c.getAttribute('data-id');
+              const cid = String(c.getAttribute('data-id'));
               const ctype = c.getAttribute('data-type');
               const citem = ctype === 'folder' ? this.foldersMap.get(cid) : this.filesMap.get(cid);
               UI.toggleSelection(cid, ctype, citem, true);
@@ -387,7 +387,7 @@ const App = {
         // Clicking a folder card navigates directly into it (like Google Drive)
         const folderCard = e.target.closest('.folder-card');
         if (folderCard) {
-          const id = folderCard.getAttribute('data-id');
+          const id = String(folderCard.getAttribute('data-id'));
           UI.clearSelection();
           this.lastSelectedId = id;
           this.navigateToFolder(id);
@@ -397,7 +397,7 @@ const App = {
         // Clicking a file card toggles selection
         const card = e.target.closest('.file-card');
         if (card) {
-          const id = card.getAttribute('data-id');
+          const id = String(card.getAttribute('data-id'));
           const type = card.getAttribute('data-type');
           const item = this.filesMap.get(id);
           UI.toggleSelection(id, type, item);
@@ -409,7 +409,7 @@ const App = {
       // 6. Normal click: Folder navigates, File opens preview
       const folderCard = e.target.closest('.folder-card');
       if (folderCard) {
-        const id = folderCard.getAttribute('data-id');
+        const id = String(folderCard.getAttribute('data-id'));
         this.lastSelectedId = id;
         this.navigateToFolder(id);
         return;
@@ -417,7 +417,7 @@ const App = {
 
       const fileCard = e.target.closest('.file-card');
       if (fileCard) {
-        const id = fileCard.getAttribute('data-id');
+        const id = String(fileCard.getAttribute('data-id'));
         this.lastSelectedId = id;
         const file = this.filesMap.get(id);
         if (file) {
@@ -431,14 +431,14 @@ const App = {
     fileContainer.addEventListener('dblclick', (e) => {
       const folderCard = e.target.closest('.folder-card');
       if (folderCard) {
-        const id = folderCard.getAttribute('data-id');
+        const id = String(folderCard.getAttribute('data-id'));
         UI.clearSelection();
         this.navigateToFolder(id);
         return;
       }
       const fileCard = e.target.closest('.file-card');
       if (fileCard) {
-        const id = fileCard.getAttribute('data-id');
+        const id = String(fileCard.getAttribute('data-id'));
         const file = this.filesMap.get(id);
         if (file) {
           Preview.open(file);
@@ -452,7 +452,7 @@ const App = {
       if (card) {
         e.preventDefault();
         e.stopPropagation();
-        const id = card.getAttribute('data-id');
+        const id = String(card.getAttribute('data-id'));
         const type = card.getAttribute('data-type');
         const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
         if (item) {
