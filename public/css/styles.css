@@ -39,7 +39,7 @@ body {
   background: var(--text-secondary);
 }
 
-/* Buttons & Inputs */
+/* Buttons, Selects & Inputs */
 button {
   cursor: pointer;
   border: none;
@@ -48,7 +48,7 @@ button {
   color: inherit;
 }
 
-input {
+input, select, textarea {
   font-family: inherit;
   color: var(--text-primary);
   background: var(--bg-card);
@@ -60,7 +60,7 @@ input {
   width: 100%;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-input:focus {
+input:focus, select:focus, textarea:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
 }
@@ -1197,9 +1197,15 @@ input:focus {
   padding: 24px;
   width: 90%;
   max-width: 440px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   z-index: 900;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
+  font-family: inherit;
   opacity: 0;
   transition: all 0.2s;
 }
@@ -2402,15 +2408,18 @@ input:focus {
 .settings-modal {
   max-width: 680px;
   width: 94%;
-  max-height: 88vh;
+  height: 88vh;
+  height: 88dvh;
+  max-height: 88dvh;
   padding: 0;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
   background: var(--bg-card);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
+  font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .settings-modal-header {
@@ -2420,6 +2429,7 @@ input:focus {
   padding: 20px 24px 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
 .settings-header-icon {
@@ -2439,6 +2449,7 @@ input:focus {
 
 .settings-header-titles h3 {
   font-size: 18px;
+  font-family: 'Google Sans', sans-serif;
   font-weight: 600;
   margin: 0 0 2px 0;
   color: var(--text-primary);
@@ -2463,6 +2474,7 @@ input:focus {
   border-bottom: 1px solid var(--border-color);
   padding: 0 16px;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .settings-tab-btn {
@@ -2474,6 +2486,7 @@ input:focus {
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-secondary);
+  font-family: 'Google Sans Text', 'Roboto', sans-serif;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -2492,8 +2505,12 @@ input:focus {
 
 .settings-tab-pane {
   padding: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(88vh - 140px);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -2512,6 +2529,7 @@ input:focus {
 
 .settings-section-title h4 {
   font-size: 15px;
+  font-family: 'Google Sans', sans-serif;
   font-weight: 600;
   margin: 0 0 4px 0;
   color: var(--text-primary);
@@ -2802,10 +2820,18 @@ input:focus {
 .share-modal {
   max-width: 520px;
   width: 92%;
+  max-height: 88vh;
+  max-height: 88dvh;
   padding: 24px;
   border-radius: 16px;
   background: var(--bg-card);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-color);
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .share-modal-header {
   display: flex;
@@ -2813,6 +2839,7 @@ input:focus {
   gap: 14px;
   margin-bottom: 20px;
   position: relative;
+  flex-shrink: 0;
 }
 .share-modal-file-icon {
   font-size: 28px;
@@ -2833,6 +2860,7 @@ input:focus {
 .share-modal-title-wrap h3 {
   margin: 0;
   font-size: 17px;
+  font-family: 'Google Sans', sans-serif;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2858,6 +2886,7 @@ input:focus {
 .share-section-title {
   display: block;
   font-size: 12px;
+  font-family: 'Google Sans', sans-serif;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2895,6 +2924,7 @@ input:focus {
   background: transparent;
   border: none;
   font-size: 14px;
+  font-family: 'Google Sans Text', 'Roboto', sans-serif;
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
@@ -2928,7 +2958,7 @@ input:focus {
   padding: 10px 12px;
   font-size: 13px;
   color: var(--text-primary);
-  font-family: monospace;
+  font-family: inherit;
   outline: none;
 }
 .share-link-box button {
@@ -2992,6 +3022,7 @@ input:focus {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
+  font-family: 'Google Sans Text', 'Roboto', sans-serif;
   font-size: 13px;
   outline: none;
 }

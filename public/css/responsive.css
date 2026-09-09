@@ -303,56 +303,134 @@
     right: 0 !important;
     bottom: 0 !important;
     transform: none !important;
-    width: 100vw !important;
-    max-width: 100vw !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
     border-radius: 0 !important;
     border: none !important;
     margin: 0 !important;
-    z-index: 1000 !important;
+    z-index: 1200 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   }
   .settings-modal-header {
-    padding: 14px 16px;
+    padding: 14px 16px !important;
+    flex-shrink: 0 !important;
   }
   .settings-header-icon {
-    width: 38px;
-    height: 38px;
+    width: 38px !important;
+    height: 38px !important;
   }
   .settings-header-titles h3 {
-    font-size: 16px;
+    font-size: 16px !important;
+    font-family: 'Google Sans', sans-serif !important;
   }
   .settings-tabs {
-    padding: 0 10px;
-    gap: 2px;
-    scrollbar-width: none;
+    padding: 0 10px !important;
+    gap: 2px !important;
+    flex-shrink: 0 !important;
+    scrollbar-width: none !important;
   }
   .settings-tabs::-webkit-scrollbar {
-    display: none;
+    display: none !important;
   }
   .settings-tab-btn {
-    padding: 10px 10px;
-    font-size: 12px;
-    gap: 6px;
+    padding: 10px 10px !important;
+    font-size: 12px !important;
+    gap: 6px !important;
+    font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
   }
   .settings-tab-pane {
-    padding: 16px 14px calc(env(safe-area-inset-bottom, 0px) + 20px);
-    max-height: calc(100vh - 120px);
-    gap: 16px;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
+    touch-action: pan-y !important;
+    padding: 16px 14px calc(env(safe-area-inset-bottom, 24px) + 90px) !important;
+    gap: 16px !important;
   }
   .settings-section {
-    padding: 14px 14px;
+    padding: 14px 14px !important;
   }
   .settings-section-title h4 {
-    font-size: 14px;
+    font-size: 14px !important;
+    font-family: 'Google Sans', sans-serif !important;
   }
   .form-row-2 {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
   }
   .storage-stats-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* 10b. Share Modal (Mobile Responsive Bottom Sheet) */
+  .share-modal,
+  .share-modal.visible {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: translateY(0) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
+    border-radius: 20px 20px 0 0 !important;
+    border: 1px solid var(--border-color) !important;
+    border-bottom: none !important;
+    margin: 0 !important;
+    padding: 20px 16px calc(env(safe-area-inset-bottom, 24px) + 30px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
+    touch-action: pan-y !important;
+    z-index: 1200 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4) !important;
+    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  }
+  .share-modal-header {
+    margin-bottom: 16px !important;
+    flex-shrink: 0 !important;
+  }
+  .share-modal-title-wrap h3 {
+    font-size: 16px !important;
+    font-family: 'Google Sans', sans-serif !important;
+  }
+  .share-modal-subtitle {
+    font-size: 12px !important;
+  }
+  .share-advanced-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .share-modal-actions {
+    margin-top: 20px !important;
+    padding-bottom: 10px !important;
+    flex-direction: column-reverse !important;
+    gap: 10px !important;
+  }
+  .share-modal-actions > * {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  .share-modal-actions button {
+    height: 44px !important;
+    font-size: 14px !important;
+    font-family: 'Google Sans', sans-serif !important;
+    font-weight: 500 !important;
   }
 
   /* 11. Media & PDF Full-screen Viewer */

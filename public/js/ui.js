@@ -38,7 +38,7 @@ const UI = {
     const modal = document.getElementById(modalId);
     if (overlay && modal) {
       overlay.style.display = 'block';
-      modal.style.display = 'block';
+      modal.style.display = (modal.classList.contains('settings-modal') || modal.classList.contains('share-modal')) ? 'flex' : 'block';
       setTimeout(() => {
         overlay.classList.add('visible');
         modal.classList.add('visible');
