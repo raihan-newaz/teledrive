@@ -63,6 +63,41 @@ async function deleteFolderRecursive(folderId) {
 }
 
 /**
+ * Permanently deletes folder and all contained files from Telegram, local cache, and SQLite DB
+ * @param {string} folderId 
+ * @returns {Promise<Object>} Object with counts
+ */
+async function permanentlyDeleteFolderRecursive(folderId) {
+    let deletedFiles = 0;
+    let deletedFolders = 0;
+
+    // 1. Recursively process subfolders first
+    const subfolders = await db.all('SELECT id FROM folders WHERE parent_id = ?', [folderId]);
+    for (const sub of subfolders) {
+        const res = await permanentlyDeleteFolderRecursive(sub.id);
+        deletedFiles += res.deletedFiles;
+        deletedFolders += res.deletedFolders;
+    }
+
+    // 2. Permanently delete all files inside this folder from Telegram & DB
+    const files = await db.all('SELECT * FROM files WHERE folder_id = ?', [folderId]);
+    const filesRouter = require('./files');
+    for (const file of files) {
+        if (filesRouter.permanentlyDeleteFile) {
+            await filesRouter.permanentlyDeleteFile(file, { throwOnError: true });
+            deletedFiles++;
+        }
+    }
+
+    // 3. Delete the folder metadata from database
+    await db.run('DELETE FROM folders WHERE id = ?', [folderId]);
+    deletedFolders++;
+
+    return { deletedFiles, deletedFolders };
+}
+
+
+/**
  * GET /
  */
 router.get('/', async (req, res) => {
@@ -196,14 +231,18 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const folderId = req.params.id;
-        const result = await deleteFolderRecursive(folderId);
+        const isPermanent = req.query.permanent === 'true';
+        const result = isPermanent ?
+            await permanentlyDeleteFolderRecursive(folderId) :
+            await deleteFolderRecursive(folderId);
         
         res.json({ success: true, ...result });
     } catch (error) {
         console.error('Delete folder error:', error);
-        res.status(500).json({ error: 'Failed to delete folder' });
+        res.status(500).json({ error: error.message || 'Failed to delete folder' });
     }
 });
 
 router.deleteFolderRecursive = deleteFolderRecursive;
+router.permanentlyDeleteFolderRecursive = permanentlyDeleteFolderRecursive;
 module.exports = router;

@@ -225,31 +225,90 @@ async function* iterDownloadFile(messageId, requestSize = 512 * 1024) {
   }
 }
 
+let _cachedChannelEntity = null;
+
 /**
- * Deletes a file/message from the channel
- * @param {number} messageId - ID of the message to delete
- * @returns {Promise<void>}
+ * Resolves the channel input entity reliably for GramJS
  */
-async function deleteFile(messageId) {
+async function getChannelInputEntity() {
   const tClient = getClient();
   const channel = process.env.CHANNEL_ID;
-  
-  if (!channel) {
-    throw new Error('Channel ID not configured');
+  if (!channel) throw new Error('Channel ID not configured');
+
+  if (_cachedChannelEntity) {
+    return _cachedChannelEntity;
   }
 
-  await tClient.deleteMessages(channel, [parseInt(messageId, 10)], {
-    revoke: true,
-  });
+  try {
+    _cachedChannelEntity = await tClient.getInputEntity(channel);
+    return _cachedChannelEntity;
+  } catch (e1) {
+    try {
+      _cachedChannelEntity = await tClient.getInputEntity(BigInt(channel));
+      return _cachedChannelEntity;
+    } catch (e2) {
+      try {
+        const ent = await tClient.getEntity(channel);
+        _cachedChannelEntity = await tClient.getInputEntity(ent);
+        return _cachedChannelEntity;
+      } catch (e3) {
+        const ent = await tClient.getEntity(BigInt(channel));
+        _cachedChannelEntity = await tClient.getInputEntity(ent);
+        return _cachedChannelEntity;
+      }
+    }
+  }
+}
+
+/**
+ * Deletes one or multiple messages/files from the Telegram channel
+ * @param {number|number[]|string|string[]} messageIds - Message ID(s) to delete
+ * @returns {Promise<Object>}
+ */
+async function deleteFiles(messageIds) {
+  const tClient = getClient();
+  const ids = (Array.isArray(messageIds) ? messageIds : [messageIds])
+    .map(id => parseInt(id, 10))
+    .filter(id => !isNaN(id) && id > 0);
+
+  if (ids.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  try {
+    const channelEntity = await getChannelInputEntity();
+    console.log(`[Telegram] Deleting message ID(s): [${ids.join(', ')}] from channel...`);
+    const result = await tClient.deleteMessages(channelEntity, ids, { revoke: true });
+    console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}]. Result:`, JSON.stringify(result));
+    return { success: true, count: ids.length, result };
+  } catch (err) {
+    console.error(`[Telegram] Error deleting message ID(s) [${ids.join(', ')}]:`, err.message);
+    if (err.message && (err.message.includes('CHAT_ADMIN_REQUIRED') || err.message.includes('MESSAGE_DELETE_FORBIDDEN') || err.message.includes('admin'))) {
+      throw new Error(`Telegram bot permission error: Bot requires "Delete messages" administrator rights in the channel to remove files.`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Backward-compatible single file delete
+ * @param {number|string} messageId - ID of the message to delete
+ * @returns {Promise<Object>}
+ */
+async function deleteFile(messageId) {
+  return deleteFiles([messageId]);
 }
 
 module.exports = {
   initialize,
   getClient,
+  getChannelInputEntity,
   testConnection,
   uploadFile,
   downloadFile,
   downloadToStream,
   iterDownloadFile,
-  deleteFile
+  deleteFile,
+  deleteFiles
 };
+

@@ -126,8 +126,8 @@ const API = {
     return this.request('PATCH', `/api/folders/${id}`, { parent_id });
   },
 
-  async deleteFolder(id) {
-    return this.request('DELETE', `/api/folders/${id}`);
+  async deleteFolder(id, permanent = false) {
+    return this.request('DELETE', `/api/folders/${id}${permanent ? '?permanent=true' : ''}`);
   },
 
   // ─── Files ────────────────────────────────────────────────────────
