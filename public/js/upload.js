@@ -5,9 +5,9 @@ const Upload = {
   queue: [],
   isUploading: false,
 
-  // 25MB chunk size & 3x parallel streams — optimal for high throughput and fast Telegram delivery
-  CHUNK_SIZE: 25 * 1024 * 1024,
-  CONCURRENT_CHUNKS: 3,
+  // 300MB chunk size & 2x parallel streams — optimal for large multi-GB uploads to Telegram
+  CHUNK_SIZE: 300 * 1024 * 1024,
+  CONCURRENT_CHUNKS: 2,
 
   // Folder creation caches for fast idempotent folder uploads
   _folderCache: new Map(),
