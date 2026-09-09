@@ -5,8 +5,8 @@ const Upload = {
   queue: [],
   isUploading: false,
 
-  // 100MB chunk threshold & size for fast transfers, smooth progress & instant resume
-  CHUNK_SIZE: 100 * 1024 * 1024,
+  // 500MB chunk threshold & size — optimal balance: minimum Telegram parts, fast streaming, zero overhead, and instant resume
+  CHUNK_SIZE: 500 * 1024 * 1024,
 
   /**
    * Deterministic Upload ID based on file metadata
@@ -221,12 +221,12 @@ const Upload = {
     const file = item.file;
     const totalSize = file.size;
 
-    // Single-part upload for files <= 100MB
+    // Single-part upload for files <= 500MB
     if (totalSize <= this.CHUNK_SIZE) {
       return this.uploadSingleFile(item);
     }
 
-    // Auto-chunking for files > 100MB
+    // Auto-chunking for files > 500MB
     const totalChunks = Math.ceil(totalSize / this.CHUNK_SIZE);
     const uploadId = item.id;
     item.totalParts = totalChunks;
