@@ -2162,21 +2162,37 @@ input:focus, select:focus, textarea:focus {
   max-height: 84vh;
 }
 .img-toolbar {
-  background: rgba(30, 30, 30, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 6px 14px;
-  border-radius: 20px;
+  background: rgba(24, 24, 27, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 12px;
+  border-radius: 24px;
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
   color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   z-index: 20;
 }
 .img-toolbar .icon-btn {
-  color: #fff;
-  font-size: 12px;
-  width: 32px;
-  height: 32px;
+  color: #f1f3f4;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  transition: background-color 0.15s, transform 0.1s;
+}
+.img-toolbar .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.06);
+}
+.img-toolbar .icon-btn:active {
+  transform: scale(0.95);
 }
 .img-viewport {
   overflow: auto;

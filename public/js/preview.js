@@ -226,10 +226,33 @@ const Preview = {
       contentEl.innerHTML = `
         <div class="img-lightbox-wrap">
           <div class="img-toolbar">
-            <button class="icon-btn" id="img-zoom-in" title="Zoom In (+)">🔍+</button>
-            <button class="icon-btn" id="img-zoom-out" title="Zoom Out (-)">🔍-</button>
-            <button class="icon-btn" id="img-rotate" title="Rotate 90°">🔄</button>
-            <button class="icon-btn" id="img-reset" title="Reset View">Reset</button>
+            <button class="icon-btn" id="img-zoom-in" title="Zoom In (+)" aria-label="Zoom In">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <line x1="11" y1="8" x2="11" y2="14"></line>
+                <line x1="8" y1="11" x2="14" y2="11"></line>
+              </svg>
+            </button>
+            <button class="icon-btn" id="img-zoom-out" title="Zoom Out (-)" aria-label="Zoom Out">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <line x1="8" y1="11" x2="14" y2="11"></line>
+              </svg>
+            </button>
+            <button class="icon-btn" id="img-rotate" title="Rotate 90°" aria-label="Rotate">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6"></path>
+                <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+            </button>
+            <button class="icon-btn" id="img-reset" title="Reset View" aria-label="Reset View">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+            </button>
           </div>
           <div class="img-viewport" id="img-viewport">
             <img src="${streamUrl}" class="lightbox-img" id="lightbox-img" alt="${file.name}">
