@@ -188,6 +188,15 @@ const Upload = {
     return `ETA ${Math.ceil(seconds)}s`;
   },
 
+  formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const val = parseFloat((bytes / Math.pow(k, i)).toFixed(i >= 2 ? 2 : 1));
+    return `${val} ${sizes[i]}`;
+  },
+
   updateSpeedAndETA(item, overallLoaded, totalSize) {
     const now = performance.now();
     if (!item.startTime) {
@@ -290,6 +299,7 @@ const Upload = {
         if (item.status === 'cancelled') return;
         if (e.lengthComputable) {
           item.progress = Math.round((e.loaded / e.total) * 100);
+          item.overallLoaded = e.loaded;
           this.updateSpeedAndETA(item, e.loaded, e.total);
           if (e.loaded >= e.total) {
             this.updateItemProgressUI(item, 100, '🔒 Encrypting & saving to Telegram...');
@@ -365,6 +375,7 @@ const Upload = {
         if (e.lengthComputable) {
           const overallLoaded = start + e.loaded;
           item.progress = Math.min(99, Math.round((overallLoaded / totalSize) * 100));
+          item.overallLoaded = overallLoaded;
           const chunkPct = Math.round((e.loaded / e.total) * 100);
           this.updateSpeedAndETA(item, overallLoaded, totalSize);
 
@@ -475,7 +486,9 @@ const Upload = {
           </div>
           <div class="upload-item-metrics">
             ${metricsText}
-            <span>${(item.file.size / (1024 * 1024)).toFixed(1)} MB</span>
+            <span>${(item.status === 'uploading' && item.overallLoaded && item.progress < 100)
+              ? `${this.formatFileSize(item.overallLoaded)} / ${this.formatFileSize(item.file.size)}`
+              : this.formatFileSize(item.file.size)}</span>
           </div>
         </div>
       `;
@@ -507,9 +520,12 @@ const Upload = {
         const metricsText = (item.speedText || item.etaText)
           ? `${item.speedText}${item.speedText && item.etaText ? ' · ' : ''}${item.etaText}`
           : (customText || item.statusText || '');
+        const sizeText = (item.status === 'uploading' && item.overallLoaded && item.progress < 100)
+          ? `${this.formatFileSize(item.overallLoaded)} / ${this.formatFileSize(item.file.size)}`
+          : this.formatFileSize(item.file.size);
         metrics.innerHTML = `
           <span>${metricsText}</span>
-          <span>${(item.file.size / (1024 * 1024)).toFixed(1)} MB</span>
+          <span>${sizeText}</span>
         `;
       }
     }
