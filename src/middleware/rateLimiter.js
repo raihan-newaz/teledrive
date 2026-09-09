@@ -31,11 +31,11 @@ const loginLimiter = rateLimit({
 const authLimiter = loginLimiter;
 
 /**
- * Upload rate limiter: 100 requests per minute per IP
+ * Upload rate limiter: 2000 requests per minute per IP (Generous for parallel chunk uploads)
  */
 const uploadLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
-    max: 100,
+    max: 2000,
     message: { error: 'Too many upload requests from this IP, please try again after 1 minute.' },
     standardHeaders: true,
     legacyHeaders: false,

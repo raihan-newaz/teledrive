@@ -5,8 +5,9 @@ const Upload = {
   queue: [],
   isUploading: false,
 
-  // 500MB chunk threshold & size — optimal balance: minimum Telegram parts, fast streaming, zero overhead, and instant resume
-  CHUNK_SIZE: 500 * 1024 * 1024,
+  // 25MB chunk size & 3x parallel streams — optimal for high throughput and fast Telegram delivery
+  CHUNK_SIZE: 25 * 1024 * 1024,
+  CONCURRENT_CHUNKS: 3,
 
   // Folder creation caches for fast idempotent folder uploads
   _folderCache: new Map(),
@@ -202,6 +203,12 @@ const Upload = {
       try { item.xhr.abort(); } catch (e) {}
       item.xhr = null;
     }
+    if (item.activeXHRs) {
+      for (const x of item.activeXHRs) {
+        try { x.abort(); } catch (e) {}
+      }
+      item.activeXHRs.clear();
+    }
 
     if (typeof UI !== 'undefined' && UI.showToast) {
       UI.showToast(`Cancelled upload of "${item.file.name}"`, 'info');
@@ -234,8 +241,16 @@ const Upload = {
     const index = this.queue.findIndex(i => i.id === itemId);
     if (index !== -1) {
       const item = this.queue[index];
-      if (item.status === 'uploading' && item.xhr) {
-        try { item.xhr.abort(); } catch (e) {}
+      if (item.status === 'uploading') {
+        if (item.xhr) {
+          try { item.xhr.abort(); } catch (e) {}
+        }
+        if (item.activeXHRs) {
+          for (const x of item.activeXHRs) {
+            try { x.abort(); } catch (e) {}
+          }
+          item.activeXHRs.clear();
+        }
         this.isUploading = false;
       }
       this.queue.splice(index, 1);
@@ -314,15 +329,16 @@ const Upload = {
     const file = item.file;
     const totalSize = file.size;
 
-    // Single-part upload for files <= 500MB
+    // Single-part upload for files <= CHUNK_SIZE
     if (totalSize <= this.CHUNK_SIZE) {
       return this.uploadSingleFile(item);
     }
 
-    // Auto-chunking for files > 500MB
+    // Auto-chunking for files > CHUNK_SIZE
     const totalChunks = Math.ceil(totalSize / this.CHUNK_SIZE);
     const uploadId = item.id;
     item.totalParts = totalChunks;
+    item.activeXHRs = new Set();
 
     // Check if session already exists on server for true resumability
     let uploadedIndices = [];
@@ -344,26 +360,53 @@ const Upload = {
     item.startTime = performance.now();
     item.lastTime = item.startTime;
     item.currentSpeed = 0;
+    item.uploadedIndices = uploadedIndices;
 
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      if (item.status === 'cancelled') {
-        throw new Error('Upload cancelled by user');
+    const pendingIndices = [];
+    for (let i = 0; i < totalChunks; i++) {
+      if (!uploadedIndices.includes(i)) {
+        pendingIndices.push(i);
       }
-
-      item.currentPart = chunkIndex + 1;
-      const start = chunkIndex * this.CHUNK_SIZE;
-      const end = Math.min(start + this.CHUNK_SIZE, totalSize);
-
-      // If chunk is already saved on server/Telegram, skip sending it!
-      if (uploadedIndices.includes(chunkIndex)) {
-        item.progress = Math.min(99, Math.round((end / totalSize) * 100));
-        this.updateItemProgressUI(item, 100, `⚡ Resumed Part ${chunkIndex + 1}/${totalChunks}`);
-        continue;
-      }
-
-      const chunkBlob = file.slice(start, end);
-      await this.uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize);
     }
+
+    if (pendingIndices.length === 0) {
+      item.progress = 100;
+      this.updateItemProgressUI(item, 100, 'Completed');
+      return;
+    }
+
+    let nextIndexPtr = 0;
+    const chunkLoadedMap = new Map();
+    let finalResult = null;
+
+    const uploadWorker = async (workerId) => {
+      while (nextIndexPtr < pendingIndices.length) {
+        if (item.status === 'cancelled') {
+          throw new Error('Upload cancelled by user');
+        }
+
+        const chunkIndex = pendingIndices[nextIndexPtr++];
+        const start = chunkIndex * this.CHUNK_SIZE;
+        const end = Math.min(start + this.CHUNK_SIZE, totalSize);
+        const chunkBlob = file.slice(start, end);
+
+        const res = await this.uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap);
+        if (res && res.done) {
+          finalResult = res;
+        }
+        uploadedIndices.push(chunkIndex);
+        chunkLoadedMap.delete(chunkIndex);
+      }
+    };
+
+    const workerPromises = [];
+    const concurrency = Math.min(this.CONCURRENT_CHUNKS, pendingIndices.length);
+    for (let w = 0; w < concurrency; w++) {
+      workerPromises.push(uploadWorker(w));
+    }
+
+    await Promise.all(workerPromises);
+    return finalResult;
   },
 
   uploadSingleFile(item) {
@@ -434,14 +477,15 @@ const Upload = {
     });
   },
 
-  uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize) {
+  uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap) {
     return new Promise((resolve, reject) => {
       if (item.status === 'cancelled') {
         return reject(new Error('Upload cancelled'));
       }
 
       const xhr = new XMLHttpRequest();
-      item.xhr = xhr;
+      if (!item.activeXHRs) item.activeXHRs = new Set();
+      item.activeXHRs.add(xhr);
 
       const formData = new FormData();
       formData.append('file', chunkBlob, item.file.name);
@@ -457,22 +501,33 @@ const Upload = {
       xhr.upload.onprogress = (e) => {
         if (item.status === 'cancelled') return;
         if (e.lengthComputable) {
-          const overallLoaded = start + e.loaded;
+          if (chunkLoadedMap) {
+            chunkLoadedMap.set(chunkIndex, e.loaded);
+          }
+
+          let overallLoaded = 0;
+          if (item.uploadedIndices) {
+            overallLoaded += item.uploadedIndices.length * this.CHUNK_SIZE;
+          }
+          if (chunkLoadedMap) {
+            for (const b of chunkLoadedMap.values()) {
+              overallLoaded += b;
+            }
+          }
+          overallLoaded = Math.min(overallLoaded, totalSize);
+
           item.progress = Math.min(99, Math.round((overallLoaded / totalSize) * 100));
           item.overallLoaded = overallLoaded;
-          const chunkPct = Math.round((e.loaded / e.total) * 100);
           this.updateSpeedAndETA(item, overallLoaded, totalSize);
 
-          if (chunkPct >= 100) {
-            this.updateItemProgressUI(item, chunkPct, `🔒 Saving Part ${chunkIndex + 1}/${totalChunks} to Telegram...`);
-          } else {
-            this.updateItemProgressUI(item, chunkPct);
-          }
+          const activeCount = item.activeXHRs ? item.activeXHRs.size : 1;
+          const completedCount = item.uploadedIndices ? item.uploadedIndices.length : 0;
+          this.updateItemProgressUI(item, item.progress, `🚀 Uploading Part ${completedCount + 1}/${totalChunks} (${activeCount}x parallel)...`);
         }
       };
 
       xhr.onload = () => {
-        item.xhr = null;
+        if (item.activeXHRs) item.activeXHRs.delete(xhr);
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
@@ -491,7 +546,7 @@ const Upload = {
       };
 
       xhr.onerror = () => {
-        item.xhr = null;
+        if (item.activeXHRs) item.activeXHRs.delete(xhr);
         if (item.status === 'cancelled') {
           reject(new Error('Upload cancelled'));
         } else {
@@ -500,7 +555,7 @@ const Upload = {
       };
 
       xhr.onabort = () => {
-        item.xhr = null;
+        if (item.activeXHRs) item.activeXHRs.delete(xhr);
         reject(new Error('Upload cancelled'));
       };
 

@@ -324,12 +324,20 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
  * Helper to commit completed chunked file to database
  */
 function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
-  chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+  const existingFile = db.getFile(uploadId);
+  if (existingFile && existingFile.size === totalFileSize) {
+    db.deleteUploadSession(uploadId);
+    return res.json({ success: true, done: true, file: existingFile });
+  }
+
+  const allChunks = db.getUploadedSessionChunks(uploadId);
+  const chunksToUse = allChunks.length >= totalChunks ? allChunks : chunks;
+  chunksToUse.sort((a, b) => a.chunk_index - b.chunk_index);
 
   const fileId = uploadId;
   const mimeType = getMimeType(safeName);
   const now = new Date().toISOString();
-  const firstChunk = chunks[0];
+  const firstChunk = chunksToUse[0] || {};
 
   db.run(
     `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
@@ -339,7 +347,7 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
 
   // Clear any old records for this file ID in file_chunks, then commit all chunks
   db.deleteFileChunks(fileId);
-  for (const ch of chunks) {
+  for (const ch of chunksToUse) {
     db.addFileChunk({
       id: ch.id,
       fileId,
