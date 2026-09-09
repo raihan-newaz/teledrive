@@ -541,7 +541,7 @@ const UI = {
   _videoObserver: null,
   _thumbnailQueue: [],
   _activeThumbnailWorkers: 0,
-  _MAX_THUMBNAIL_WORKERS: 2,
+  _MAX_THUMBNAIL_WORKERS: 4,
 
   _processThumbnailQueue() {
     while (this._activeThumbnailWorkers < this._MAX_THUMBNAIL_WORKERS && this._thumbnailQueue.length > 0) {
@@ -565,7 +565,7 @@ const UI = {
       const video = document.createElement('video');
       video.crossOrigin = 'anonymous';
       video.muted = true;
-      video.preload = 'metadata';
+      video.preload = 'auto';
       video.playsInline = true;
       video.src = API.getStreamUrl(file.id);
 
@@ -582,39 +582,43 @@ const UI = {
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 12000); // 12s fallback timeout
+      const timeoutId = setTimeout(done, 6000); // 6s fast fallback timeout
 
-      video.onloadedmetadata = () => {
+      const captureFrame = () => {
+        if (finished) return;
         try {
-          video.currentTime = Math.min(1.5, (video.duration || 2) * 0.1);
-        } catch (e) {
-          clearTimeout(timeoutId);
-          done();
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.min(240, video.videoWidth || 240);
+            canvas.height = Math.min(135, video.videoHeight || 135);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+            
+            if (imgEl && document.body.contains(imgEl)) {
+              imgEl.src = dataUrl;
+              imgEl.classList.add('loaded');
+            }
+            try {
+              sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
+            } catch(e) {}
+            clearTimeout(timeoutId);
+            done();
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      };
+
+      video.onloadeddata = () => {
+        if (!captureFrame()) {
+          try { video.currentTime = 0.05; } catch (e) { done(); }
         }
       };
 
       video.onseeked = () => {
-        clearTimeout(timeoutId);
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.min(240, video.videoWidth || 240);
-          canvas.height = Math.min(135, video.videoHeight || 135);
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-          
-          if (imgEl && document.body.contains(imgEl)) {
-            imgEl.src = dataUrl;
-            imgEl.classList.add('loaded');
-          }
-          try {
-            sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
-          } catch(e) {}
-        } catch (e) {
-          // Canvas error fallback
-        } finally {
-          done();
-        }
+        captureFrame();
+        done();
       };
 
       video.onerror = () => {
