@@ -413,6 +413,17 @@ const App = {
       fileContainer.classList.add('grid-view');
       fileContainer.classList.remove('list-view');
     }
+
+    const viewToggle = document.getElementById('view-toggle');
+    if (viewToggle) {
+      if (this.viewMode === 'list') {
+        viewToggle.title = 'Switch to Grid View';
+        viewToggle.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/></svg>`;
+      } else {
+        viewToggle.title = 'Switch to List View';
+        viewToggle.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`;
+      }
+    }
   },
 
   sortArray(arr) {

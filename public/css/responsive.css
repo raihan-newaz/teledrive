@@ -177,62 +177,188 @@
     white-space: nowrap;
   }
 
-  /* 6. File & Folder Grid Cards (Strict 2-Column Mobile Layout) */
-  .file-grid,
-  #folders-grid,
-  #files-grid,
+  /* 6. File & Folder Cards: Grid View (2-Columns) vs List View (1-Column Full Width) */
   .file-container:not(.list-view) .file-grid,
   .file-container:not(.list-view) #folders-grid,
-  .file-container:not(.list-view) #files-grid {
+  .file-container:not(.list-view) #files-grid,
+  .file-container.grid-view .file-grid,
+  .file-container.grid-view #folders-grid,
+  .file-container.grid-view #files-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
     width: 100% !important;
   }
-  .file-card,
-  .folder-card {
+  .file-container:not(.list-view) .file-card,
+  .file-container:not(.list-view) .folder-card,
+  .file-container.grid-view .file-card,
+  .file-container.grid-view .folder-card {
     min-width: 0 !important;
     width: 100% !important;
     box-sizing: border-box !important;
   }
-  .folder-card {
+  .file-container:not(.list-view) .folder-card,
+  .file-container.grid-view .folder-card {
     padding: 10px 10px !important;
     border-radius: 10px !important;
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
   }
-  .folder-name {
+  .file-container:not(.list-view) .folder-name,
+  .file-container.grid-view .folder-name {
     font-size: 12px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
-  .file-card {
+  .file-container:not(.list-view) .file-card,
+  .file-container.grid-view .file-card {
     padding: 8px !important;
     border-radius: 10px !important;
     display: flex !important;
     flex-direction: column !important;
   }
-  .file-thumb {
+  .file-container:not(.list-view) .file-card-preview,
+  .file-container.grid-view .file-card-preview {
+    width: 100% !important;
+    height: 105px !important;
+    border-radius: 8px !important;
+  }
+  .file-container:not(.list-view) .file-thumb-media,
+  .file-container.grid-view .file-thumb-media {
     width: 100% !important;
     height: 105px !important;
     border-radius: 8px !important;
     object-fit: cover !important;
   }
-  .file-name {
+  .file-container:not(.list-view) .file-name,
+  .file-container.grid-view .file-name {
     font-size: 12px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
-  .file-info-text {
+  .file-container:not(.list-view) .file-info-text,
+  .file-container.grid-view .file-info-text {
     font-size: 10px !important;
   }
-  .file-menu-btn {
+  .file-container:not(.list-view) .file-menu-btn,
+  .file-container.grid-view .file-menu-btn {
     opacity: 1 !important;
     width: 30px !important;
     height: 30px !important;
+  }
+
+  /* 6b. Mobile List View: Strict Single Column (1 Column Full Width) */
+  .file-container.list-view .file-grid,
+  .file-container.list-view #folders-grid,
+  .file-container.list-view #files-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  .file-container.list-view .folder-card {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
+    gap: 10px !important;
+  }
+  .file-container.list-view .folder-name {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+  }
+  .file-container.list-view .file-card {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+    min-height: 52px !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+  }
+  .file-container.list-view .file-card-preview {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    max-height: 42px !important;
+    border-radius: 8px !important;
+    margin-right: 10px !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    background: var(--bg-secondary) !important;
+  }
+  .file-container.list-view .file-thumb-media {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 8px !important;
+  }
+  .file-container.list-view .file-type-icon-lg svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  .file-container.list-view .video-play-badge {
+    display: none !important;
+  }
+  .file-container.list-view .file-card-info {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    padding: 0 8px 0 0 !important;
+    gap: 3px !important;
+  }
+  .file-container.list-view .file-card-title-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    margin-bottom: 0 !important;
+  }
+  .file-container.list-view .file-name {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+  }
+  .file-container.list-view .file-meta-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    font-size: 11px !important;
+    color: var(--text-secondary) !important;
+  }
+  .file-container.list-view .card-select-btn {
+    margin-right: 6px !important;
+    flex-shrink: 0 !important;
+  }
+  .file-container.list-view .item-more-btn {
+    position: static !important;
+    opacity: 1 !important;
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
+    width: 32px !important;
+    height: 32px !important;
   }
 
   /* 7. Bottom Navigation Bar */
