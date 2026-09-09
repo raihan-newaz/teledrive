@@ -59,6 +59,7 @@ async function initialize(apiId, apiHash, botToken) {
 
   const savedSession = client.session.save();
   try { fs.writeFileSync(sessionFile, savedSession); } catch (e) {}
+  _cachedChannelEntity = null; // Invalidate cached channel entity on re-init
   return savedSession;
 }
 
@@ -276,7 +277,7 @@ async function deleteFiles(messageIds) {
   try {
     const channelEntity = await getChannelInputEntity();
     console.log(`[Telegram] Deleting message ID(s): [${ids.join(', ')}] from channel...`);
-    const result = await tClient.deleteMessages(channelEntity, ids, { revoke: true });
+    const result = await withTelegramRetry(() => tClient.deleteMessages(channelEntity, ids, { revoke: true }));
     console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}]. Result:`, JSON.stringify(result));
     return { success: true, count: ids.length, result };
   } catch (err) {

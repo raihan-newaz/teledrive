@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const fsPromises = require('fs/promises');
-const { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, copyFileSync } = require('fs');
+const { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, copyFileSync, unlinkSync } = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
@@ -267,15 +267,16 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       }
     }
 
-    cacheWriteStream.end();
-    if (!isClientClosed) {
-      streamCompleted = true;
-      try {
-        if (existsSync(tempCachedPath)) {
+    cacheWriteStream.end(() => {
+      if (!isClientClosed && existsSync(tempCachedPath)) {
+        try {
           const fs = require('fs');
           fs.renameSync(tempCachedPath, cachedPath);
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
+    });
+    if (!isClientClosed) {
+      streamCompleted = true;
       res.end();
     }
   } catch (err) {
@@ -582,20 +583,30 @@ router.get('/:id/thumbnail', async (req, res) => {
       return;
     }
 
-    // Stream on-the-fly (for thumbnail, we only need the first part)
+    // Stream on-the-fly (for thumbnail of single/chunk 0)
     const targetMsgId = file.telegram_message_id;
     const targetSalt = file.salt;
     const targetIv = file.iv;
     const targetSize = file.size;
+    const isSingleFile = file.is_chunked === 0 || file.total_chunks <= 1;
 
     const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, targetSalt);
     const iv = Buffer.from(targetIv, 'base64');
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
 
-    const cacheWriteStream = createWriteStream(cachedPath);
+    const tempCachedPath = `${cachedPath}.tmp`;
+    const cacheWriteStream = isSingleFile ? createWriteStream(tempCachedPath) : null;
     let totalEnc = 0;
+    let isClientClosed = false;
+
+    req.on('close', () => {
+      isClientClosed = true;
+      if (cacheWriteStream) cacheWriteStream.destroy();
+      try { if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath); } catch (e) {}
+    });
 
     for await (const chunk of telegram.iterDownloadFile(targetMsgId, 256 * 1024)) {
+      if (isClientClosed) break;
       totalEnc += chunk.length;
       let cipherChunk = chunk;
       if (totalEnc > targetSize) {
@@ -604,13 +615,22 @@ router.get('/:id/thumbnail', async (req, res) => {
       }
       if (cipherChunk.length > 0) {
         const dec = decipher.update(cipherChunk);
-        res.write(dec);
-        cacheWriteStream.write(dec);
+        if (!isClientClosed) res.write(dec);
+        if (cacheWriteStream) cacheWriteStream.write(dec);
       }
     }
 
-    cacheWriteStream.end();
-    res.end();
+    if (cacheWriteStream) {
+      cacheWriteStream.end(() => {
+        if (!isClientClosed && existsSync(tempCachedPath)) {
+          try {
+            const fs = require('fs');
+            fs.renameSync(tempCachedPath, cachedPath);
+          } catch (e) {}
+        }
+      });
+    }
+    if (!isClientClosed) res.end();
   } catch (error) {
     console.error('Thumbnail error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to load thumbnail' });
