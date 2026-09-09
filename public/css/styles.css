@@ -2818,6 +2818,11 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-secondary);
 }
 
+.cache-action-box button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 /* GOOGLE DRIVE STYLE SHARE MODAL                                            */
 /* ══════════════════════════════════════════════════════════════════════════ */
