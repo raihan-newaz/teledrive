@@ -1992,10 +1992,12 @@ const App = {
 
       inputImportDb.onchange = async (e) => {
         const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
         const confirmed = await UI.confirm({
           title: 'Restore Database Backup?',
           message: `Are you sure you want to restore database from "${file.name}"?`,
-          description: 'Warning: This will overwrite the current database file. TeleDrive will restart after restoration.',
+          description: 'Warning: This will overwrite the current database file. TeleDrive will reload automatically once restored.',
           icon: 'warning',
           confirmText: 'Restore & Overwrite',
           confirmType: 'danger',
@@ -2008,17 +2010,17 @@ const App = {
         }
 
         btnImportTrigger.disabled = true;
-        btnImportTrigger.innerHTML = '<span>⏳ Restoring Database...</span>';
+        btnImportTrigger.innerHTML = '<span>⏳ Restoring...</span>';
+        UI.showToast('Restoring database backup and verifying tables... Please wait.', 'info', 10000);
 
         try {
           const res = await API.importDatabase(file);
-          UI.showToast(res.message || 'Database restored successfully!', 'success');
-          setTimeout(() => window.location.reload(), 1200);
+          UI.showToast(res.message || 'Database restored successfully! Reloading...', 'success', 4000);
+          setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
-          UI.showToast('Import failed: ' + err.message, 'error');
-        } finally {
+          UI.showToast('Database restore failed: ' + (err.message || 'Invalid SQLite file'), 'error', 6000);
           btnImportTrigger.disabled = false;
-          btnImportTrigger.innerHTML = '<span>⬆️ Choose & Restore DB</span>';
+          btnImportTrigger.innerHTML = '<span>Restore Database</span>';
           inputImportDb.value = '';
         }
       };

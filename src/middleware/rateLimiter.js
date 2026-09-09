@@ -16,16 +16,19 @@ const globalLimiter = rateLimit({
 });
 
 /**
- * Auth rate limiter: 30 requests per 15 minutes per IP
- * Used for login/authentication endpoints
+ * Auth / Login rate limiter: 5 failed attempts per 15 minutes per IP
+ * Uses skipSuccessfulRequests so valid logins are never blocked.
  */
-const authLimiter = rateLimit({
+const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 30,
-    message: { error: 'Too many login attempts from this IP, please try again after 15 minutes.' },
+    max: 5, // Maximum 5 failed attempts
+    skipSuccessfulRequests: true,
+    message: { error: 'Too many failed login attempts. Please try again after 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
+
+const authLimiter = loginLimiter;
 
 /**
  * Upload rate limiter: 100 requests per minute per IP
@@ -41,5 +44,6 @@ const uploadLimiter = rateLimit({
 module.exports = {
     globalLimiter,
     authLimiter,
+    loginLimiter,
     uploadLimiter
 };
