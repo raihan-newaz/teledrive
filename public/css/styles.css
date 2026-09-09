@@ -393,6 +393,14 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   gap: 12px;
 }
+.hamburger-btn {
+  display: none;
+}
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: inline-flex;
+  }
+}
 .logo {
   display: flex;
   align-items: center;
