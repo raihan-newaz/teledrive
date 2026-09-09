@@ -405,4 +405,13 @@
     font-size: 13px;
     padding: 10px 14px;
   }
+
+  /* 13. Upload Panel Mobile */
+  .upload-panel {
+    bottom: calc(var(--bottom-nav-height) + 12px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+  }
 }

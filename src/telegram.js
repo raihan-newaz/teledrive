@@ -139,7 +139,7 @@ async function uploadFile(filePath, fileName, progressCallback) {
   return await tClient.sendFile(channel, {
     file: filePath,
     forceDocument: true,
-    workers: 8,
+    workers: 16,
     progressCallback: progressCallback,
     attributes: [
       new Api.DocumentAttributeFilename({

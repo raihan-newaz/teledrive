@@ -23,17 +23,23 @@ if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 
 const upload = multer({ dest: tmpDir, limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2GB max
 
-const activeChunkSessions = new Map();
-
-// Session cleaner for expired chunk sessions (after 6 hours)
-setInterval(() => {
-  const now = Date.now();
-  for (const [uploadId, session] of activeChunkSessions.entries()) {
-    if (now - session.createdAt > 6 * 3600 * 1000) {
-      activeChunkSessions.delete(uploadId);
+// Clean up abandoned upload sessions older than 48 hours
+async function purgeExpiredUploadSessions() {
+  try {
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const expiredSessions = db.getExpiredUploadSessions(fortyEightHoursAgo);
+    for (const session of expiredSessions) {
+      const chunks = db.getUploadedSessionChunks(session.id);
+      for (const ch of chunks) {
+        try { await telegram.deleteFile(ch.telegram_message_id); } catch (e) {}
+      }
+      db.deleteUploadSession(session.id);
     }
+  } catch (err) {
+    console.error('[Upload-Session] Error purging expired sessions:', err);
   }
-}, 30 * 60 * 1000).unref();
+}
+setInterval(purgeExpiredUploadSessions, 12 * 3600 * 1000).unref();
 
 function getMimeType(filename) {
   const ext = path.extname(filename).toLowerCase();
@@ -248,7 +254,94 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
 });
 
 /**
- * POST /upload-chunk — Auto-Chunked Upload for Large Files (>2GB)
+ * Helper to commit completed chunked file to database
+ */
+function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
+  chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+
+  const fileId = uploadId;
+  const mimeType = getMimeType(safeName);
+  const now = new Date().toISOString();
+  const firstChunk = chunks[0];
+
+  db.run(
+    `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+    [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
+  );
+
+  // Clear any old records for this file ID in file_chunks, then commit all chunks
+  db.deleteFileChunks(fileId);
+  for (const ch of chunks) {
+    db.addFileChunk({
+      id: ch.id,
+      fileId,
+      chunkIndex: ch.chunk_index,
+      telegramMessageId: ch.telegram_message_id,
+      size: ch.size,
+      iv: ch.iv,
+      salt: ch.salt
+    });
+  }
+
+  // Remove upload session
+  db.deleteUploadSession(uploadId);
+
+  const fileRecord = db.getFile(fileId);
+  return res.json({ success: true, done: true, file: fileRecord });
+}
+
+/**
+ * GET /upload-session — Check existing upload session state for resumable uploads
+ */
+router.get('/upload-session', (req, res) => {
+  try {
+    const { uploadId } = req.query;
+    if (!uploadId) return res.status(400).json({ error: 'Missing uploadId' });
+
+    const session = db.getUploadSession(uploadId);
+    if (!session) {
+      return res.json({ exists: false, uploadedIndices: [] });
+    }
+
+    const chunks = db.getUploadedSessionChunks(uploadId);
+    const uploadedIndices = chunks.map(c => c.chunk_index);
+
+    res.json({
+      exists: true,
+      fileName: session.file_name,
+      fileSize: session.file_size,
+      totalChunks: session.total_chunks,
+      uploadedIndices
+    });
+  } catch (error) {
+    console.error('Check upload session error:', error);
+    res.status(500).json({ error: 'Failed to check upload session' });
+  }
+});
+
+/**
+ * DELETE /upload-session/:uploadId — Cancel an in-progress session and delete its chunks from Telegram
+ */
+router.delete('/upload-session/:uploadId', async (req, res) => {
+  try {
+    const uploadId = req.params.uploadId;
+    const chunks = db.getUploadedSessionChunks(uploadId);
+    for (const ch of chunks) {
+      try {
+        await telegram.deleteFile(ch.telegram_message_id);
+      } catch (e) {}
+    }
+    db.deleteUploadSession(uploadId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete upload session error:', error);
+    res.status(500).json({ error: 'Failed to cancel upload session' });
+  }
+});
+
+/**
+ * POST /upload-chunk — Auto-Chunked Resumable Upload
  */
 router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, res) => {
   let originalPath = null;
@@ -269,33 +362,41 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     }
 
     const safeName = sanitizeFilename(fileName);
+
+    // 1. Ensure persistent session exists in DB
+    db.createUploadSession({
+      id: uploadId,
+      fileName: safeName,
+      fileSize: totalFileSize,
+      folderId,
+      totalChunks
+    });
+
+    // 2. Check if this chunk was already uploaded (prevents duplicate work on retry/resume)
+    const existingChunks = db.getUploadedSessionChunks(uploadId);
+    const alreadyUploaded = existingChunks.find(c => c.chunk_index === chunkIndex);
+    if (alreadyUploaded) {
+      if (existingChunks.length === totalChunks) {
+        return assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, existingChunks, res);
+      }
+      return res.json({ success: true, done: false, chunkIndex, uploadedChunks: existingChunks.length, totalChunks });
+    }
+
     originalPath = req.file.path;
     encryptedPath = originalPath + '.enc';
 
-    // 1. Encrypt this chunk with AES-256-GCM
+    // 3. Encrypt this chunk with AES-256-GCM
     const encryptionKey = process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
-    // 2. Upload this chunk to Telegram
+    // 4. Upload chunk to Telegram
     const chunkTgName = `${safeName}.part${chunkIndex + 1}.enc`;
     const message = await telegram.uploadFile(encryptedPath, chunkTgName);
 
-    // 3. Track session
-    if (!activeChunkSessions.has(uploadId)) {
-      activeChunkSessions.set(uploadId, {
-        uploadId,
-        fileName: safeName,
-        totalFileSize,
-        folderId,
-        totalChunks,
-        createdAt: Date.now(),
-        chunks: []
-      });
-    }
-
-    const session = activeChunkSessions.get(uploadId);
-    session.chunks.push({
+    // 5. Persist chunk in DB
+    db.addUploadSessionChunk({
       id: uuidv4(),
+      sessionId: uploadId,
       chunkIndex,
       telegramMessageId: message.id,
       size: req.file.size,
@@ -303,40 +404,13 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       salt
     });
 
-    // 4. Check if all chunks have been received
-    if (session.chunks.length === totalChunks) {
-      session.chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
-
-      const fileId = uploadId;
-      const mimeType = getMimeType(safeName);
-      const now = new Date().toISOString();
-      const firstChunk = session.chunks[0];
-
-      db.run(
-        `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-        [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegramMessageId, firstChunk.iv, firstChunk.salt, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
-      );
-
-      // Insert each chunk into file_chunks table
-      for (const ch of session.chunks) {
-        db.addFileChunk({
-          id: ch.id,
-          fileId,
-          chunkIndex: ch.chunkIndex,
-          telegramMessageId: ch.telegramMessageId,
-          size: ch.size,
-          iv: ch.iv,
-          salt: ch.salt
-        });
-      }
-
-      activeChunkSessions.delete(uploadId);
-      const fileRecord = db.getFile(fileId);
-      return res.json({ success: true, done: true, file: fileRecord });
+    // 6. Check if all chunks have been received
+    const allChunks = db.getUploadedSessionChunks(uploadId);
+    if (allChunks.length === totalChunks) {
+      return assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, allChunks, res);
     }
 
-    return res.json({ success: true, done: false, chunkIndex, uploadedChunks: session.chunks.length, totalChunks });
+    return res.json({ success: true, done: false, chunkIndex, uploadedChunks: allChunks.length, totalChunks });
   } catch (error) {
     console.error('Upload chunk error:', error);
     res.status(500).json({ error: 'Chunk upload failed: ' + error.message });

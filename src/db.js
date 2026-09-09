@@ -79,6 +79,32 @@ async function initialize() {
   try { db.run('ALTER TABLE files ADD COLUMN total_chunks INTEGER DEFAULT 1;'); } catch (e) {}
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS upload_sessions (
+      id TEXT PRIMARY KEY,
+      file_name TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      folder_id TEXT,
+      total_chunks INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS upload_session_chunks (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES upload_sessions(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      telegram_message_id INTEGER NOT NULL,
+      size INTEGER NOT NULL,
+      iv TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(session_id, chunk_index)
+    );
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -260,6 +286,60 @@ function deleteFileChunks(fileId) {
 }
 
 /**
+ * Gets an upload session by ID
+ */
+function getUploadSession(id) {
+  return get('SELECT * FROM upload_sessions WHERE id = ?', [id]);
+}
+
+/**
+ * Creates or updates an upload session
+ */
+function createUploadSession(session) {
+  const now = new Date().toISOString();
+  run(
+    `INSERT INTO upload_sessions (id, file_name, file_size, folder_id, total_chunks, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET updated_at = ?`,
+    [session.id, session.fileName, session.fileSize, session.folderId || null, session.totalChunks, now, now, now]
+  );
+}
+
+/**
+ * Gets all uploaded chunks for a session
+ */
+function getUploadedSessionChunks(sessionId) {
+  return all('SELECT * FROM upload_session_chunks WHERE session_id = ? ORDER BY chunk_index ASC', [sessionId]);
+}
+
+/**
+ * Adds an uploaded chunk to the session
+ */
+function addUploadSessionChunk(chunk) {
+  run(
+    `INSERT OR REPLACE INTO upload_session_chunks (id, session_id, chunk_index, telegram_message_id, size, iv, salt, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [chunk.id, chunk.sessionId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, new Date().toISOString()]
+  );
+  run('UPDATE upload_sessions SET updated_at = ? WHERE id = ?', [new Date().toISOString(), chunk.sessionId]);
+}
+
+/**
+ * Deletes an upload session and its chunks
+ */
+function deleteUploadSession(sessionId) {
+  run('DELETE FROM upload_session_chunks WHERE session_id = ?', [sessionId]);
+  run('DELETE FROM upload_sessions WHERE id = ?', [sessionId]);
+}
+
+/**
+ * Gets expired upload sessions
+ */
+function getExpiredUploadSessions(olderThanIso) {
+  return all('SELECT * FROM upload_sessions WHERE updated_at <= ?', [olderThanIso]);
+}
+
+/**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
  */
@@ -278,6 +358,12 @@ module.exports = {
   getFileChunks,
   addFileChunk,
   deleteFileChunks,
+  getUploadSession,
+  createUploadSession,
+  getUploadedSessionChunks,
+  addUploadSessionChunk,
+  deleteUploadSession,
+  getExpiredUploadSessions,
   getFolder,
   getFolderContents,
   searchFiles,
