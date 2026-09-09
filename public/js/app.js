@@ -93,11 +93,26 @@ const App = {
     const appEl = document.getElementById('app-screen');
     
     if (loaderEl) loaderEl.style.display = 'none';
-    if (setupEl) setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
-    if (loginEl) loginEl.style.display = screen === 'login' ? 'flex' : 'none';
+    if (setupEl) {
+      setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
+      if (screen !== 'setup') setupEl.setAttribute('aria-hidden', 'true');
+    }
+    if (loginEl) {
+      loginEl.style.display = screen === 'login' ? 'flex' : 'none';
+      if (screen !== 'login') {
+        loginEl.setAttribute('aria-hidden', 'true');
+        // Clear password value to prevent Chrome autofill popups on click inside main app
+        const pwdInput = document.getElementById('login-password');
+        if (pwdInput) {
+          pwdInput.value = '';
+          pwdInput.blur();
+        }
+      }
+    }
     if (appEl) appEl.style.display = screen === 'app' ? 'flex' : 'none';
 
     if (screen === 'login') {
+      if (loginEl) loginEl.removeAttribute('aria-hidden');
       setTimeout(() => {
         const pwdInput = document.getElementById('login-password');
         if (pwdInput) {
