@@ -1246,9 +1246,16 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(20, 20, 20, 0.6);
+}
+.preview-header-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
 }
 .preview-filename {
   font-size: 15px;
@@ -1256,11 +1263,14 @@ input:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: block;
+  width: 100%;
 }
 .preview-header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 .preview-btn {
   width: 42px;

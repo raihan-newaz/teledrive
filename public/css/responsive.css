@@ -359,13 +359,26 @@
   .preview-header {
     height: 52px;
     padding: 0 10px;
+    gap: 8px;
+  }
+  .preview-header-left {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
   }
   .preview-filename {
-    max-width: 44vw;
+    max-width: 100%;
     font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: block;
+  }
+  .preview-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
   }
   .preview-btn {
     width: 38px;
