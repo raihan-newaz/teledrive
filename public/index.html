@@ -6,10 +6,10 @@
   <title>TeleDrive — Unlimited Secure Cloud Storage</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg">
-  <!-- Google Fonts: Roboto (400, 500, 600, 700) -->
+  <!-- Google Fonts: Google Sans & Roboto (Exact Google Drive typography) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Google+Sans+Text:ital,wght@0,400;0,500;0,700;1,400&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/themes.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/responsive.css">
@@ -173,7 +173,10 @@
 
         <form id="login-form">
           <div class="form-group">
-            <input type="password" id="login-password" placeholder="Master Password" required autocomplete="current-password" autofocus>
+            <div class="input-with-action">
+              <input type="password" id="login-password" placeholder="Master Password" required autocomplete="current-password" autofocus>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password">👁️</button>
+            </div>
           </div>
           <button type="submit" class="btn-primary btn-block" id="login-btn">
             <span>Unlock Drive</span>
@@ -310,17 +313,14 @@
             <span>Items in Trash are automatically deleted forever from Telegram after 30 days.</span>
           </div>
           <button class="btn-danger-sm" id="btn-empty-trash" title="Empty Trash">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zm2 15H7V6h10v13zM9 8h2v9H9V8zm4 0h2v9h-2V8z"/></svg>
-            <span>Empty Trash</span>
+            <span>🗑️ Empty Trash</span>
           </button>
         </div>
 
         <!-- ACTION BAR (shown when items are selected) -->
         <div class="action-bar" id="action-bar" style="display:none;">
           <div class="action-bar-left">
-            <button class="icon-btn" id="action-bar-close" title="Clear selection">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-            </button>
+            <button class="icon-btn" id="action-bar-close" title="Clear selection">✕</button>
             <span class="selected-count" id="selected-count">0 selected</span>
             <button class="action-select-all-btn" id="action-select-all" title="Select all visible items">Select All</button>
           </div>
@@ -350,7 +350,7 @@
               <span>Delete</span>
             </button>
             <button class="action-btn danger" id="action-permanent-delete" title="Delete permanently" style="display:none;">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41 2.12 2.12 2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               <span>Permanent Delete</span>
             </button>
           </div>
@@ -358,41 +358,20 @@
 
         <!-- QUICK FILTERS -->
         <div class="filters" id="filters">
-          <button class="filter-chip active" data-type="all">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-            <span>All</span>
-          </button>
-          <button class="filter-chip" data-type="image">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-            <span>Images</span>
-          </button>
-          <button class="filter-chip" data-type="video">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-            <span>Videos</span>
-          </button>
-          <button class="filter-chip" data-type="audio">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-            <span>Audio</span>
-          </button>
-          <button class="filter-chip" data-type="document">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-            <span>Documents</span>
-          </button>
-          <button class="filter-chip" data-type="archive">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10v-2h-4v2H8v-4h2v2h4v-2h2v4h-2z"/></svg>
-            <span>Archives</span>
-          </button>
+          <button class="filter-chip active" data-type="all">All</button>
+          <button class="filter-chip" data-type="image">🖼️ Images</button>
+          <button class="filter-chip" data-type="video">🎬 Videos</button>
+          <button class="filter-chip" data-type="audio">🎵 Audio</button>
+          <button class="filter-chip" data-type="document">📄 Documents</button>
+          <button class="filter-chip" data-type="archive">📦 Archives</button>
         </div>
 
         <!-- SORT BAR -->
         <div class="sort-bar" id="sort-bar">
-          <span class="sort-label">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
-            Sort by:
-          </span>
-          <button class="sort-btn active" data-sort="name"><span>Name</span> <span class="sort-arrow">↑</span></button>
-          <button class="sort-btn" data-sort="date"><span>Date</span></button>
-          <button class="sort-btn" data-sort="size"><span>Size</span></button>
+          <span class="sort-label">Sort by:</span>
+          <button class="sort-btn active" data-sort="name">Name <span class="sort-arrow">↑</span></button>
+          <button class="sort-btn" data-sort="date">Date</button>
+          <button class="sort-btn" data-sort="size">Size</button>
         </div>
 
         <!-- SKELETON LOADER -->
@@ -512,25 +491,19 @@
   <!-- SHARE FILE MODAL (Google Drive Style) -->
   <div class="modal share-modal" id="share-modal" style="display:none;" role="dialog" aria-modal="true">
     <div class="share-modal-header">
-      <div class="share-modal-file-icon" id="share-modal-file-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="#4285F4"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-      </div>
+      <div class="share-modal-file-icon" id="share-modal-file-icon">📄</div>
       <div class="share-modal-title-wrap">
         <h3 id="share-modal-title">Share File</h3>
         <span class="share-modal-subtitle" id="share-modal-subtitle">Configure link and access settings</span>
       </div>
-      <button class="icon-btn share-modal-close-btn" data-modal-cancel title="Close">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
+      <button class="icon-btn share-modal-close-btn" data-modal-cancel title="Close">✕</button>
     </div>
 
     <!-- General Access Section -->
     <div class="share-section">
       <label class="share-section-title">General access</label>
       <div class="share-access-card">
-        <div class="share-access-icon-wrap" id="share-access-icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-        </div>
+        <div class="share-access-icon-wrap" id="share-access-icon-wrap">🔒</div>
         <div class="share-access-info">
           <select id="share-access-select" class="share-access-select">
             <option value="restricted">Restricted — Only you have access</option>
@@ -558,14 +531,12 @@
         <!-- Optional Password -->
         <div class="share-field-group">
           <label class="share-field-label">
-            <span><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg> Password Protection</span>
+            <span>🔑 Password Protection</span>
             <span class="share-field-optional">(Optional)</span>
           </label>
           <div class="share-pw-wrap">
             <input type="password" id="share-password-input" placeholder="Set a password or leave blank">
-            <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-            </button>
+            <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">👁️</button>
           </div>
           <small class="share-field-help" id="share-pw-status"></small>
         </div>
@@ -573,7 +544,7 @@
         <!-- Expiration -->
         <div class="share-field-group">
           <label class="share-field-label">
-            <span><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Link Expiration</span>
+            <span>⏳ Link Expiration</span>
           </label>
           <select id="share-expiration-select" class="share-select">
             <option value="never">Never expires</option>
@@ -587,8 +558,8 @@
 
       <!-- Stats Badge -->
       <div class="share-stats-badge" id="share-stats-badge">
-        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: text-bottom; margin-right: 3px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg> <strong id="share-stats-views">0</strong> views</span>
-        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: text-bottom; margin-right: 3px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> <strong id="share-stats-downloads">0</strong> downloads</span>
+        <span>👁️ <strong id="share-stats-views">0</strong> views</span>
+        <span>⬇️ <strong id="share-stats-downloads">0</strong> downloads</span>
       </div>
     </div>
 
@@ -656,47 +627,29 @@
         <span class="info-value" id="info-file-location">-</span>
       </div>
       <div class="info-row highlight-row">
-        <span class="info-label">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
-          Upload Date & Time
-        </span>
+        <span class="info-label">📅 Upload Date & Time</span>
         <span class="info-value info-date" id="info-file-created">-</span>
       </div>
       <div class="info-row">
-        <span class="info-label">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-          Last Modified
-        </span>
+        <span class="info-label">🕒 Last Modified</span>
         <span class="info-value info-date" id="info-file-updated">-</span>
       </div>
       <div class="info-row">
-        <span class="info-label">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-          Encryption
-        </span>
+        <span class="info-label">🔐 Encryption</span>
         <span class="info-value"><span class="badge-secure">AES-256-GCM Zero-Knowledge</span></span>
       </div>
       <div class="info-row">
-        <span class="info-label">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
-          Telegram Ref
-        </span>
+        <span class="info-label">💬 Telegram Ref</span>
         <span class="info-value" id="info-file-tg">-</span>
       </div>
       <div class="info-row">
-        <span class="info-label">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7zM20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14z"/></svg>
-          File UUID
-        </span>
+        <span class="info-label">🆔 File UUID</span>
         <span class="info-value info-uuid" id="info-file-id">-</span>
       </div>
     </div>
 
     <div class="modal-actions file-info-actions">
-      <button class="btn-secondary" id="info-copy-link">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-        <span>Copy Stream Link</span>
-      </button>
+      <button class="btn-secondary" id="info-copy-link">📋 Copy Stream Link</button>
       <button class="btn-primary" data-modal-cancel>Close</button>
     </div>
   </div>
@@ -766,9 +719,7 @@
             <label for="settings-current-pass">Current Password <span class="req">*</span></label>
             <div class="input-with-action">
               <input type="password" id="settings-current-pass" placeholder="Enter current master password" required autocomplete="current-password">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-current-pass" title="Show/Hide">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-              </button>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-current-pass" title="Show/Hide">👁️</button>
             </div>
           </div>
           <div class="form-row-2">
@@ -776,24 +727,19 @@
               <label for="settings-new-pass">New Password <span class="req">*</span></label>
               <div class="input-with-action">
                 <input type="password" id="settings-new-pass" placeholder="Enter new master password" required autocomplete="new-password">
-                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-new-pass" title="Show/Hide">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                </button>
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-new-pass" title="Show/Hide">👁️</button>
               </div>
             </div>
             <div class="form-group">
               <label for="settings-confirm-pass">Confirm New Password <span class="req">*</span></label>
               <div class="input-with-action">
                 <input type="password" id="settings-confirm-pass" placeholder="Confirm new password" required autocomplete="new-password">
-                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-confirm-pass" title="Show/Hide">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                </button>
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-confirm-pass" title="Show/Hide">👁️</button>
               </div>
             </div>
           </div>
           <div class="settings-actions">
             <button type="button" class="btn-primary" id="btn-save-password">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
               <span>Save New Password</span>
             </button>
           </div>
@@ -832,8 +778,7 @@
             <p>Safely clear session credentials and lock the vault on this browser.</p>
           </div>
           <button type="button" class="btn-danger" id="settings-logout-btn">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
-            <span>Log Out</span>
+            <span>🔒 Log Out</span>
           </button>
         </div>
       </div>
@@ -870,9 +815,7 @@
             <label for="settings-tg-bot-token">Telegram Bot Token <span class="req">*</span></label>
             <div class="input-with-action">
               <input type="password" id="settings-tg-bot-token" placeholder="e.g. 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ" required autocomplete="off">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-tg-bot-token" title="Show/Hide Token">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-              </button>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-tg-bot-token" title="Show/Hide Token">👁️</button>
             </div>
           </div>
 
@@ -884,12 +827,10 @@
 
           <div class="settings-actions">
             <button type="button" class="btn-secondary" id="btn-test-tg">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
-              <span>Test Connection</span>
+              <span>⚡ Test Connection</span>
             </button>
             <button type="button" class="btn-primary" id="btn-save-tg">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-              <span>Save & Reconnect</span>
+              <span>💾 Save & Reconnect</span>
             </button>
           </div>
         </form>
@@ -909,14 +850,8 @@
             <span>Switch between Light and Dark mode</span>
           </div>
           <div class="theme-switch-btns">
-            <button type="button" class="theme-btn" id="theme-btn-light" data-theme="light">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 000-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 000-1.41.996.996 0 00-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 000-1.41.996.996 0 000-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
-              <span>Light</span>
-            </button>
-            <button type="button" class="theme-btn" id="theme-btn-dark" data-theme="dark">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4a.996.996 0 001.41 0l1.9-1.9C9.28 19.64 10.59 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
-              <span>Dark</span>
-            </button>
+            <button type="button" class="theme-btn" id="theme-btn-light" data-theme="light">☀️ Light</button>
+            <button type="button" class="theme-btn" id="theme-btn-dark" data-theme="dark">🌙 Dark</button>
           </div>
         </div>
       </div>
@@ -932,14 +867,8 @@
             <span>Choose default display mode for files & folders</span>
           </div>
           <div class="view-pref-btns">
-            <button type="button" class="pref-btn" id="view-pref-grid">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 11h5V5H4v6zm0 7h5v-5H4v5zm6 0h5v-5h-5v5zm6 0h5v-5h-5v5zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/></svg>
-              <span>Grid</span>
-            </button>
-            <button type="button" class="pref-btn" id="view-pref-list">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
-              <span>List</span>
-            </button>
+            <button type="button" class="pref-btn" id="view-pref-grid">🔲 Grid</button>
+            <button type="button" class="pref-btn" id="view-pref-list">☰ List</button>
           </div>
         </div>
         <div class="pref-row">
@@ -964,36 +893,28 @@
         </div>
         <div class="storage-stats-grid">
           <div class="storage-card">
-            <div class="storage-card-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="#1A73E8"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-            </div>
+            <div class="storage-card-icon">📁</div>
             <div class="storage-card-content">
               <span class="storage-card-label">Total Cloud Files</span>
               <strong id="settings-storage-files" class="storage-card-val">0</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="#34A853"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
-            </div>
+            <div class="storage-card-icon">☁️</div>
             <div class="storage-card-content">
               <span class="storage-card-label">Encrypted Cloud Used</span>
               <strong id="settings-storage-bytes" class="storage-card-val">0 B</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="#FBBC04"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
-            </div>
+            <div class="storage-card-icon">⚡</div>
             <div class="storage-card-content">
               <span class="storage-card-label">Storage Capacity</span>
               <strong class="storage-card-val text-success">Unlimited ∞</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="#EA4335"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
-            </div>
+            <div class="storage-card-icon">💾</div>
             <div class="storage-card-content">
               <span class="storage-card-label">Local Decryption Cache</span>
               <strong id="settings-cache-size" class="storage-card-val">0 B</strong>
@@ -1013,8 +934,7 @@
             <p>Freed disk space on your computer. Files remain completely safe and untouched in your Telegram Cloud.</p>
           </div>
           <button type="button" class="btn-danger" id="btn-clear-cache">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zm2 15H7V6h10v13zM9 8h2v9H9V8zm4 0h2v9h-2V8z"/></svg>
-            <span>Clear Local Cache</span>
+            <span>🗑️ Clear Local Cache</span>
           </button>
         </div>
       </div>
@@ -1033,8 +953,7 @@
             <p>Save <code>teledrive.db</code> to your local machine as a safe backup or for migrating to another server.</p>
           </div>
           <button type="button" class="btn-primary" id="btn-export-db">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-            <span>Export Database</span>
+            <span>⬇️ Export Database</span>
           </button>
         </div>
       </div>
@@ -1052,8 +971,7 @@
           <div style="display: flex; gap: 8px;">
             <input type="file" id="import-db-file" accept=".db,.sqlite" style="display:none;">
             <button type="button" class="btn-secondary" id="btn-import-db-trigger">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-              <span>Choose & Restore DB</span>
+              <span>⬆️ Choose & Restore DB</span>
             </button>
           </div>
         </div>
@@ -1147,7 +1065,7 @@
       <span>Restore</span>
     </button>
     <button class="context-item danger" data-action="permanent-delete" style="display:none;">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12l1.41-1.41 2.12 2.12 2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14l-2.13-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       <span>Delete Permanently</span>
     </button>
   </div>

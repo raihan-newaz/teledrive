@@ -96,6 +96,15 @@ const App = {
     if (setupEl) setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
     if (loginEl) loginEl.style.display = screen === 'login' ? 'flex' : 'none';
     if (appEl) appEl.style.display = screen === 'app' ? 'flex' : 'none';
+
+    if (screen === 'login') {
+      setTimeout(() => {
+        const pwdInput = document.getElementById('login-password');
+        if (pwdInput) {
+          pwdInput.focus();
+        }
+      }, 50);
+    }
   },
 
   // ─── View & Navigation ─────────────────────────────────────────────
@@ -238,13 +247,7 @@ const App = {
     // Filter files
     let filteredFiles = this.files;
     if (this.activeFilter && this.activeFilter !== 'all') {
-      filteredFiles = this.files.filter(f => {
-        const cat = UI.getFileTypeCategory(f.mime_type, f.name);
-        if (this.activeFilter === 'document') {
-          return cat === 'document' || cat === 'pdf' || cat === 'spreadsheet' || cat === 'presentation' || cat === 'code';
-        }
-        return cat === this.activeFilter;
-      });
+      filteredFiles = this.files.filter(f => UI.getFileTypeCategory(f.mime_type) === this.activeFilter);
     }
 
     // Sort files & folders
@@ -314,22 +317,6 @@ const App = {
   initFileContainerEvents() {
     const fileContainer = document.getElementById('file-container');
     if (!fileContainer) return;
-
-    // Detect touch device
-    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
-    // On touch devices, disable draggable to prevent drag from eating taps
-    if (isTouchDevice) {
-      const disableDrag = () => {
-        fileContainer.querySelectorAll('[draggable="true"]').forEach(el => {
-          el.removeAttribute('draggable');
-        });
-      };
-      // Disable on current cards and also after re-renders
-      disableDrag();
-      const observer = new MutationObserver(disableDrag);
-      observer.observe(fileContainer, { childList: true, subtree: true });
-    }
 
     // Click handler (delegated)
     fileContainer.addEventListener('click', (e) => {
@@ -458,62 +445,6 @@ const App = {
         }
       }
     });
-
-    // ─── Mobile Touch Tap Handler (Backup for click events) ────────
-    // On some mobile browsers, draggable elements or touch-callout can
-    // swallow click events. This touchend handler ensures taps always work.
-    if (isTouchDevice) {
-      let touchStartTime = 0;
-      let touchStartX = 0;
-      let touchStartY = 0;
-
-      fileContainer.addEventListener('touchstart', (e) => {
-        touchStartTime = Date.now();
-        const touch = e.touches[0];
-        touchStartX = touch.clientX;
-        touchStartY = touch.clientY;
-      }, { passive: true });
-
-      fileContainer.addEventListener('touchend', (e) => {
-        const elapsed = Date.now() - touchStartTime;
-        // Only treat as tap if it was a quick touch (< 300ms) without drag
-        if (elapsed > 300) return;
-
-        const touch = e.changedTouches[0];
-        const dx = Math.abs(touch.clientX - touchStartX);
-        const dy = Math.abs(touch.clientY - touchStartY);
-        // If finger moved more than 10px, it's a scroll/drag, not a tap
-        if (dx > 10 || dy > 10) return;
-
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
-        if (!target) return;
-
-        // Skip if tapping on interactive buttons (they handle their own click)
-        if (target.closest('.card-select-btn') || target.closest('.item-more-btn')) return;
-
-        const folderCard = target.closest('.folder-card');
-        if (folderCard) {
-          e.preventDefault();
-          const id = folderCard.getAttribute('data-id');
-          this.lastSelectedId = id;
-          if (UI.selectedItems.size > 0) UI.clearSelection();
-          this.navigateToFolder(id);
-          return;
-        }
-
-        const fileCard = target.closest('.file-card');
-        if (fileCard) {
-          e.preventDefault();
-          const id = fileCard.getAttribute('data-id');
-          this.lastSelectedId = id;
-          const file = this.filesMap.get(id);
-          if (file) {
-            Preview.open(file);
-          }
-          return;
-        }
-      }, { passive: false });
-    }
 
     // Context menu / right-click handler (delegated)
     fileContainer.addEventListener('contextmenu', (e) => {
@@ -795,13 +726,13 @@ const App = {
 
     if (iconEl) {
       iconEl.innerHTML = item.type === 'folder' ?
-        `<svg viewBox="0 0 24 24" width="36" height="36" fill="#5f6368" aria-hidden="true"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>` :
-        UI.getFileIconSvg(item.mime_type, item.name, 36);
+        `<svg viewBox="0 0 24 24" width="36" height="36" fill="#5f6368"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>` :
+        UI.getFileIconSvg(item.mime_type);
     }
 
     if (nameEl) nameEl.textContent = item.name;
     if (subEl) subEl.textContent = item.type === 'folder' ? 'Cloud Folder' : (item.mime_type || 'Binary file');
-    if (typeEl) typeEl.textContent = item.type === 'folder' ? 'Directory / Folder' : `${UI.getFileTypeCategory(item.mime_type, item.name).toUpperCase()} (${item.mime_type || 'Unknown'})`;
+    if (typeEl) typeEl.textContent = item.type === 'folder' ? 'Directory / Folder' : `${UI.getFileTypeCategory(item.mime_type).toUpperCase()} (${item.mime_type || 'Unknown'})`;
     
     if (sizeEl) {
       if (item.type === 'folder') {
@@ -869,7 +800,7 @@ const App = {
     const accessIcon = document.getElementById('share-access-icon-wrap');
     const accessHint = document.getElementById('share-access-hint');
 
-    if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type, file.name, 32);
+    if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type);
     if (modalTitle) modalTitle.textContent = `Share "${file.name}"`;
     if (modalSubtitle) modalSubtitle.textContent = `${UI.formatFileSize(file.size)} • ${file.mime_type || 'File'}`;
 
@@ -894,9 +825,7 @@ const App = {
       const isShared = !!data.is_shared;
 
       if (accessSelect) accessSelect.value = isShared ? 'public' : 'restricted';
-      const sharePublicSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`;
-      const shareLockSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>`;
-      if (accessIcon) accessIcon.innerHTML = isShared ? sharePublicSvg : shareLockSvg;
+      if (accessIcon) accessIcon.textContent = isShared ? '🌐' : '🔒';
       if (accessHint) {
         accessHint.textContent = isShared
           ? 'Anyone on the internet with this link can view and download'
@@ -966,20 +895,33 @@ const App = {
     if (loginForm) {
       loginForm.onsubmit = async (e) => {
         e.preventDefault();
-        const pwd = document.getElementById('login-password').value;
+        const pwdInput = document.getElementById('login-password');
+        const pwd = pwdInput ? pwdInput.value : '';
         const spinner = document.getElementById('login-spinner');
         const btn = document.getElementById('login-btn');
+
+        if (!pwd || !pwd.trim()) {
+          UI.showToast('Please enter your password', 'info');
+          if (pwdInput) pwdInput.focus();
+          return;
+        }
+
         if (spinner) spinner.style.display = 'inline-block';
         if (btn) btn.disabled = true;
 
         try {
           await API.login(pwd);
           UI.showToast('Login successful!', 'success');
+          if (pwdInput) pwdInput.value = '';
           this.showScreen('app');
           await this.navigateToFolder(null);
           this.loadStorageStats();
         } catch (err) {
-          UI.showToast('Invalid password', 'error');
+          UI.showToast(err.message || 'Invalid master password', 'error');
+          if (pwdInput) {
+            pwdInput.focus();
+            pwdInput.select();
+          }
         } finally {
           if (spinner) spinner.style.display = 'none';
           if (btn) btn.disabled = false;
@@ -987,28 +929,15 @@ const App = {
       };
     }
 
-    // Logout buttons
-    const handleLogout = async () => {
-      const confirmed = await UI.confirm({
-        title: 'Log Out of TeleDrive?',
-        message: 'Are you sure you want to end this encrypted drive session?',
-        description: 'Your local decryption session will be closed and you will need your password to access your drive again.',
-        icon: 'warning',
-        confirmText: 'Log Out',
-        cancelText: 'Cancel',
-        confirmType: 'danger'
-      });
-      if (!confirmed) return;
-      UI.hideModal('settings-modal');
-      await API.logout();
-      UI.showToast('Logged out successfully', 'info');
-      this.showScreen('login');
-    };
-
+    // Logout button
     const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) logoutBtn.onclick = handleLogout;
-    const settingsLogoutBtn = document.getElementById('settings-logout-btn');
-    if (settingsLogoutBtn) settingsLogoutBtn.onclick = handleLogout;
+    if (logoutBtn) {
+      logoutBtn.onclick = async () => {
+        await API.logout();
+        UI.showToast('Logged out', 'info');
+        this.showScreen('login');
+      };
+    }
 
     // View toggle button (Grid / List)
     const viewToggle = document.getElementById('view-toggle');
@@ -1273,35 +1202,14 @@ const App = {
     const overlay = document.getElementById('sidebar-overlay');
 
     if (sidebarToggle && sidebar && overlay) {
-      const toggleSidebar = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      sidebarToggle.onclick = () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('open');
       };
-      const closeSidebar = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      overlay.onclick = () => {
         sidebar.classList.remove('open');
         overlay.classList.remove('open');
       };
-
-      sidebarToggle.addEventListener('click', toggleSidebar);
-      overlay.addEventListener('click', closeSidebar);
-
-      // Also bind touchend for mobile reliability
-      sidebarToggle.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('open');
-      }, { passive: false });
-      overlay.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        sidebar.classList.remove('open');
-        overlay.classList.remove('open');
-      }, { passive: false });
     }
 
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
@@ -1513,15 +1421,10 @@ const App = {
     const saveBtn = document.getElementById('btn-save-share');
     const revokeBtn = document.getElementById('btn-revoke-share');
 
-    const sharePublicSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`;
-    const shareLockSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>`;
-    const eyeOpenSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-    const eyeOffSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`;
-
     if (accessSelect) {
       accessSelect.onchange = () => {
         const isPublic = accessSelect.value === 'public';
-        if (accessIcon) accessIcon.innerHTML = isPublic ? sharePublicSvg : shareLockSvg;
+        if (accessIcon) accessIcon.textContent = isPublic ? '🌐' : '🔒';
         if (accessHint) {
           accessHint.textContent = isPublic
             ? 'Anyone on the internet with this link can view and download'
@@ -1562,10 +1465,10 @@ const App = {
       pwToggleBtn.onclick = () => {
         if (pwInput.type === 'password') {
           pwInput.type = 'text';
-          pwToggleBtn.innerHTML = eyeOffSvg;
+          pwToggleBtn.textContent = '🙈';
         } else {
           pwInput.type = 'password';
-          pwToggleBtn.innerHTML = eyeOpenSvg;
+          pwToggleBtn.textContent = '👁️';
         }
       };
     }
@@ -1815,20 +1718,17 @@ const App = {
     });
 
     // Password Eye Toggles
-    const eyeOpenPassSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-    const eyeOffPassSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`;
     document.querySelectorAll('.btn-toggle-pass').forEach(btn => {
-      btn.innerHTML = eyeOpenPassSvg;
       btn.onclick = () => {
         const targetId = btn.getAttribute('data-target');
         const input = document.getElementById(targetId);
         if (input) {
           if (input.type === 'password') {
             input.type = 'text';
-            btn.innerHTML = eyeOffPassSvg;
+            btn.textContent = '🙈';
           } else {
             input.type = 'password';
-            btn.innerHTML = eyeOpenPassSvg;
+            btn.textContent = '👁️';
           }
         }
       };
