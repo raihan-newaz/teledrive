@@ -337,12 +337,13 @@ const UI = {
 
   // ─── Render Card HTML (Clean & Robust, No broken inline JS) ───────
   renderFolderCard(folder) {
+    const folderIdStr = String(folder.id);
     const safeName = folder.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const isSelected = this.selectedItems.has(folder.id);
+    const isSelected = this.selectedItems.has(folderIdStr) || this.selectedItems.has(folder.id);
     const selectedClass = isSelected ? ' selected' : '';
     return `
-      <div class="folder-card${selectedClass}" data-id="${folder.id}" data-type="folder" draggable="true">
-        <button class="card-select-btn icon-btn" title="Select folder" data-id="${folder.id}" data-type="folder" aria-label="Select">
+      <div class="folder-card${selectedClass}" data-id="${folderIdStr}" data-type="folder" draggable="true">
+        <button class="card-select-btn icon-btn" title="Select folder" data-id="${folderIdStr}" data-type="folder" aria-label="Select">
           <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         <div class="folder-icon-wrap">
@@ -351,7 +352,7 @@ const UI = {
           </svg>
         </div>
         <div class="folder-name" title="${safeName}">${safeName}</div>
-        <button class="item-more-btn icon-btn" title="More options" data-id="${folder.id}" data-type="folder">
+        <button class="item-more-btn icon-btn" title="More options" data-id="${folderIdStr}" data-type="folder">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       </div>
@@ -359,8 +360,9 @@ const UI = {
   },
 
   renderFileCard(file) {
+    const fileIdStr = String(file.id);
     const safeName = file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const isSelected = this.selectedItems.has(file.id);
+    const isSelected = this.selectedItems.has(fileIdStr) || this.selectedItems.has(file.id);
     const selectedClass = isSelected ? ' selected' : '';
     const cat = this.getFileTypeCategory(file.mime_type);
     const icon = this.getFileIconSvg(file.mime_type);
@@ -398,8 +400,8 @@ const UI = {
     }
 
     return `
-      <div class="file-card${selectedClass}" data-id="${file.id}" data-type="file" draggable="true">
-        <button class="card-select-btn icon-btn" title="Select file" data-id="${file.id}" data-type="file" aria-label="Select">
+      <div class="file-card${selectedClass}" data-id="${fileIdStr}" data-type="file" draggable="true">
+        <button class="card-select-btn icon-btn" title="Select file" data-id="${fileIdStr}" data-type="file" aria-label="Select">
           <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         ${previewHtml}
@@ -413,7 +415,7 @@ const UI = {
             <span class="file-date">${date}</span>
           </div>
         </div>
-        <button class="item-more-btn icon-btn" title="More options" data-id="${file.id}" data-type="file">
+        <button class="item-more-btn icon-btn" title="More options" data-id="${fileIdStr}" data-type="file">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       </div>
