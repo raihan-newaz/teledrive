@@ -39,6 +39,9 @@ const UI = {
     if (overlay && modal) {
       overlay.style.display = 'block';
       modal.style.display = (modal.classList.contains('settings-modal') || modal.classList.contains('share-modal')) ? 'flex' : 'block';
+      modal.removeAttribute('inert');
+      modal.removeAttribute('aria-hidden');
+      modal.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = false);
       setTimeout(() => {
         overlay.classList.add('visible');
         modal.classList.add('visible');
@@ -51,7 +54,14 @@ const UI = {
     const modal = document.getElementById(modalId);
     if (modal) {
       modal.classList.remove('visible');
-      setTimeout(() => { modal.style.display = 'none'; }, 200);
+      modal.setAttribute('inert', '');
+      modal.setAttribute('aria-hidden', 'true');
+      modal.querySelectorAll('input, button, select, textarea').forEach(el => {
+        el.blur();
+      });
+      setTimeout(() => { 
+        modal.style.display = 'none'; 
+      }, 200);
     }
     if (overlay) {
       overlay.classList.remove('visible');
@@ -62,6 +72,9 @@ const UI = {
   hideAllModals() {
     document.querySelectorAll('.modal').forEach(m => {
       m.classList.remove('visible');
+      m.setAttribute('inert', '');
+      m.setAttribute('aria-hidden', 'true');
+      m.querySelectorAll('input, button, select, textarea').forEach(el => el.blur());
       setTimeout(() => { m.style.display = 'none'; }, 200);
     });
     const overlay = document.getElementById('modal-overlay');

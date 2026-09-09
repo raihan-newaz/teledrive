@@ -93,32 +93,55 @@ const App = {
     const appEl = document.getElementById('app-screen');
     
     if (loaderEl) loaderEl.style.display = 'none';
+    
     if (setupEl) {
       setupEl.style.display = screen === 'setup' ? 'flex' : 'none';
-      if (screen !== 'setup') setupEl.setAttribute('aria-hidden', 'true');
+      if (screen === 'setup') {
+        setupEl.removeAttribute('inert');
+        setupEl.removeAttribute('aria-hidden');
+        setupEl.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = false);
+      } else {
+        setupEl.setAttribute('inert', '');
+        setupEl.setAttribute('aria-hidden', 'true');
+        setupEl.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = true);
+      }
     }
+    
     if (loginEl) {
       loginEl.style.display = screen === 'login' ? 'flex' : 'none';
-      if (screen !== 'login') {
+      if (screen === 'login') {
+        loginEl.removeAttribute('inert');
+        loginEl.removeAttribute('aria-hidden');
+        loginEl.querySelectorAll('input, button').forEach(el => el.disabled = false);
+        setTimeout(() => {
+          const pwdInput = document.getElementById('login-password');
+          if (pwdInput) pwdInput.focus();
+        }, 50);
+      } else {
+        loginEl.setAttribute('inert', '');
         loginEl.setAttribute('aria-hidden', 'true');
-        // Clear password value to prevent Chrome autofill popups on click inside main app
         const pwdInput = document.getElementById('login-password');
         if (pwdInput) {
           pwdInput.value = '';
           pwdInput.blur();
         }
+        loginEl.querySelectorAll('input, button').forEach(el => {
+          el.blur();
+          el.disabled = true;
+        });
       }
     }
-    if (appEl) appEl.style.display = screen === 'app' ? 'flex' : 'none';
-
-    if (screen === 'login') {
-      if (loginEl) loginEl.removeAttribute('aria-hidden');
-      setTimeout(() => {
-        const pwdInput = document.getElementById('login-password');
-        if (pwdInput) {
-          pwdInput.focus();
-        }
-      }, 50);
+    
+    if (appEl) {
+      appEl.style.display = screen === 'app' ? 'flex' : 'none';
+      if (screen === 'app') {
+        appEl.removeAttribute('inert');
+        appEl.removeAttribute('aria-hidden');
+        appEl.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = false);
+      } else {
+        appEl.setAttribute('inert', '');
+        appEl.setAttribute('aria-hidden', 'true');
+      }
     }
   },
 

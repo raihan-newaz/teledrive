@@ -171,10 +171,12 @@
           <p class="subtitle">Enter your master password to unlock your encrypted cloud</p>
         </div>
 
-        <form id="login-form" autocomplete="off">
+        <form id="login-form" autocomplete="off" action="javascript:void(0);">
+          <input type="text" name="prevent_autofill_username" id="prevent_autofill_username" style="display:none;" tabindex="-1" autocomplete="off">
+          <input type="password" name="prevent_autofill_password" id="prevent_autofill_password" style="display:none;" tabindex="-1" autocomplete="off">
           <div class="form-group">
             <div class="input-with-action">
-              <input type="password" id="login-password" name="teledrive_master_pass" placeholder="Master Password" required autocomplete="new-password" data-lpignore="true" autofocus>
+              <input type="password" id="login-password" name="teledrive_sec_field" placeholder="Master Password" required autocomplete="new-password" data-lpignore="true" data-1password-ignore="true">
               <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password">👁️</button>
             </div>
           </div>

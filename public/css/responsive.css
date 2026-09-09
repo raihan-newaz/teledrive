@@ -295,7 +295,10 @@
   }
 
   /* 10. Settings Modal (Mobile Fullscreen Sheet) */
-  .settings-modal,
+  .settings-modal:not(.visible) {
+    display: none !important;
+    pointer-events: none !important;
+  }
   .settings-modal.visible {
     position: fixed !important;
     top: 0 !important;
@@ -315,6 +318,7 @@
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    pointer-events: auto !important;
     font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   }
   .settings-modal-header {
@@ -373,7 +377,10 @@
   }
 
   /* 10b. Share Modal (Mobile Responsive Bottom Sheet) */
-  .share-modal,
+  .share-modal:not(.visible) {
+    display: none !important;
+    pointer-events: none !important;
+  }
   .share-modal.visible {
     position: fixed !important;
     top: auto !important;
@@ -397,6 +404,7 @@
     z-index: 1200 !important;
     display: flex !important;
     flex-direction: column !important;
+    pointer-events: auto !important;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4) !important;
     font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   }

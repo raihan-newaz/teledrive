@@ -1181,10 +1181,12 @@ input:focus, select:focus, textarea:focus {
   backdrop-filter: blur(2px);
   z-index: 800;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s;
 }
 .modal-overlay.visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .modal {
@@ -1207,10 +1209,12 @@ input:focus, select:focus, textarea:focus {
   border: 1px solid var(--border-color);
   font-family: inherit;
   opacity: 0;
+  pointer-events: none;
   transition: all 0.2s;
 }
 .modal.visible {
   opacity: 1;
+  pointer-events: auto;
   transform: translate(-50%, -50%) scale(1);
 }
 .modal h3 {
