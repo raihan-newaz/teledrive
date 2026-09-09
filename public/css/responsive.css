@@ -282,21 +282,77 @@
   /* 9. Action Bar for Selection */
   .action-bar {
     position: fixed;
-    bottom: calc(var(--bottom-nav-height) + 10px + env(safe-area-inset-bottom, 0px));
-    left: 10px;
-    right: 10px;
+    bottom: calc(var(--bottom-nav-height, 56px) + 12px + env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    right: 8px;
     width: auto;
-    margin: 0;
-    padding: 8px 12px;
-    z-index: 580;
-    box-shadow: var(--shadow-lg);
+    max-width: calc(100vw - 16px);
+    margin: 0 auto;
+    padding: 8px 10px;
+    z-index: 990;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .action-bar::-webkit-scrollbar {
+    display: none;
   }
   .action-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
     font-size: 12px;
   }
-  .action-btn {
-    padding: 5px 9px;
+  .action-bar-left .selected-count {
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .action-select-all-btn {
+    padding: 4px 8px;
     font-size: 11px;
+    white-space: nowrap;
+    border-radius: 8px;
+  }
+  .action-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .action-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+  }
+  .action-btn span {
+    display: none;
+  }
+  .action-btn svg {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+    margin: 0;
+  }
+  .action-btn.danger {
+    color: var(--danger-color, #ea4335);
+    background: rgba(234, 67, 53, 0.12);
   }
 
   /* 10. Settings Modal (Mobile Fullscreen Sheet) */
