@@ -305,34 +305,82 @@ const UI = {
     });
   },
 
-  getFileTypeCategory(mimeType) {
-    if (!mimeType) return 'document';
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.includes('pdf') || mimeType.includes('word') || mimeType.includes('text') || mimeType.includes('sheet')) return 'document';
-    if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z') || mimeType.includes('tar') || mimeType.includes('gzip')) return 'archive';
-    return 'document';
+  getFileTypeCategory(mimeType, filename = '') {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    const mime = (mimeType || '').toLowerCase();
+
+    if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'tiff', 'avif'].includes(ext)) {
+      return 'image';
+    }
+    if (mime.startsWith('video/') || ['mp4', 'mkv', 'mov', 'avi', 'wmv', 'flv', 'webm', 'm4v', '3gp'].includes(ext)) {
+      return 'video';
+    }
+    if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus', 'mid'].includes(ext)) {
+      return 'audio';
+    }
+    if (mime === 'application/pdf' || ext === 'pdf') {
+      return 'pdf';
+    }
+    if (
+      mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('sheet') || mime.includes('csv') ||
+      ['xls', 'xlsx', 'csv', 'tsv', 'ods', 'numbers'].includes(ext)
+    ) {
+      return 'spreadsheet';
+    }
+    if (
+      mime.includes('presentation') || mime.includes('powerpoint') ||
+      ['ppt', 'pptx', 'odp', 'key'].includes(ext)
+    ) {
+      return 'presentation';
+    }
+    if (
+      mime.includes('word') || mime.includes('document') || mime.includes('rtf') ||
+      ['doc', 'docx', 'odt', 'rtf', 'pages'].includes(ext)
+    ) {
+      return 'document';
+    }
+    if (
+      ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso', 'tgz', 'apk'].includes(ext) ||
+      mime.includes('zip') || mime.includes('compressed') || mime.includes('tar') || mime.includes('archive')
+    ) {
+      return 'archive';
+    }
+    if (
+      ['js', 'ts', 'jsx', 'tsx', 'html', 'htm', 'css', 'scss', 'json', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'sh', 'bat', 'cmd', 'ps1', 'sql', 'xml', 'yaml', 'yml', 'md', 'txt', 'log'].includes(ext) ||
+      mime.includes('javascript') || mime.includes('json') || mime.includes('html') || mime.includes('xml')
+    ) {
+      return 'code';
+    }
+    return 'unknown';
   },
 
-  getFileIconSvg(mimeType) {
-    const cat = this.getFileTypeCategory(mimeType);
-    if (cat === 'image') {
-      return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#34A853"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`;
+  getFileIconSvg(mimeType, filename = '', size = 28) {
+    const cat = this.getFileTypeCategory(mimeType, filename);
+    const sz = size || 28;
+
+    // Google Drive Material Iconography System
+    switch (cat) {
+      case 'image':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#34A853" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`;
+      case 'video':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#EA4335" aria-hidden="true"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`;
+      case 'audio':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#A142F4" aria-hidden="true"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
+      case 'pdf':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#EA4335" aria-hidden="true"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v4zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5z"/></svg>`;
+      case 'spreadsheet':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#0F9D58" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM5 7h4v4H5V7zm0 6h4v4H5v-4zm14 4h-8v-4h8v4zm0-6h-8V7h8v4z"/></svg>`;
+      case 'presentation':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#F4B400" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5h10l-5 5zm5-7H7V7h10v3z"/></svg>`;
+      case 'document':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#4285F4" aria-hidden="true"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`;
+      case 'archive':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#F9AB00" aria-hidden="true"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10v-2h-4v2H8v-4h2v2h4v-2h2v4h-2z"/></svg>`;
+      case 'code':
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#1A73E8" aria-hidden="true"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>`;
+      default:
+        return `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="#5F6368" aria-hidden="true"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`;
     }
-    if (cat === 'video') {
-      return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#EA4335"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`;
-    }
-    if (cat === 'audio') {
-      return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#A142F4"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
-    }
-    if (cat === 'archive') {
-      return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#F9AB00"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10v-2h-4v2H8v-4h2v2h4v-2h2v4h-2z"/></svg>`;
-    }
-    if (mimeType && mimeType.includes('pdf')) {
-      return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#EA4335"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v4zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5z"/></svg>`;
-    }
-    return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#1A73E8"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`;
   },
 
   // ─── Render Card HTML (Clean & Robust, No broken inline JS) ───────
@@ -343,15 +391,15 @@ const UI = {
     return `
       <div class="folder-card${selectedClass}" data-id="${folder.id}" data-type="folder" draggable="true">
         <button class="card-select-btn icon-btn" title="Select folder" data-id="${folder.id}" data-type="folder" aria-label="Select">
-          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         <div class="folder-icon-wrap">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="#5f6368">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="#5f6368" aria-hidden="true">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
           </svg>
         </div>
         <div class="folder-name" title="${safeName}">${safeName}</div>
-        <button class="item-more-btn icon-btn" title="More options" data-id="${folder.id}" data-type="folder">
+        <button class="item-more-btn icon-btn" title="More options" data-id="${folder.id}" data-type="folder" aria-label="More options">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       </div>
@@ -362,11 +410,12 @@ const UI = {
     const safeName = file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const isSelected = this.selectedItems.has(file.id);
     const selectedClass = isSelected ? ' selected' : '';
-    const cat = this.getFileTypeCategory(file.mime_type);
-    const icon = this.getFileIconSvg(file.mime_type);
+    const cat = this.getFileTypeCategory(file.mime_type, file.name);
+    const icon = this.getFileIconSvg(file.mime_type, file.name);
     const size = this.formatFileSize(file.size);
     const date = this.formatDate(file.created_at);
-    const starIcon = file.is_starred ? '⭐' : '';
+    const starIcon = file.is_starred ?
+      `<svg viewBox="0 0 24 24" width="14" height="14" fill="#F4B400" aria-label="Starred"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>` : '';
     const downloadUrl = API.getDownloadUrl(file.id);
     const streamUrl = API.getStreamUrl(file.id);
 
@@ -400,7 +449,7 @@ const UI = {
     return `
       <div class="file-card${selectedClass}" data-id="${file.id}" data-type="file" draggable="true">
         <button class="card-select-btn icon-btn" title="Select file" data-id="${file.id}" data-type="file" aria-label="Select">
-          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         ${previewHtml}
         <div class="file-card-info">
@@ -413,7 +462,7 @@ const UI = {
             <span class="file-date">${date}</span>
           </div>
         </div>
-        <button class="item-more-btn icon-btn" title="More options" data-id="${file.id}" data-type="file">
+        <button class="item-more-btn icon-btn" title="More options" data-id="${file.id}" data-type="file" aria-label="More options">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       </div>
@@ -449,9 +498,10 @@ const UI = {
 
   // ─── Folder Tree for Move Modal ────────────────────────────────────
   renderFolderTree(container, tree, onSelect) {
+    const folderSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="#5f6368" style="vertical-align: middle; margin-right: 6px;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
     let html = `
       <div class="tree-item active" data-folder-id="null">
-        <span class="tree-icon">📁</span>
+        <span class="tree-icon">${folderSvg}</span>
         <span class="tree-label">My Drive (Root)</span>
       </div>
     `;
@@ -461,7 +511,7 @@ const UI = {
         const padding = depth * 18;
         html += `
           <div class="tree-item" data-folder-id="${node.id}" style="padding-left: ${padding}px">
-            <span class="tree-icon">📁</span>
+            <span class="tree-icon">${folderSvg}</span>
             <span class="tree-label">${node.name}</span>
           </div>
         `;
@@ -611,7 +661,7 @@ const UI = {
 
   loadVideoThumbnails(files) {
     if (!files || files.length === 0) return;
-    const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type) === 'video');
+    const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type, f.name) === 'video');
     if (videoFiles.length === 0) return;
 
     if (!this._videoObserver && window.IntersectionObserver) {

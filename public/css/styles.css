@@ -14,7 +14,7 @@ body {
   width: 100%;
   height: 100%;
   min-height: 100vh;
-  font-family: 'Google Sans', 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
@@ -123,11 +123,20 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.1s ease;
+  flex-shrink: 0;
 }
-.icon-btn:hover {
+.icon-btn:hover:not(:disabled) {
   background-color: var(--bg-hover);
   color: var(--text-primary);
+}
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.icon-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .icon-btn-sm {
@@ -138,10 +147,25 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
 }
-.icon-btn-sm:hover {
+.icon-btn-sm:hover:not(:disabled) {
   background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
+.icon-btn-sm:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Material Design Standard Icon Sizing */
+.icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
+.icon-20 { width: 20px; height: 20px; flex-shrink: 0; }
+.icon-24 { width: 24px; height: 24px; flex-shrink: 0; }
+.icon-40 { width: 40px; height: 40px; flex-shrink: 0; }
+.icon-48 { width: 48px; height: 48px; flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /* SCREENS                                                                    */
@@ -815,6 +839,9 @@ input:focus, select:focus, textarea:focus {
   padding-bottom: 4px;
 }
 .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 14px;
   border-radius: 16px;
   background: var(--bg-secondary);
@@ -823,7 +850,11 @@ input:focus, select:focus, textarea:focus {
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+.filter-chip svg {
+  flex-shrink: 0;
 }
 .filter-chip:hover {
   background: var(--bg-hover);
@@ -2419,7 +2450,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--bg-card);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
-  font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
 }
 
 .settings-modal-header {
@@ -2449,8 +2480,8 @@ input:focus, select:focus, textarea:focus {
 
 .settings-header-titles h3 {
   font-size: 18px;
-  font-family: 'Google Sans', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
+  font-weight: 500;
   margin: 0 0 2px 0;
   color: var(--text-primary);
 }
@@ -2486,7 +2517,7 @@ input:focus, select:focus, textarea:focus {
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-secondary);
-  font-family: 'Google Sans Text', 'Roboto', sans-serif;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -2529,8 +2560,8 @@ input:focus, select:focus, textarea:focus {
 
 .settings-section-title h4 {
   font-size: 15px;
-  font-family: 'Google Sans', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
+  font-weight: 500;
   margin: 0 0 4px 0;
   color: var(--text-primary);
 }
@@ -2831,7 +2862,7 @@ input:focus, select:focus, textarea:focus {
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
 }
 .share-modal-header {
   display: flex;
@@ -2860,8 +2891,8 @@ input:focus, select:focus, textarea:focus {
 .share-modal-title-wrap h3 {
   margin: 0;
   font-size: 17px;
-  font-family: 'Google Sans', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
+  font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -2886,8 +2917,8 @@ input:focus, select:focus, textarea:focus {
 .share-section-title {
   display: block;
   font-size: 12px;
-  font-family: 'Google Sans', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
@@ -2924,8 +2955,8 @@ input:focus, select:focus, textarea:focus {
   background: transparent;
   border: none;
   font-size: 14px;
-  font-family: 'Google Sans Text', 'Roboto', sans-serif;
-  font-weight: 600;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
+  font-weight: 500;
   color: var(--text-primary);
   cursor: pointer;
   padding: 0;
@@ -3022,7 +3053,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  font-family: 'Google Sans Text', 'Roboto', sans-serif;
+  font-family: var(--font-primary, "Roboto", Arial, sans-serif);
   font-size: 13px;
   outline: none;
 }

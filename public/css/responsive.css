@@ -315,7 +315,7 @@
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
   }
   .settings-modal-header {
     padding: 14px 16px !important;
@@ -327,7 +327,8 @@
   }
   .settings-header-titles h3 {
     font-size: 16px !important;
-    font-family: 'Google Sans', sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-weight: 500 !important;
   }
   .settings-tabs {
     padding: 0 10px !important;
@@ -342,7 +343,7 @@
     padding: 10px 10px !important;
     font-size: 12px !important;
     gap: 6px !important;
-    font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
   }
   .settings-tab-pane {
     flex: 1 1 auto !important;
@@ -361,7 +362,8 @@
   }
   .settings-section-title h4 {
     font-size: 14px !important;
-    font-family: 'Google Sans', sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-weight: 500 !important;
   }
   .form-row-2 {
     grid-template-columns: 1fr !important;
@@ -398,7 +400,7 @@
     display: flex !important;
     flex-direction: column !important;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4) !important;
-    font-family: 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
   }
   .share-modal-header {
     margin-bottom: 16px !important;
@@ -406,7 +408,8 @@
   }
   .share-modal-title-wrap h3 {
     font-size: 16px !important;
-    font-family: 'Google Sans', sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
+    font-weight: 500 !important;
   }
   .share-modal-subtitle {
     font-size: 12px !important;
@@ -429,7 +432,7 @@
   .share-modal-actions button {
     height: 44px !important;
     font-size: 14px !important;
-    font-family: 'Google Sans', sans-serif !important;
+    font-family: var(--font-primary, "Roboto", Arial, sans-serif) !important;
     font-weight: 500 !important;
   }
 
