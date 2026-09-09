@@ -135,8 +135,9 @@ router.get('/', async (req, res) => {
             
         const files = await db.all(filesQuery, parentId ? [parentId] : []);
         const breadcrumbs = await getBreadcrumbs(parentId);
+        const currentFolder = parentId ? await db.getFolder(parentId) : null;
 
-        res.json({ folders, files, breadcrumbs });
+        res.json({ currentFolder: sanitizeFolder(currentFolder), folders, files, breadcrumbs });
     } catch (error) {
         console.error('Get folders error:', error);
         res.status(500).json({ error: 'Failed to retrieve folders' });

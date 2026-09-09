@@ -202,6 +202,10 @@ const App = {
     UI.showSkeletons();
     try {
       const data = await API.getFolderContents(folderId);
+      if (data.currentFolder && Boolean(data.currentFolder.is_locked) && !this.unlockedFolders.has(String(data.currentFolder.id))) {
+        this.openUnlockFolderModal(data.currentFolder, false);
+        return;
+      }
       this.folders = data.folders || [];
       this.files = data.files || [];
       this.breadcrumbs = data.breadcrumbs || [{ id: null, name: 'My Drive' }];
@@ -458,7 +462,13 @@ const App = {
       const folderCard = e.target.closest('.folder-card');
       if (folderCard) {
         const id = String(folderCard.getAttribute('data-id'));
+        const isLocked = folderCard.getAttribute('data-locked') === '1';
         this.lastSelectedId = id;
+        if (isLocked && !this.unlockedFolders.has(id)) {
+          const folder = this.foldersMap.get(id) || { id, name: folderCard.querySelector('.folder-name')?.textContent || 'Folder', is_locked: 1 };
+          this.openUnlockFolderModal(folder, false);
+          return;
+        }
         this.navigateToFolder(id);
         return;
       }
@@ -480,7 +490,13 @@ const App = {
       const folderCard = e.target.closest('.folder-card');
       if (folderCard) {
         const id = String(folderCard.getAttribute('data-id'));
+        const isLocked = folderCard.getAttribute('data-locked') === '1';
         UI.clearSelection();
+        if (isLocked && !this.unlockedFolders.has(id)) {
+          const folder = this.foldersMap.get(id) || { id, name: folderCard.querySelector('.folder-name')?.textContent || 'Folder', is_locked: 1 };
+          this.openUnlockFolderModal(folder, false);
+          return;
+        }
         this.navigateToFolder(id);
         return;
       }
@@ -1457,7 +1473,7 @@ const App = {
         try {
           btnConfirmLock.disabled = true;
           await API.lockFolder(this.selectedItem.id, pass);
-          this.unlockedFolders.add(String(this.selectedItem.id));
+          this.unlockedFolders.delete(String(this.selectedItem.id));
           UI.showToast(`Folder "${this.selectedItem.name}" locked successfully`, 'success');
           UI.hideAllModals();
           this.refreshCurrentView();
