@@ -2528,12 +2528,13 @@ const App = {
 
   setTheme(theme) {
     document.documentElement.classList.add('theme-transition');
+    void document.documentElement.offsetHeight;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('teledrive_theme', theme);
     this.updateThemeToggleIcon(theme);
     setTimeout(() => {
       document.documentElement.classList.remove('theme-transition');
-    }, 250);
+    }, 240);
   },
 
   initTheme() {
