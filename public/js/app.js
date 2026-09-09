@@ -621,9 +621,19 @@ const App = {
         UI.showToast('Moved to Trash', 'info');
         this.refreshCurrentView();
       } else {
-        UI.showToast('Deleting folder and all its contents...', 'info');
+        const confirmed = await UI.confirm({
+          title: 'Move Folder to Trash?',
+          message: `Are you sure you want to move folder "${itemData.name}" and all its contents to Trash?`,
+          description: 'All files inside will be unlinked and moved to Trash. They can still be restored.',
+          icon: 'trash',
+          confirmText: 'Move to Trash',
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+        if (!confirmed) return;
+        UI.showToast('Moving folder to Trash...', 'info');
         await API.deleteFolder(itemData.id);
-        UI.showToast('Folder deleted', 'info');
+        UI.showToast('Folder moved to Trash', 'info');
         this.refreshCurrentView();
       }
     } else if (action === 'restore') {
@@ -784,19 +794,31 @@ const App = {
           UI.showToast('Trash is already empty', 'info');
           return;
         }
-        if (confirm('Are you sure you want to permanently delete all items in Trash? They will be permanently removed from Telegram.')) {
-          try {
-            UI.showToast('Permanently deleting all items from Telegram...', 'info');
-            const res = await API.emptyTrash();
-            if (res.warnings && res.warnings.length > 0) {
-              UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
-            } else {
-              UI.showToast(`Permanently deleted ${res.count || 0} file(s) from Telegram`, 'success');
-            }
-            this.refreshCurrentView();
-          } catch (e) {
-            UI.showToast('Failed to empty trash: ' + e.message, 'error');
+
+        const count = this.files.length;
+        const confirmed = await UI.confirm({
+          title: 'Empty Trash?',
+          message: `Are you sure you want to permanently delete all ${count} item(s) in Trash?`,
+          description: 'All items will be permanently erased from your Telegram cloud storage. This action cannot be undone.',
+          icon: 'trash',
+          confirmText: `Empty Trash (${count})`,
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+
+        if (!confirmed) return;
+
+        try {
+          UI.showToast('Permanently deleting all items from Telegram...', 'info');
+          const res = await API.emptyTrash();
+          if (res.warnings && res.warnings.length > 0) {
+            UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
+          } else {
+            UI.showToast(`Permanently deleted ${res.count || 0} file(s) from Telegram`, 'success');
           }
+          this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to empty trash: ' + e.message, 'error');
         }
       };
     }
@@ -904,21 +926,33 @@ const App = {
       };
     }
 
-    if (actionDelete) {
-      actionDelete.onclick = async () => {
+    if (actionTrash) {
+      actionTrash.onclick = async () => {
         const selectedItems = Array.from(UI.selectedItems.values());
         if (selectedItems.length === 0) return;
         const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
         const folderIds = selectedItems.filter(i => i.type === 'folder').map(i => i.id);
-        if (confirm(`Move ${selectedItems.length} item(s) to Trash?`)) {
-          try {
-            await API.batchTrash(fileIds, folderIds);
-            UI.showToast(`Moved ${selectedItems.length} item(s) to Trash`, 'success');
-            UI.clearSelection();
-            await this.refreshCurrentView();
-          } catch (e) {
-            UI.showToast('Failed to trash items: ' + e.message, 'error');
-          }
+        const count = selectedItems.length;
+
+        const confirmed = await UI.confirm({
+          title: 'Move to Trash?',
+          message: `Move ${count} selected item(s) to Trash?`,
+          description: 'Items in Trash are safely kept and can be restored anytime within 30 days.',
+          icon: 'trash',
+          confirmText: `Move ${count} Item${count > 1 ? 's' : ''} to Trash`,
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+
+        if (!confirmed) return;
+
+        try {
+          await API.batchTrash(fileIds, folderIds);
+          UI.showToast(`Moved ${count} item(s) to Trash`, 'success');
+          UI.clearSelection();
+          await this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to trash items: ' + e.message, 'error');
         }
       };
     }
@@ -944,20 +978,32 @@ const App = {
         const selectedItems = Array.from(UI.selectedItems.values());
         const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
         const folderIds = selectedItems.filter(i => i.type === 'folder').map(i => i.id);
-        if (confirm(`Permanently delete ${selectedItems.length} item(s) from Telegram cloud? This cannot be undone.`)) {
-          try {
-            UI.showToast('Permanently deleting from Telegram...', 'info');
-            const res = await API.batchDelete(fileIds, folderIds);
-            if (res.warnings && res.warnings.length > 0) {
-              UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
-            } else {
-              UI.showToast(`Permanently deleted ${selectedItems.length} item(s) from Telegram`, 'success');
-            }
-            UI.clearSelection();
-            await this.refreshCurrentView();
-          } catch (e) {
-            UI.showToast('Failed to permanently delete items: ' + e.message, 'error');
+        const count = selectedItems.length;
+
+        const confirmed = await UI.confirm({
+          title: 'Permanently Delete Items?',
+          message: `Permanently delete ${count} item(s) from Telegram cloud?`,
+          description: 'This action cannot be undone. All file data and chunk parts will be completely removed from Telegram and database.',
+          icon: 'danger',
+          confirmText: `Delete Permanently (${count})`,
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+
+        if (!confirmed) return;
+
+        try {
+          UI.showToast('Permanently deleting from Telegram...', 'info');
+          const res = await API.batchDelete(fileIds, folderIds);
+          if (res.warnings && res.warnings.length > 0) {
+            UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
+          } else {
+            UI.showToast(`Permanently deleted ${count} item(s) from Telegram`, 'success');
           }
+          UI.clearSelection();
+          await this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to permanently delete items: ' + e.message, 'error');
         }
       };
     }
@@ -1232,13 +1278,35 @@ const App = {
     }
   },
 
-  openDeleteModal(item) {
+  async openDeleteModal(item) {
+    if (!item) return;
     this.selectedItem = item;
-    const desc = document.getElementById('delete-modal-desc');
-    if (desc) {
-      desc.textContent = `Are you sure you want to permanently delete "${item.name}" from Telegram cloud storage? This cannot be undone.`;
+    const isFolder = item.type === 'folder';
+
+    const confirmed = await UI.confirm({
+      title: isFolder ? 'Permanently Delete Folder?' : 'Permanently Delete File?',
+      message: `Permanently delete "${item.name}" from Telegram cloud?`,
+      description: 'This action cannot be undone. All associated message parts will be deleted from Telegram.',
+      icon: 'danger',
+      confirmText: 'Delete Permanently',
+      confirmType: 'danger',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      UI.showToast('Deleting permanently from Telegram...', 'info');
+      if (isFolder) {
+        await API.deleteFolder(item.id, true);
+      } else {
+        await API.permanentDeleteFile(item.id);
+      }
+      UI.showToast('Permanently deleted from Telegram', 'success');
+      this.refreshCurrentView();
+    } catch (e) {
+      UI.showToast('Delete failed: ' + e.message, 'error');
     }
-    UI.showModal('delete-modal');
   },
 
   initSettings() {
@@ -1519,9 +1587,17 @@ const App = {
 
       inputImportDb.onchange = async (e) => {
         const file = e.target.files && e.target.files[0];
-        if (!file) return;
+        const confirmed = await UI.confirm({
+          title: 'Restore Database Backup?',
+          message: `Are you sure you want to restore database from "${file.name}"?`,
+          description: 'Warning: This will overwrite the current database file. TeleDrive will restart after restoration.',
+          icon: 'warning',
+          confirmText: 'Restore & Overwrite',
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
 
-        if (!confirm(`Are you sure you want to restore database from "${file.name}"? This will overwrite the current database file.`)) {
+        if (!confirmed) {
           inputImportDb.value = '';
           return;
         }

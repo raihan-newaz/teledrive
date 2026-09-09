@@ -71,6 +71,114 @@ const UI = {
     }
   },
 
+  /**
+   * Modern, Promise-based custom confirmation dialog with beautiful UI
+   * @param {Object} options
+   * @param {string} options.title - Header title
+   * @param {string} options.message - Primary question / message
+   * @param {string} [options.description] - Additional warning or details
+   * @param {string} [options.icon='danger'] - 'danger' | 'trash' | 'warning' | 'info'
+   * @param {string} [options.confirmText='Confirm'] - Action button text
+   * @param {string} [options.cancelText='Cancel'] - Cancel button text
+   * @param {string} [options.confirmType='danger'] - 'danger' | 'primary' | 'warning'
+   * @returns {Promise<boolean>}
+   */
+  confirm({
+    title = 'Are you sure?',
+    message = 'Do you want to proceed?',
+    description = '',
+    icon = 'danger',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    confirmType = 'danger'
+  } = {}) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('custom-confirm-modal');
+      const titleEl = document.getElementById('confirm-modal-title');
+      const msgEl = document.getElementById('confirm-modal-message');
+      const descEl = document.getElementById('confirm-modal-description');
+      const iconWrap = document.getElementById('confirm-icon-wrapper');
+      const iconEl = document.getElementById('confirm-icon');
+      const cancelBtn = document.getElementById('confirm-btn-cancel');
+      const actionBtn = document.getElementById('confirm-btn-action');
+
+      if (!modal || !titleEl || !msgEl || !actionBtn || !cancelBtn) {
+        return resolve(window.confirm(`${title}\n\n${message}`));
+      }
+
+      titleEl.textContent = title;
+      msgEl.textContent = message;
+
+      if (description) {
+        descEl.textContent = description;
+        descEl.style.display = 'block';
+        descEl.className = `confirm-subtext ${confirmType === 'danger' ? 'danger' : (confirmType === 'warning' ? 'warning' : '')}`;
+      } else {
+        descEl.style.display = 'none';
+      }
+
+      // Set icon style and SVG
+      if (iconWrap) iconWrap.className = `confirm-icon-wrapper ${confirmType || icon}`;
+      const icons = {
+        danger: `<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`,
+        trash: `<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zm2 15H7V6h10v13zM9 8h2v9H9V8zm4 0h2v9h-2V8z"/></svg>`,
+        warning: `<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`,
+        info: `<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`
+      };
+      if (iconEl) iconEl.innerHTML = icons[icon] || icons.danger;
+
+      // Button styling & text
+      cancelBtn.textContent = cancelText;
+      actionBtn.textContent = confirmText;
+      actionBtn.className = `btn-${confirmType || 'danger'}`;
+
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        this.hideModal('custom-confirm-modal');
+        document.removeEventListener('keydown', onKeyDown);
+      };
+
+      const onConfirm = () => {
+        cleanup();
+        resolve(true);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onCancel();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          onConfirm();
+        }
+      };
+
+      cancelBtn.onclick = onCancel;
+      actionBtn.onclick = onConfirm;
+
+      // Close on backdrop overlay click
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay) {
+        overlay.onclick = () => {
+          if (modal.classList.contains('visible')) {
+            onCancel();
+          }
+        };
+      }
+
+      document.addEventListener('keydown', onKeyDown);
+      this.showModal('custom-confirm-modal');
+      actionBtn.focus();
+    });
+  },
+
   // ─── Loading Skeletons ─────────────────────────────────────────────
   showSkeletons() {
     const sk = document.getElementById('skeleton-container');

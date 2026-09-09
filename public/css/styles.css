@@ -1168,6 +1168,176 @@ input:focus {
   margin-top: 20px;
 }
 
+/* ─── Modern Custom Confirmation Modal ────────────────────────────── */
+.custom-confirm-modal {
+  max-width: 440px !important;
+  width: 92% !important;
+  padding: 28px 24px 22px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  text-align: center;
+  overflow: hidden;
+}
+
+[data-theme="light"] .custom-confirm-modal {
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 24px 48px -12px rgba(60, 64, 67, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+.confirm-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.confirm-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: scale(0.8);
+}
+
+.custom-confirm-modal.visible .confirm-icon-wrapper {
+  transform: scale(1);
+}
+
+.confirm-icon-wrapper.danger,
+.confirm-icon-wrapper.trash {
+  background: rgba(234, 67, 53, 0.14);
+  color: #ea4335;
+  box-shadow: 0 0 0 8px rgba(234, 67, 53, 0.06);
+}
+
+.confirm-icon-wrapper.warning {
+  background: rgba(249, 171, 0, 0.16);
+  color: #f9ab00;
+  box-shadow: 0 0 0 8px rgba(249, 171, 0, 0.06);
+}
+
+.confirm-icon-wrapper.info,
+.confirm-icon-wrapper.primary {
+  background: rgba(26, 115, 232, 0.14);
+  color: #1a73e8;
+  box-shadow: 0 0 0 8px rgba(26, 115, 232, 0.06);
+}
+
+.confirm-text-wrap {
+  width: 100%;
+}
+
+.confirm-text-wrap h3 {
+  font-size: 19px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  margin: 0 0 8px 0 !important;
+  line-height: 1.35;
+}
+
+.confirm-text-wrap p {
+  font-size: 14.5px !important;
+  color: var(--text-secondary) !important;
+  line-height: 1.5 !important;
+  margin: 0 0 10px 0 !important;
+}
+
+.confirm-subtext {
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin: 10px 0 14px 0;
+  text-align: left;
+}
+
+.confirm-subtext.danger {
+  background: rgba(234, 67, 53, 0.08);
+  color: #d93025;
+  border: 1px solid rgba(234, 67, 53, 0.18);
+}
+
+[data-theme="dark"] .confirm-subtext.danger {
+  background: rgba(234, 67, 53, 0.15);
+  color: #f28b82;
+  border: 1px solid rgba(234, 67, 53, 0.28);
+}
+
+.confirm-subtext.warning {
+  background: rgba(249, 171, 0, 0.09);
+  color: #b06000;
+  border: 1px solid rgba(249, 171, 0, 0.2);
+}
+
+[data-theme="dark"] .confirm-subtext.warning {
+  background: rgba(249, 171, 0, 0.15);
+  color: #fdd663;
+  border: 1px solid rgba(249, 171, 0, 0.25);
+}
+
+.confirm-actions {
+  width: 100%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: stretch !important;
+  gap: 12px !important;
+  margin-top: 14px !important;
+}
+
+.confirm-actions button {
+  flex: 1;
+  height: 42px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.confirm-actions .btn-secondary {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.confirm-actions .btn-secondary:hover {
+  background: var(--bg-active);
+}
+
+.confirm-actions .btn-danger {
+  background: #ea4335 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(234, 67, 53, 0.28);
+}
+
+.confirm-actions .btn-danger:hover {
+  background: #d93025 !important;
+  box-shadow: 0 6px 16px rgba(234, 67, 53, 0.38);
+  transform: translateY(-1px);
+}
+
+.confirm-actions .btn-primary {
+  background: #1a73e8 !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.28);
+}
+
+.confirm-actions .btn-primary:hover {
+  background: #1557b0 !important;
+  box-shadow: 0 6px 16px rgba(26, 115, 232, 0.38);
+  transform: translateY(-1px);
+}
+
+
 /* Folder Tree */
 .folder-tree {
   max-height: 220px;
