@@ -265,6 +265,12 @@ const UI = {
       const hasFiles = Array.from(this.selectedItems.values()).some(i => i.type === 'file');
       if (downloadBtn) downloadBtn.style.display = hasFiles ? 'inline-flex' : 'none';
       if (starBtn) starBtn.style.display = hasFiles ? 'inline-flex' : 'none';
+
+      const shareBtn = document.getElementById('action-share');
+      if (shareBtn) {
+        const selectedFiles = Array.from(this.selectedItems.values()).filter(i => i.type === 'file');
+        shareBtn.style.display = (!isTrashView && selectedFiles.length === 1) ? 'inline-flex' : 'none';
+      }
     }
   },
 
@@ -498,6 +504,7 @@ const UI = {
     const permDeleteBtn = menu.querySelector('[data-action="permanent-delete"]');
     const downloadBtn = menu.querySelector('[data-action="download"]');
     const starBtn = menu.querySelector('[data-action="star"]');
+    const shareBtn = menu.querySelector('[data-action="share"]');
     const infoBtn = menu.querySelector('[data-action="info"]');
 
     if (trashBtn) trashBtn.style.display = isTrashed ? 'none' : 'flex';
@@ -505,6 +512,7 @@ const UI = {
     if (permDeleteBtn) permDeleteBtn.style.display = isTrashed ? 'flex' : 'none';
     if (downloadBtn) downloadBtn.style.display = item.type === 'file' ? 'flex' : 'none';
     if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
+    if (shareBtn) shareBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
     if (infoBtn) infoBtn.style.display = 'flex';
 
     menu.style.display = 'block';

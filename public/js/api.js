@@ -231,5 +231,22 @@ const API = {
     const formData = new FormData();
     formData.append('database', file);
     return this.request('POST', '/api/settings/import-db', formData);
+  },
+
+  // ─── File Sharing ──────────────────────────────────────────────────
+  async getShareStatus(fileId) {
+    return this.request('GET', `/api/share/file/${fileId}`);
+  },
+
+  async updateShareStatus(fileId, options) {
+    return this.request('POST', `/api/share/file/${fileId}`, options);
+  },
+
+  async revokeShare(fileId) {
+    return this.request('DELETE', `/api/share/file/${fileId}`);
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.API = API;
+}

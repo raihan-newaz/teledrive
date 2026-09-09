@@ -18,6 +18,7 @@ const Preview = {
     const contentEl = document.getElementById('preview-content');
     const downloadBtn = document.getElementById('preview-download');
     const openTabBtn = document.getElementById('preview-open-tab');
+    const shareBtn = document.getElementById('preview-share');
     const closeBtn = document.getElementById('preview-close');
 
     if (!overlay || !contentEl) return;
@@ -32,6 +33,13 @@ const Preview = {
     }
     if (openTabBtn) {
       openTabBtn.onclick = () => window.open(streamUrl, '_blank');
+    }
+    if (shareBtn) {
+      shareBtn.onclick = () => {
+        if (typeof App !== 'undefined' && App.openShareModal) {
+          App.openShareModal(file);
+        }
+      };
     }
     if (downloadBtn) {
       downloadBtn.onclick = () => window.open(downloadUrl, '_blank');

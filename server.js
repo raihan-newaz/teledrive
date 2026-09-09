@@ -33,6 +33,7 @@ const filesRouter = require('./src/routes/files');
 const foldersRouter = require('./src/routes/folders');
 const setupRouter = require('./src/routes/setup');
 const settingsRouter = require('./src/routes/settings');
+const shareRouter = require('./src/routes/share');
 
 const app = express();
 
@@ -55,6 +56,12 @@ app.use('/api/auth', authRouter);
 app.use('/api/folders', foldersRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/share', shareRouter);
+
+// Public share landing page
+app.get('/share/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'share.html'));
+});
 
 // SPA fallback — serve index.html for all non-API GET routes
 app.get('*', (req, res) => {

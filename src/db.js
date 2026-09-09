@@ -55,6 +55,12 @@ async function initialize() {
       is_trashed INTEGER DEFAULT 0,
       is_chunked INTEGER DEFAULT 0,
       total_chunks INTEGER DEFAULT 1,
+      is_shared INTEGER DEFAULT 0,
+      share_token TEXT,
+      share_password TEXT,
+      share_expires_at DATETIME,
+      share_views INTEGER DEFAULT 0,
+      share_downloads INTEGER DEFAULT 0,
       trashed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -77,6 +83,12 @@ async function initialize() {
   // Safe migrations for existing databases
   try { db.run('ALTER TABLE files ADD COLUMN is_chunked INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN total_chunks INTEGER DEFAULT 1;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN is_shared INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN share_token TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN share_password TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN share_expires_at DATETIME;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN share_views INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN share_downloads INTEGER DEFAULT 0;'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS upload_sessions (
@@ -349,6 +361,54 @@ function getExpiredUploadSessions(olderThanIso) {
 }
 
 /**
+ * Gets a file by public share token
+ */
+function getFileByShareToken(token) {
+  return get('SELECT * FROM files WHERE share_token = ? AND is_shared = 1 AND is_trashed = 0', [token]);
+}
+
+/**
+ * Enable or update public share configuration for a file
+ */
+function updateFileShare(fileId, options = {}) {
+  const isShared = options.isShared !== undefined ? options.isShared : options.is_shared;
+  const token = options.token !== undefined ? options.token : options.share_token;
+  const password = options.password !== undefined ? options.password : options.share_password;
+  const expiresAt = options.expiresAt !== undefined ? options.expiresAt : options.share_expires_at;
+
+  run(
+    'UPDATE files SET is_shared = ?, share_token = ?, share_password = ?, share_expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [isShared ? 1 : 0, token || null, password || null, expiresAt || null, fileId]
+  );
+  return getFile(fileId);
+}
+
+/**
+ * Revokes public share link for a file
+ */
+function revokeFileShare(fileId) {
+  run(
+    'UPDATE files SET is_shared = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [fileId]
+  );
+  return getFile(fileId);
+}
+
+/**
+ * Increment view count for shared file
+ */
+function incrementShareViews(token) {
+  run('UPDATE files SET share_views = COALESCE(share_views, 0) + 1 WHERE share_token = ?', [token]);
+}
+
+/**
+ * Increment download count for shared file
+ */
+function incrementShareDownloads(token) {
+  run('UPDATE files SET share_downloads = COALESCE(share_downloads, 0) + 1 WHERE share_token = ?', [token]);
+}
+
+/**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
  */
@@ -373,6 +433,11 @@ module.exports = {
   addUploadSessionChunk,
   deleteUploadSession,
   getExpiredUploadSessions,
+  getFileByShareToken,
+  updateFileShare,
+  revokeFileShare,
+  incrementShareViews,
+  incrementShareDownloads,
   getFolder,
   getFolderContents,
   searchFiles,

@@ -1005,4 +1005,5 @@ router.post('/batch-move', async (req, res) => {
 });
 
 router.permanentlyDeleteFile = permanentlyDeleteFile;
+router.streamFileToResponse = streamFileToResponse;
 module.exports = router;

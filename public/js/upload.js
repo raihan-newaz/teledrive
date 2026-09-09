@@ -193,23 +193,26 @@ const Upload = {
     const item = this.queue.find(i => i.id === itemId);
     if (!item) return;
 
-    if (item.status === 'uploading') {
-      item.status = 'cancelled';
-      item.statusText = 'Cancelled';
-      item.speedText = '';
-      item.etaText = '';
-      if (item.xhr) {
-        try { item.xhr.abort(); } catch (e) {}
-        item.xhr = null;
-      }
+    item.status = 'cancelled';
+    item.statusText = 'Cancelled';
+    item.speedText = '';
+    item.etaText = '';
+
+    if (item.xhr) {
+      try { item.xhr.abort(); } catch (e) {}
+      item.xhr = null;
+    }
+
+    if (typeof UI !== 'undefined' && UI.showToast) {
       UI.showToast(`Cancelled upload of "${item.file.name}"`, 'info');
+    }
+
+    this.renderQueue();
+
+    // If no other item is uploading, continue queue processing
+    if (!this.queue.some(i => i.status === 'uploading')) {
       this.isUploading = false;
-      this.renderQueue();
       this.processQueue();
-    } else if (item.status === 'pending') {
-      item.status = 'cancelled';
-      item.statusText = 'Cancelled';
-      this.renderQueue();
     }
   },
 
@@ -513,6 +516,32 @@ const Upload = {
   showUploadPanel() {
     const panel = document.getElementById('upload-panel');
     if (panel) panel.style.display = 'block';
+    this.initPanelEvents();
+  },
+
+  initPanelEvents() {
+    const body = document.getElementById('upload-panel-body');
+    if (!body || this._panelEventsInitialized) return;
+    this._panelEventsInitialized = true;
+
+    body.addEventListener('click', (e) => {
+      const btn = e.target.closest('.upload-action-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const action = btn.getAttribute('data-action');
+      const id = btn.getAttribute('data-id');
+      if (!id) return;
+
+      if (action === 'cancel') {
+        this.cancelUpload(id);
+      } else if (action === 'retry') {
+        this.retryUpload(id);
+      } else if (action === 'dismiss') {
+        this.dismissItem(id);
+      }
+    });
   },
 
   renderQueue() {
@@ -535,17 +564,17 @@ const Upload = {
 
       const partText = item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '';
 
-      // Action buttons
+      // Action buttons with data-action and data-id (clean event delegation)
       let actionBtn = '';
       if (item.status === 'uploading' || item.status === 'pending') {
-        actionBtn = `<button class="upload-action-btn cancel" onclick="Upload.cancelUpload('${item.id}')" title="Cancel upload">✕</button>`;
+        actionBtn = `<button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">✕</button>`;
       } else if (item.status === 'cancelled' || item.status === 'error') {
         actionBtn = `
-          <button class="upload-action-btn retry" onclick="Upload.retryUpload('${item.id}')" title="Resume/Retry">🔄</button>
-          <button class="upload-action-btn" onclick="Upload.dismissItem('${item.id}')" title="Dismiss">✕</button>
+          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume/Retry">🔄</button>
+          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">✕</button>
         `;
       } else {
-        actionBtn = `<button class="upload-action-btn" onclick="Upload.dismissItem('${item.id}')" title="Dismiss">✕</button>`;
+        actionBtn = `<button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">✕</button>`;
       }
 
       // Metrics string (speed, ETA)
@@ -762,3 +791,7 @@ const Upload = {
     }
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.Upload = Upload;
+}

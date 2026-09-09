@@ -55,6 +55,7 @@ const App = {
         this.initDragAndDropMove();
         this.initContextMenu();
         this.initModals();
+        this.initShareModal();
         this.initUpload();
         this.initSettings();
         this.initKeyboardShortcuts();
@@ -649,6 +650,10 @@ const App = {
       if (itemData.type !== 'folder') {
         window.open(API.getDownloadUrl(itemData.id), '_blank');
       }
+    } else if (action === 'share') {
+      if (itemData.type !== 'folder') {
+        this.openShareModal(itemData);
+      }
     } else if (action === 'info') {
       this.openFileInfoModal(itemData);
     } else if (action === 'star') {
@@ -758,6 +763,107 @@ const App = {
     }
 
     UI.showModal('file-info-modal');
+  },
+
+  currentShareFile: null,
+
+  async openShareModal(file) {
+    if (!file || file.type === 'folder') {
+      UI.showToast('Only individual files can be shared publicly', 'info');
+      return;
+    }
+    this.currentShareFile = file;
+
+    const modalIcon = document.getElementById('share-modal-file-icon');
+    const modalTitle = document.getElementById('share-modal-title');
+    const modalSubtitle = document.getElementById('share-modal-subtitle');
+    const accessSelect = document.getElementById('share-access-select');
+    const publicSettings = document.getElementById('share-public-settings');
+    const linkInput = document.getElementById('share-link-input');
+    const copyBtnText = document.getElementById('copy-share-btn-text');
+    const pwInput = document.getElementById('share-password-input');
+    const pwStatus = document.getElementById('share-pw-status');
+    const expSelect = document.getElementById('share-expiration-select');
+    const expStatus = document.getElementById('share-expiry-status');
+    const viewsEl = document.getElementById('share-stats-views');
+    const dlsEl = document.getElementById('share-stats-downloads');
+    const revokeBtn = document.getElementById('btn-revoke-share');
+    const accessIcon = document.getElementById('share-access-icon-wrap');
+    const accessHint = document.getElementById('share-access-hint');
+
+    if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type);
+    if (modalTitle) modalTitle.textContent = `Share "${file.name}"`;
+    if (modalSubtitle) modalSubtitle.textContent = `${UI.formatFileSize(file.size)} • ${file.mime_type || 'File'}`;
+
+    // Reset default UI state
+    if (linkInput) linkInput.value = 'Loading share settings...';
+    if (copyBtnText) copyBtnText.textContent = 'Copy link';
+    if (pwInput) {
+      pwInput.value = '';
+      pwInput.type = 'password';
+      pwInput.placeholder = 'Set a password or leave blank';
+    }
+    if (pwStatus) pwStatus.textContent = '';
+    if (expSelect) expSelect.value = 'never';
+    if (expStatus) expStatus.textContent = '';
+    if (viewsEl) viewsEl.textContent = '0';
+    if (dlsEl) dlsEl.textContent = '0';
+
+    UI.showModal('share-modal');
+
+    try {
+      const data = await API.getShareStatus(file.id);
+      const isShared = !!data.is_shared;
+
+      if (accessSelect) accessSelect.value = isShared ? 'public' : 'restricted';
+      if (accessIcon) accessIcon.textContent = isShared ? '🌐' : '🔒';
+      if (accessHint) {
+        accessHint.textContent = isShared
+          ? 'Anyone on the internet with this link can view and download'
+          : 'Only people logged into TeleDrive can access this file';
+      }
+
+      if (publicSettings) {
+        publicSettings.style.display = isShared ? 'block' : 'none';
+      }
+
+      if (revokeBtn) {
+        revokeBtn.style.display = isShared ? 'inline-flex' : 'none';
+      }
+
+      if (isShared && data.share_url) {
+        if (linkInput) linkInput.value = data.share_url;
+      } else {
+        if (linkInput) linkInput.value = '';
+      }
+
+      if (pwStatus) {
+        if (data.has_password) {
+          pwStatus.textContent = '🔒 Password protection is active. Enter a new password to change, or leave blank to keep current password.';
+          pwStatus.style.color = 'var(--primary-color)';
+        } else {
+          pwStatus.textContent = 'Direct access enabled without password.';
+          pwStatus.style.color = 'var(--text-muted)';
+        }
+      }
+
+      if (expStatus) {
+        if (data.share_expires_at) {
+          const expDate = new Date(data.share_expires_at);
+          expStatus.textContent = `⏳ Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
+          expStatus.style.color = expDate < new Date() ? '#ea4335' : 'var(--primary-color)';
+        } else {
+          expStatus.textContent = 'Link never expires.';
+          expStatus.style.color = 'var(--text-muted)';
+        }
+      }
+
+      if (viewsEl) viewsEl.textContent = data.share_views || 0;
+      if (dlsEl) dlsEl.textContent = data.share_downloads || 0;
+    } catch (err) {
+      console.error('Failed to load share status:', err);
+      UI.showToast('Could not load sharing details: ' + err.message, 'error');
+    }
   },
 
   async refreshCurrentView() {
@@ -899,6 +1005,7 @@ const App = {
 
     // Action Bar actions
     const actionDownload = document.getElementById('action-download');
+    const actionShare = document.getElementById('action-share');
     const actionStar = document.getElementById('action-star');
     const actionMove = document.getElementById('action-move');
     const actionDelete = document.getElementById('action-delete');
@@ -913,6 +1020,17 @@ const App = {
       actionSelectAll.onclick = () => {
         const allItems = [...this.folders, ...this.files];
         UI.selectAll(allItems);
+      };
+    }
+
+    if (actionShare) {
+      actionShare.onclick = () => {
+        const selectedFiles = Array.from(UI.selectedItems.values()).filter(i => i.type === 'file');
+        if (selectedFiles.length === 1) {
+          this.openShareModal(selectedFiles[0]);
+        } else if (selectedFiles.length > 1) {
+          UI.showToast('Select a single file to share', 'info');
+        }
       };
     }
 
@@ -1262,6 +1380,128 @@ const App = {
           this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Delete failed: ' + e.message, 'error');
+        }
+      };
+    }
+  },
+
+  initShareModal() {
+    const accessSelect = document.getElementById('share-access-select');
+    const accessIcon = document.getElementById('share-access-icon-wrap');
+    const accessHint = document.getElementById('share-access-hint');
+    const publicSettings = document.getElementById('share-public-settings');
+    const linkInput = document.getElementById('share-link-input');
+    const copyBtn = document.getElementById('btn-copy-share-link');
+    const copyBtnText = document.getElementById('copy-share-btn-text');
+    const pwToggleBtn = document.getElementById('share-toggle-pw');
+    const pwInput = document.getElementById('share-password-input');
+    const expSelect = document.getElementById('share-expiration-select');
+    const saveBtn = document.getElementById('btn-save-share');
+    const revokeBtn = document.getElementById('btn-revoke-share');
+
+    if (accessSelect) {
+      accessSelect.onchange = () => {
+        const isPublic = accessSelect.value === 'public';
+        if (accessIcon) accessIcon.textContent = isPublic ? '🌐' : '🔒';
+        if (accessHint) {
+          accessHint.textContent = isPublic
+            ? 'Anyone on the internet with this link can view and download'
+            : 'Only people logged into TeleDrive can access this file';
+        }
+        if (publicSettings) {
+          publicSettings.style.display = isPublic ? 'block' : 'none';
+        }
+        if (isPublic && (!linkInput.value || linkInput.value.includes('Loading'))) {
+          linkInput.value = 'Click "Save Changes" to generate public link';
+        }
+      };
+    }
+
+    if (copyBtn && linkInput) {
+      copyBtn.onclick = async () => {
+        const url = linkInput.value.trim();
+        if (!url || url.startsWith('Click') || url.startsWith('Loading')) {
+          UI.showToast('Please save changes first to get active link', 'info');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          if (copyBtnText) copyBtnText.textContent = 'Copied!';
+          UI.showToast('Share link copied to clipboard!', 'success');
+          setTimeout(() => {
+            if (copyBtnText) copyBtnText.textContent = 'Copy link';
+          }, 2000);
+        } catch (e) {
+          linkInput.select();
+          document.execCommand('copy');
+          UI.showToast('Share link copied!', 'success');
+        }
+      };
+    }
+
+    if (pwToggleBtn && pwInput) {
+      pwToggleBtn.onclick = () => {
+        if (pwInput.type === 'password') {
+          pwInput.type = 'text';
+          pwToggleBtn.textContent = '🙈';
+        } else {
+          pwInput.type = 'password';
+          pwToggleBtn.textContent = '👁️';
+        }
+      };
+    }
+
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        if (!this.currentShareFile) return;
+        const isShared = accessSelect && accessSelect.value === 'public';
+        const password = pwInput ? pwInput.value.trim() : '';
+        const expVal = expSelect ? expSelect.value : 'never';
+        const expiresInDays = expVal === 'never' ? null : parseInt(expVal, 10);
+
+        try {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          await API.updateShareStatus(this.currentShareFile.id, {
+            is_shared: isShared,
+            password: password || undefined,
+            expires_in_days: expiresInDays
+          });
+
+          UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
+          await this.openShareModal(this.currentShareFile);
+        } catch (err) {
+          UI.showToast('Failed to save share settings: ' + err.message, 'error');
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Changes';
+        }
+      };
+    }
+
+    if (revokeBtn) {
+      revokeBtn.onclick = async () => {
+        if (!this.currentShareFile) return;
+        const confirmed = await UI.confirm({
+          title: 'Turn Off Sharing?',
+          message: `Are you sure you want to stop sharing "${this.currentShareFile.name}"?`,
+          description: 'Any existing links will stop working immediately. Nobody outside TeleDrive will be able to access this file.',
+          icon: 'lock',
+          confirmText: 'Turn Off Sharing',
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+        if (!confirmed) return;
+
+        try {
+          revokeBtn.disabled = true;
+          await API.revokeShare(this.currentShareFile.id);
+          UI.showToast('Public link revoked successfully', 'info');
+          await this.openShareModal(this.currentShareFile);
+        } catch (err) {
+          UI.showToast('Failed to revoke link: ' + err.message, 'error');
+        } finally {
+          revokeBtn.disabled = false;
         }
       };
     }
