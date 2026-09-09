@@ -166,10 +166,23 @@ router.post('/', async (req, res) => {
         const { name, parentId } = req.body;
         if (!name) return res.status(400).json({ error: 'Folder name is required' });
 
+        const targetParentId = parentId && parentId !== 'null' ? parentId : null;
+        const folderName = name.trim();
+
+        // If folder with same name already exists in target parent, reuse it
+        const query = targetParentId
+            ? 'SELECT * FROM folders WHERE name = ? AND parent_id = ?'
+            : 'SELECT * FROM folders WHERE name = ? AND parent_id IS NULL';
+        const params = targetParentId ? [folderName, targetParentId] : [folderName];
+        const existing = await db.get(query, params);
+        if (existing) {
+            return res.json(existing);
+        }
+
         const folder = {
             id: crypto.randomUUID(),
-            name,
-            parent_id: parentId || null,
+            name: folderName,
+            parent_id: targetParentId,
             created_at: new Date().toISOString()
         };
 

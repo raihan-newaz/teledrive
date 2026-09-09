@@ -8,12 +8,17 @@ const Upload = {
   // 500MB chunk threshold & size — optimal balance: minimum Telegram parts, fast streaming, zero overhead, and instant resume
   CHUNK_SIZE: 500 * 1024 * 1024,
 
+  // Folder creation caches for fast idempotent folder uploads
+  _folderCache: new Map(),
+  _folderPromiseCache: new Map(),
+
   /**
-   * Deterministic Upload ID based on file metadata
+   * Deterministic Upload ID based on file metadata & relative path
    */
   getFileUploadId(file) {
     let hash = 0;
-    const str = `${file.name}_${file.size}_${file.lastModified}`;
+    const relPath = file.webkitRelativePath || file._relativePath || '';
+    const str = `${file.name}_${file.size}_${file.lastModified}_${relPath}`;
     for (let i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash) + str.charCodeAt(i);
       hash |= 0;
@@ -23,10 +28,80 @@ const Upload = {
     return `up_${safeHash}_${sizeHex}`;
   },
 
-  addFiles(fileList, folderId) {
+  /**
+   * Resolve or create a single directory under a parent folder (deduplicated)
+   */
+  async getOrCreateFolder(name, parentId) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return parentId;
+
+    const cacheKey = `${parentId || 'root'}::${trimmed}`;
+    if (this._folderCache.has(cacheKey)) {
+      return this._folderCache.get(cacheKey);
+    }
+    if (this._folderPromiseCache.has(cacheKey)) {
+      return await this._folderPromiseCache.get(cacheKey);
+    }
+
+    const promise = (async () => {
+      try {
+        const res = await API.createFolder(trimmed, parentId);
+        const folderId = res.id;
+        this._folderCache.set(cacheKey, folderId);
+        return folderId;
+      } catch (err) {
+        console.error(`[Upload] Failed to create folder "${trimmed}":`, err);
+        return parentId;
+      } finally {
+        this._folderPromiseCache.delete(cacheKey);
+      }
+    })();
+
+    this._folderPromiseCache.set(cacheKey, promise);
+    return await promise;
+  },
+
+  /**
+   * Recursively resolve nested folders for a relative file path
+   * e.g. "my-project/sub1/sub2/file.txt" under baseFolderId
+   */
+  async resolveDestinationFolder(relativePath, baseFolderId) {
+    if (!relativePath) return baseFolderId;
+    const parts = relativePath.split(/[/\\]+/).filter(Boolean);
+    // If only filename or empty, it belongs directly in baseFolderId
+    if (parts.length <= 1) return baseFolderId;
+
+    const dirSegments = parts.slice(0, -1);
+    let currentParentId = baseFolderId || null;
+
+    for (const segment of dirSegments) {
+      currentParentId = await this.getOrCreateFolder(segment, currentParentId);
+    }
+    return currentParentId;
+  },
+
+  async addFiles(fileList, baseFolderId) {
     if (!fileList || fileList.length === 0) return;
 
-    for (const file of fileList) {
+    const fileArray = Array.from(fileList);
+    const hasRelativePaths = fileArray.some(f => (f.webkitRelativePath || f._relativePath));
+    if (hasRelativePaths && typeof UI !== 'undefined' && UI.showToast) {
+      UI.showToast('Scanning folder structure & preparing upload...', 'info');
+    }
+
+    let addedCount = 0;
+    for (const file of fileArray) {
+      const relPath = file.webkitRelativePath || file._relativePath || '';
+      let targetFolderId = baseFolderId;
+
+      if (relPath) {
+        try {
+          targetFolderId = await this.resolveDestinationFolder(relPath, baseFolderId);
+        } catch (e) {
+          console.warn('[Upload] Folder resolution error for:', relPath, e);
+        }
+      }
+
       const uploadId = this.getFileUploadId(file);
 
       // Check if item already exists in queue
@@ -36,6 +111,7 @@ const Upload = {
           existing.status = 'pending';
           existing.error = null;
           existing.statusText = '';
+          existing.folderId = targetFolderId;
         }
         continue;
       }
@@ -43,7 +119,7 @@ const Upload = {
       this.queue.push({
         id: uploadId,
         file,
-        folderId,
+        folderId: targetFolderId,
         progress: 0,
         speedText: '',
         etaText: '',
@@ -55,6 +131,11 @@ const Upload = {
         lastLoaded: 0,
         currentSpeed: 0
       });
+      addedCount++;
+    }
+
+    if (hasRelativePaths && typeof App !== 'undefined' && App.refreshCurrentView) {
+      App.refreshCurrentView();
     }
 
     this.showUploadPanel();
@@ -531,7 +612,82 @@ const Upload = {
     }
   },
 
-  // ─── Drag & Drop for OS File Uploads ───────────────────────────────
+  /**
+   * Recursively extract all files and directory structure from DataTransfer items
+   */
+  async extractFilesFromDataTransfer(dataTransfer) {
+    const items = dataTransfer.items;
+    if (!items || items.length === 0) {
+      return Array.from(dataTransfer.files || []);
+    }
+
+    const readEntryRecursively = async (entry, path = '') => {
+      if (entry.isFile) {
+        return new Promise((resolve) => {
+          entry.file((file) => {
+            if (path) {
+              file._relativePath = `${path}/${file.name}`;
+            }
+            resolve([file]);
+          }, (err) => {
+            console.warn('[Upload] Error reading file entry:', err);
+            resolve([]);
+          });
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const currentPath = path ? `${path}/${entry.name}` : entry.name;
+
+        // Drain all directory entries (readEntries returns in batches)
+        const entries = [];
+        const readBatch = () => new Promise((resolve) => {
+          dirReader.readEntries((batch) => {
+            resolve(batch);
+          }, (err) => {
+            console.warn('[Upload] Error reading directory entries:', err);
+            resolve([]);
+          });
+        });
+
+        while (true) {
+          const batch = await readBatch();
+          if (!batch || batch.length === 0) break;
+          entries.push(...batch);
+        }
+
+        const nestedFiles = await Promise.all(
+          entries.map(child => readEntryRecursively(child, currentPath))
+        );
+        return nestedFiles.flat();
+      }
+      return [];
+    };
+
+    // Check if webkitGetAsEntry is available
+    const hasWebkitEntry = Array.from(items).some(item => typeof item.webkitGetAsEntry === 'function');
+    if (!hasWebkitEntry) {
+      return Array.from(dataTransfer.files || []);
+    }
+
+    try {
+      const fileArrays = await Promise.all(
+        Array.from(items).map((item) => {
+          const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+          if (!entry) {
+            const f = item.getAsFile ? item.getAsFile() : null;
+            return Promise.resolve(f ? [f] : []);
+          }
+          return readEntryRecursively(entry, '');
+        })
+      );
+      return fileArrays.flat();
+    } catch (err) {
+      console.warn('[Upload] Fallback to standard files due to error reading entries:', err);
+      return Array.from(dataTransfer.files || []);
+    }
+  },
+
+  // ─── Drag & Drop for OS File & Folder Uploads ──────────────────────
   initDragDrop() {
     const dropZone = document.getElementById('drop-zone');
     const content = document.getElementById('content');
@@ -570,14 +726,20 @@ const Upload = {
       e.preventDefault();
     });
 
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
       if (isInternalDrag(e)) return;
       e.preventDefault();
       dragCounter = 0;
       if (dropZone) dropZone.style.display = 'none';
 
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        Upload.addFiles(Array.from(e.dataTransfer.files), App.currentFolderId);
+      if (e.dataTransfer) {
+        const files = await this.extractFilesFromDataTransfer(e.dataTransfer);
+        if (files && files.length > 0) {
+          await this.addFiles(files, App.currentFolderId);
+          if (typeof App !== 'undefined' && App.refreshCurrentView) {
+            App.refreshCurrentView();
+          }
+        }
       }
     });
 

@@ -20,41 +20,59 @@ const App = {
     try {
       this.initTheme();
 
-      // Check setup status first
+      // Check setup status with automatic retry for server startup
       let setupStatus = null;
-      try {
-        setupStatus = await API.getSetupStatus();
-      } catch (e) {
-        console.warn('Could not fetch setup status, showing setup wizard:', e);
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          setupStatus = await API.getSetupStatus();
+          break;
+        } catch (e) {
+          retries--;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 600));
+          } else {
+            console.warn('Could not reach setup status endpoint:', e);
+          }
+        }
       }
 
-      if (!setupStatus || !setupStatus.isComplete) {
+      // If backend explicitly confirms setup is incomplete, show wizard
+      if (setupStatus && setupStatus.isComplete === false) {
         this.showScreen('setup');
         Setup.init();
         return;
       }
 
-      // If setup is complete, initialize app listeners & UI
-      this.initEventListeners();
-      this.updateSortButtonsUI();
-      this.initSidebar();
-      this.initBottomNav();
-      this.initSearch();
-      this.initFileContainerEvents();
-      this.initDragAndDropMove();
-      this.initContextMenu();
-      this.initModals();
-      this.initUpload();
-      this.initSettings();
-      this.initKeyboardShortcuts();
+      // Initialize app listeners & UI components
+      try {
+        this.initEventListeners();
+        this.updateSortButtonsUI();
+        this.initSidebar();
+        this.initBottomNav();
+        this.initSearch();
+        this.initFileContainerEvents();
+        this.initDragAndDropMove();
+        this.initContextMenu();
+        this.initModals();
+        this.initUpload();
+        this.initSettings();
+        this.initKeyboardShortcuts();
+      } catch (uiErr) {
+        console.error('Error initializing UI components:', uiErr);
+      }
 
       // Check auth
       if (API.token) {
         try {
           await API.verifyAuth();
           this.showScreen('app');
-          await this.navigateToFolder(null);
-          this.loadStorageStats();
+          try {
+            await this.navigateToFolder(null);
+            this.loadStorageStats();
+          } catch (loadErr) {
+            console.warn('Initial load contents warning:', loadErr);
+          }
         } catch (authErr) {
           this.showScreen('login');
         }
@@ -63,8 +81,7 @@ const App = {
       }
     } catch (e) {
       console.error('App init error:', e);
-      this.showScreen('setup');
-      Setup.init();
+      this.showScreen('login');
     }
   },
 
@@ -1222,21 +1239,79 @@ const App = {
 
   initUpload() {
     const uploadBtn = document.getElementById('upload-btn');
+    const dropdownMenu = document.getElementById('upload-dropdown-menu');
+    const btnUploadFile = document.getElementById('btn-upload-file');
+    const btnUploadFolder = document.getElementById('btn-upload-folder');
     const fabUpload = document.getElementById('fab-upload');
     const fileInput = document.getElementById('file-input');
+    const folderInput = document.getElementById('folder-input');
 
-    const triggerUpload = () => {
-      if (fileInput) fileInput.click();
-    };
+    // Toggle dropdown menu on "New Upload" button click
+    if (uploadBtn) {
+      uploadBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (dropdownMenu) {
+          const isHidden = dropdownMenu.style.display === 'none' || !dropdownMenu.style.display;
+          dropdownMenu.style.display = isHidden ? 'flex' : 'none';
+        } else if (fileInput) {
+          fileInput.click();
+        }
+      };
+    }
 
-    if (uploadBtn) uploadBtn.onclick = triggerUpload;
-    if (fabUpload) fabUpload.onclick = triggerUpload;
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (dropdownMenu && dropdownMenu.style.display !== 'none') {
+        if (!dropdownMenu.contains(e.target) && !uploadBtn.contains(e.target)) {
+          dropdownMenu.style.display = 'none';
+        }
+      }
+    });
 
+    // Option 1: Upload Files
+    if (btnUploadFile) {
+      btnUploadFile.onclick = (e) => {
+        e.stopPropagation();
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+        if (fileInput) fileInput.click();
+      };
+    }
+
+    // Option 2: Upload Folder
+    if (btnUploadFolder) {
+      btnUploadFolder.onclick = (e) => {
+        e.stopPropagation();
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+        if (folderInput) folderInput.click();
+      };
+    }
+
+    // Mobile FAB button
+    if (fabUpload) {
+      fabUpload.onclick = (e) => {
+        e.stopPropagation();
+        if (fileInput) fileInput.click();
+      };
+    }
+
+    // Multi-file selection change
     if (fileInput) {
-      fileInput.onchange = (e) => {
+      fileInput.onchange = async (e) => {
         if (e.target.files && e.target.files.length > 0) {
-          Upload.addFiles(Array.from(e.target.files), this.currentFolderId);
+          await Upload.addFiles(Array.from(e.target.files), this.currentFolderId);
           fileInput.value = '';
+          this.refreshCurrentView();
+        }
+      };
+    }
+
+    // Folder selection change
+    if (folderInput) {
+      folderInput.onchange = async (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          await Upload.addFiles(Array.from(e.target.files), this.currentFolderId);
+          folderInput.value = '';
+          this.refreshCurrentView();
         }
       };
     }
