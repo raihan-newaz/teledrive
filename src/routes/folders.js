@@ -67,6 +67,12 @@ async function deleteFolderRecursive(folderId) {
  */
 router.get('/', async (req, res) => {
     try {
+        const { search } = req.query;
+        if (search) {
+            const folders = db.searchFolders(search);
+            return res.json({ folders, files: [], breadcrumbs: [] });
+        }
+
         const parentId = req.query.parentId && req.query.parentId !== 'null' ? req.query.parentId : null;
         
         const foldersQuery = parentId ? 
@@ -199,4 +205,5 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+router.deleteFolderRecursive = deleteFolderRecursive;
 module.exports = router;

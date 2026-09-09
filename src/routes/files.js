@@ -41,6 +41,73 @@ async function purgeExpiredUploadSessions() {
 }
 setInterval(purgeExpiredUploadSessions, 12 * 3600 * 1000).unref();
 
+// Clean up temporary upload files older than 2 hours in data/tmp
+async function cleanupTmpDir() {
+  try {
+    const files = await fsPromises.readdir(tmpDir);
+    const now = Date.now();
+    const twoHoursMs = 2 * 3600 * 1000;
+    for (const file of files) {
+      try {
+        const filePath = path.join(tmpDir, file);
+        const stats = await fsPromises.stat(filePath);
+        if (now - stats.mtimeMs > twoHoursMs) {
+          await fsPromises.unlink(filePath).catch(() => {});
+        }
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('[Cleanup] Error in cleanupTmpDir:', err.message);
+  }
+}
+setInterval(cleanupTmpDir, 30 * 60 * 1000).unref();
+setTimeout(cleanupTmpDir, 60 * 1000).unref();
+
+// LRU Cache Cleaner for data/cache (keeps cache <= 5GB)
+const MAX_CACHE_BYTES = (parseInt(process.env.MAX_CACHE_GB, 10) || 5) * 1024 * 1024 * 1024;
+async function cleanupCacheLRU() {
+  try {
+    const files = await fsPromises.readdir(cacheDir);
+    let totalBytes = 0;
+    const fileEntries = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(cacheDir, file);
+        const stats = await fsPromises.stat(filePath);
+        if (stats.isFile()) {
+          totalBytes += stats.size;
+          fileEntries.push({
+            filePath,
+            size: stats.size,
+            lastAccess: stats.atimeMs || stats.mtimeMs
+          });
+        }
+      } catch (e) {}
+    }
+
+    if (totalBytes > MAX_CACHE_BYTES) {
+      console.log(`[Cache LRU] Cache usage ${(totalBytes / 1024 / 1024).toFixed(1)}MB exceeds limit ${(MAX_CACHE_BYTES / 1024 / 1024).toFixed(1)}MB. Evicting oldest files...`);
+      fileEntries.sort((a, b) => a.lastAccess - b.lastAccess);
+
+      const targetBytes = MAX_CACHE_BYTES * 0.75;
+      let freedBytes = 0;
+      for (const entry of fileEntries) {
+        if (totalBytes - freedBytes <= targetBytes) break;
+        try {
+          await fsPromises.unlink(entry.filePath);
+          freedBytes += entry.size;
+        } catch (e) {}
+      }
+      console.log(`[Cache LRU] Evicted ${(freedBytes / 1024 / 1024).toFixed(1)}MB. Current cache: ${((totalBytes - freedBytes) / 1024 / 1024).toFixed(1)}MB.`);
+    }
+  } catch (err) {
+    console.error('[Cache LRU] Error in cleanupCacheLRU:', err.message);
+  }
+}
+setInterval(cleanupCacheLRU, 60 * 60 * 1000).unref();
+setTimeout(cleanupCacheLRU, 2 * 60 * 1000).unref();
+
 function getMimeType(filename) {
   const ext = path.extname(filename).toLowerCase();
   const map = {
@@ -709,6 +776,150 @@ router.post('/:id/restore', (req, res) => {
   } catch (error) {
     console.error('Restore error:', error);
     res.status(500).json({ error: 'Failed to restore file' });
+  }
+});
+
+/**
+ * POST /batch-trash — Move multiple files and folders to trash
+ */
+router.post('/batch-trash', async (req, res) => {
+  try {
+    const { fileIds = [], folderIds = [] } = req.body;
+    const now = new Date().toISOString();
+    let trashedFilesCount = 0;
+    let trashedFoldersCount = 0;
+
+    // Trash files
+    if (Array.isArray(fileIds) && fileIds.length > 0) {
+      for (const id of fileIds) {
+        db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ?', [now, id]);
+        trashedFilesCount++;
+      }
+    }
+
+    // Trash folders recursively
+    if (Array.isArray(folderIds) && folderIds.length > 0) {
+      const foldersRouter = require('./folders');
+      for (const folderId of folderIds) {
+        if (foldersRouter.deleteFolderRecursive) {
+          const r = await foldersRouter.deleteFolderRecursive(folderId);
+          trashedFilesCount += r.deletedFiles || 0;
+          trashedFoldersCount += r.deletedFolders || 0;
+        }
+      }
+    }
+
+    res.json({ success: true, trashedFilesCount, trashedFoldersCount });
+  } catch (error) {
+    console.error('Batch trash error:', error);
+    res.status(500).json({ error: 'Failed to trash selected items' });
+  }
+});
+
+/**
+ * POST /batch-restore — Restore multiple files from trash
+ */
+router.post('/batch-restore', (req, res) => {
+  try {
+    const { fileIds = [] } = req.body;
+    let restoredCount = 0;
+
+    if (Array.isArray(fileIds) && fileIds.length > 0) {
+      for (const id of fileIds) {
+        db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ?', [id]);
+        restoredCount++;
+      }
+    }
+
+    res.json({ success: true, restoredCount });
+  } catch (error) {
+    console.error('Batch restore error:', error);
+    res.status(500).json({ error: 'Failed to restore selected files' });
+  }
+});
+
+/**
+ * POST /batch-delete — Permanently delete multiple files
+ */
+router.post('/batch-delete', async (req, res) => {
+  try {
+    const { fileIds = [] } = req.body;
+    let deletedFilesCount = 0;
+
+    if (Array.isArray(fileIds) && fileIds.length > 0) {
+      for (const id of fileIds) {
+        const file = db.getFile(id);
+        if (file) {
+          await permanentlyDeleteFile(file);
+          deletedFilesCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, deletedFilesCount });
+  } catch (error) {
+    console.error('Batch delete error:', error);
+    res.status(500).json({ error: 'Failed to permanently delete selected items' });
+  }
+});
+
+/**
+ * POST /batch-star — Star or unstar multiple files
+ */
+router.post('/batch-star', (req, res) => {
+  try {
+    const { fileIds = [], isStarred = true } = req.body;
+    const now = new Date().toISOString();
+    const starVal = isStarred ? 1 : 0;
+    let updatedCount = 0;
+
+    if (Array.isArray(fileIds) && fileIds.length > 0) {
+      for (const id of fileIds) {
+        db.run('UPDATE files SET is_starred = ?, updated_at = ? WHERE id = ?', [starVal, now, id]);
+        updatedCount++;
+      }
+    }
+
+    res.json({ success: true, updatedCount });
+  } catch (error) {
+    console.error('Batch star error:', error);
+    res.status(500).json({ error: 'Failed to update star state' });
+  }
+});
+
+/**
+ * POST /batch-move — Move multiple files and folders
+ */
+router.post('/batch-move', async (req, res) => {
+  try {
+    const { fileIds = [], folderIds = [], targetFolderId = null } = req.body;
+    const destination = (targetFolderId && targetFolderId !== 'null') ? targetFolderId : null;
+    const now = new Date().toISOString();
+    let movedFilesCount = 0;
+    let movedFoldersCount = 0;
+
+    // Move files
+    if (Array.isArray(fileIds) && fileIds.length > 0) {
+      for (const id of fileIds) {
+        db.run('UPDATE files SET folder_id = ?, updated_at = ? WHERE id = ?', [destination, now, id]);
+        movedFilesCount++;
+      }
+    }
+
+    // Move folders
+    if (Array.isArray(folderIds) && folderIds.length > 0) {
+      for (const id of folderIds) {
+        if (destination !== id) {
+          db.run('UPDATE folders SET parent_id = ?, updated_at = ? WHERE id = ?', [destination, now, id]);
+          movedFoldersCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, movedFilesCount, movedFoldersCount });
+  } catch (error) {
+    console.error('Batch move error:', error);
+    res.status(500).json({ error: 'Failed to move selected items' });
   }
 });
 

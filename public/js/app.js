@@ -5,8 +5,9 @@ const App = {
   currentView: 'drive', // 'drive', 'starred', 'recent', 'trash', 'settings'
   currentFolderId: null,
   viewMode: localStorage.getItem('teledrive_view_mode') || 'grid',
-  sortBy: 'name',
-  sortOrder: 'asc',
+  sortBy: localStorage.getItem('teledrive_sort_by') || 'name',
+  sortOrder: localStorage.getItem('teledrive_sort_order') || (localStorage.getItem('teledrive_sort_by') === 'date' ? 'desc' : 'asc'),
+  lastSelectedId: null,
   files: [],
   folders: [],
   filesMap: new Map(),
@@ -35,6 +36,7 @@ const App = {
 
       // If setup is complete, initialize app listeners & UI
       this.initEventListeners();
+      this.updateSortButtonsUI();
       this.initSidebar();
       this.initBottomNav();
       this.initSearch();
@@ -44,6 +46,7 @@ const App = {
       this.initModals();
       this.initUpload();
       this.initSettings();
+      this.initKeyboardShortcuts();
 
       // Check auth
       if (API.token) {
@@ -290,7 +293,19 @@ const App = {
 
     // Click handler (delegated)
     fileContainer.addEventListener('click', (e) => {
-      // 1. Check if 3-dot button was clicked
+      // 1. Check if selection checkbox button was clicked
+      const selectBtn = e.target.closest('.card-select-btn');
+      if (selectBtn) {
+        e.stopPropagation();
+        const id = selectBtn.getAttribute('data-id');
+        const type = selectBtn.getAttribute('data-type');
+        const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
+        UI.toggleSelection(id, type, item);
+        this.lastSelectedId = id;
+        return;
+      }
+
+      // 2. Check if 3-dot menu button was clicked
       const moreBtn = e.target.closest('.item-more-btn');
       if (moreBtn) {
         e.stopPropagation();
@@ -303,18 +318,69 @@ const App = {
         return;
       }
 
-      // 2. Check if a folder card was clicked
+      // 3. Check for Ctrl/Cmd multi-selection click on any card
+      if (e.ctrlKey || e.metaKey) {
+        const card = e.target.closest('.file-card, .folder-card');
+        if (card) {
+          e.stopPropagation();
+          const id = card.getAttribute('data-id');
+          const type = card.getAttribute('data-type');
+          const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
+          UI.toggleSelection(id, type, item);
+          this.lastSelectedId = id;
+          return;
+        }
+      }
+
+      // 4. Check for Shift range-selection click on any card
+      if (e.shiftKey && this.lastSelectedId) {
+        const card = e.target.closest('.file-card, .folder-card');
+        if (card) {
+          e.stopPropagation();
+          const allCards = Array.from(fileContainer.querySelectorAll('.file-card, .folder-card'));
+          const lastIdx = allCards.findIndex(c => c.getAttribute('data-id') === this.lastSelectedId);
+          const currIdx = allCards.findIndex(c => c === card);
+          if (lastIdx !== -1 && currIdx !== -1) {
+            const start = Math.min(lastIdx, currIdx);
+            const end = Math.max(lastIdx, currIdx);
+            for (let i = start; i <= end; i++) {
+              const c = allCards[i];
+              const cid = c.getAttribute('data-id');
+              const ctype = c.getAttribute('data-type');
+              const citem = ctype === 'folder' ? this.foldersMap.get(cid) : this.filesMap.get(cid);
+              UI.toggleSelection(cid, ctype, citem, true);
+            }
+            return;
+          }
+        }
+      }
+
+      // 5. If currently in selection mode, regular click on a card toggles its selection
+      if (UI.selectedItems.size > 0) {
+        const card = e.target.closest('.file-card, .folder-card');
+        if (card) {
+          const id = card.getAttribute('data-id');
+          const type = card.getAttribute('data-type');
+          const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
+          UI.toggleSelection(id, type, item);
+          this.lastSelectedId = id;
+          return;
+        }
+      }
+
+      // 6. Normal click: Folder navigates, File opens preview
       const folderCard = e.target.closest('.folder-card');
       if (folderCard) {
         const id = folderCard.getAttribute('data-id');
+        this.lastSelectedId = id;
         this.navigateToFolder(id);
         return;
       }
 
-      // 3. Check if a file card was clicked
       const fileCard = e.target.closest('.file-card');
       if (fileCard) {
         const id = fileCard.getAttribute('data-id');
+        this.lastSelectedId = id;
         const file = this.filesMap.get(id);
         if (file) {
           Preview.open(file);
@@ -749,12 +815,11 @@ const App = {
           this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
         } else {
           this.sortBy = sort;
-          this.sortOrder = 'asc';
+          this.sortOrder = (sort === 'date') ? 'desc' : 'asc';
         }
-        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const arrow = this.sortOrder === 'asc' ? '↑' : '↓';
-        btn.innerHTML = `${sort.charAt(0).toUpperCase() + sort.slice(1)} <span class="sort-arrow">${arrow}</span>`;
+        localStorage.setItem('teledrive_sort_by', this.sortBy);
+        localStorage.setItem('teledrive_sort_order', this.sortOrder);
+        this.updateSortButtonsUI();
         this.renderContents();
       };
     });
@@ -764,25 +829,130 @@ const App = {
     const actionStar = document.getElementById('action-star');
     const actionMove = document.getElementById('action-move');
     const actionDelete = document.getElementById('action-delete');
+    const actionRestore = document.getElementById('action-restore');
+    const actionPermanentDelete = document.getElementById('action-permanent-delete');
+    const actionSelectAll = document.getElementById('action-select-all');
     const actionBarClose = document.getElementById('action-bar-close');
 
     if (actionBarClose) actionBarClose.onclick = () => UI.clearSelection();
-    if (actionDownload) actionDownload.onclick = () => {
-      const selected = Array.from(UI.selectedItems)[0];
-      if (selected && selected.type === 'file') window.open(API.getDownloadUrl(selected.id), '_blank');
-    };
-    if (actionStar) actionStar.onclick = () => {
-      const selected = Array.from(UI.selectedItems)[0];
-      if (selected) this.handleItemAction('star', selected);
-    };
-    if (actionMove) actionMove.onclick = () => {
-      const selected = Array.from(UI.selectedItems)[0];
-      if (selected) this.openMoveModal(selected);
-    };
-    if (actionDelete) actionDelete.onclick = () => {
-      const selected = Array.from(UI.selectedItems)[0];
-      if (selected) this.handleItemAction('trash', selected);
-    };
+
+    if (actionSelectAll) {
+      actionSelectAll.onclick = () => {
+        const allItems = [...this.folders, ...this.files];
+        UI.selectAll(allItems);
+      };
+    }
+
+    if (actionDownload) {
+      actionDownload.onclick = () => {
+        const selectedFiles = Array.from(UI.selectedItems.values()).filter(i => i.type === 'file');
+        if (selectedFiles.length === 0) {
+          UI.showToast('No files selected to download', 'info');
+          return;
+        }
+        if (selectedFiles.length === 1) {
+          window.open(API.getDownloadUrl(selectedFiles[0].id), '_blank');
+        } else {
+          UI.showToast(`Downloading ${selectedFiles.length} file(s)...`, 'info');
+          selectedFiles.forEach((fileItem, idx) => {
+            setTimeout(() => {
+              const a = document.createElement('a');
+              a.href = API.getDownloadUrl(fileItem.id);
+              a.download = '';
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+            }, idx * 400);
+          });
+        }
+      };
+    }
+
+    if (actionStar) {
+      actionStar.onclick = async () => {
+        const selectedFiles = Array.from(UI.selectedItems.values()).filter(i => i.type === 'file');
+        if (selectedFiles.length === 0) {
+          UI.showToast('Select files to star/unstar', 'info');
+          return;
+        }
+        const allStarred = selectedFiles.every(f => {
+          const file = this.filesMap.get(f.id);
+          return file && file.is_starred === 1;
+        });
+        const newStarState = !allStarred;
+        const fileIds = selectedFiles.map(f => f.id);
+        try {
+          await API.batchStar(fileIds, newStarState);
+          UI.showToast(`${newStarState ? 'Starred' : 'Unstarred'} ${fileIds.length} file(s)`, 'success');
+          UI.clearSelection();
+          await this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to update star state: ' + e.message, 'error');
+        }
+      };
+    }
+
+    if (actionMove) {
+      actionMove.onclick = () => {
+        const selectedItems = Array.from(UI.selectedItems.values());
+        if (selectedItems.length === 0) return;
+        this.openMoveModal(selectedItems[0].item);
+      };
+    }
+
+    if (actionDelete) {
+      actionDelete.onclick = async () => {
+        const selectedItems = Array.from(UI.selectedItems.values());
+        if (selectedItems.length === 0) return;
+        const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
+        const folderIds = selectedItems.filter(i => i.type === 'folder').map(i => i.id);
+        if (confirm(`Move ${selectedItems.length} item(s) to Trash?`)) {
+          try {
+            await API.batchTrash(fileIds, folderIds);
+            UI.showToast(`Moved ${selectedItems.length} item(s) to Trash`, 'success');
+            UI.clearSelection();
+            await this.refreshCurrentView();
+          } catch (e) {
+            UI.showToast('Failed to trash items: ' + e.message, 'error');
+          }
+        }
+      };
+    }
+
+    if (actionRestore) {
+      actionRestore.onclick = async () => {
+        const selectedItems = Array.from(UI.selectedItems.values());
+        const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
+        if (fileIds.length === 0) return;
+        try {
+          await API.batchRestore(fileIds);
+          UI.showToast(`Restored ${fileIds.length} file(s)`, 'success');
+          UI.clearSelection();
+          await this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to restore files: ' + e.message, 'error');
+        }
+      };
+    }
+
+    if (actionPermanentDelete) {
+      actionPermanentDelete.onclick = async () => {
+        const selectedItems = Array.from(UI.selectedItems.values());
+        const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
+        const folderIds = selectedItems.filter(i => i.type === 'folder').map(i => i.id);
+        if (confirm(`Permanently delete ${selectedItems.length} item(s) from Telegram cloud? This cannot be undone.`)) {
+          try {
+            UI.showToast('Permanently deleting...', 'info');
+            await API.batchDelete(fileIds, folderIds);
+            UI.showToast(`Permanently deleted ${selectedItems.length} item(s)`, 'success');
+            UI.clearSelection();
+            await this.refreshCurrentView();
+          } catch (e) {
+            UI.showToast('Failed to permanently delete items: ' + e.message, 'error');
+          }
+        }
+      };
+    }
   },
 
   initSidebar() {
@@ -842,8 +1012,12 @@ const App = {
           }
           UI.showSkeletons();
           try {
-            this.folders = [];
-            this.files = await API.getFiles({ search: query });
+            const [folderData, fileData] = await Promise.all([
+              API.getFolderContents(null, query).catch(() => ({ folders: [] })),
+              API.getFiles({ search: query }).catch(() => [])
+            ]);
+            this.folders = (folderData && folderData.folders) ? folderData.folders : [];
+            this.files = Array.isArray(fileData) ? fileData : [];
             this.breadcrumbs = [{ id: null, name: `Search: "${query}"` }];
             this.renderContents();
             UI.renderBreadcrumbs(this.breadcrumbs);
@@ -936,7 +1110,25 @@ const App = {
     const moveConfirm = document.getElementById('move-confirm');
     if (moveConfirm) {
       moveConfirm.onclick = async () => {
-        if (!this.selectedItem || this.targetMoveFolderId === undefined) return;
+        if (this.targetMoveFolderId === undefined) return;
+        const selectedList = Array.from(UI.selectedItems.values());
+
+        if (selectedList.length > 0) {
+          const fileIds = selectedList.filter(i => i.type === 'file').map(i => i.id);
+          const folderIds = selectedList.filter(i => i.type === 'folder').map(i => i.id);
+          try {
+            await API.batchMove(fileIds, folderIds, this.targetMoveFolderId);
+            UI.showToast(`Moved ${selectedList.length} item(s)`, 'success');
+            UI.clearSelection();
+            UI.hideAllModals();
+            this.refreshCurrentView();
+          } catch (e) {
+            UI.showToast('Batch move failed: ' + e.message, 'error');
+          }
+          return;
+        }
+
+        if (!this.selectedItem) return;
         try {
           if (this.selectedItem.type === 'folder') {
             await API.moveFolder(this.selectedItem.id, this.targetMoveFolderId);
@@ -1413,6 +1605,98 @@ const App = {
     } catch (e) {
       console.warn('Could not fetch settings details:', e);
     }
+  },
+
+  updateSortButtonsUI() {
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+      const sort = btn.getAttribute('data-sort');
+      const label = sort.charAt(0).toUpperCase() + sort.slice(1);
+      if (this.sortBy === sort) {
+        btn.classList.add('active');
+        const arrow = this.sortOrder === 'asc' ? '↑' : '↓';
+        btn.innerHTML = `${label} <span class="sort-arrow">${arrow}</span>`;
+      } else {
+        btn.classList.remove('active');
+        btn.innerHTML = label;
+      }
+    });
+  },
+
+  initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      const activeTag = document.activeElement ? document.activeElement.tagName : '';
+      const isInputActive = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable);
+
+      // 1. Ctrl+A / Cmd+A -> Select all items in view (when not typing in an input)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        if (!isInputActive) {
+          e.preventDefault();
+          const allItems = [...this.folders, ...this.files];
+          UI.selectAll(allItems);
+          return;
+        }
+      }
+
+      // 2. Escape -> Close modals / Close preview / Clear selection
+      if (e.key === 'Escape') {
+        const anyModal = document.querySelector('.modal.visible');
+        if (anyModal) {
+          UI.hideAllModals();
+          return;
+        }
+        const previewModal = document.getElementById('preview-modal');
+        if (previewModal && previewModal.classList.contains('visible')) {
+          if (typeof Preview !== 'undefined' && Preview.close) Preview.close();
+          return;
+        }
+        if (UI.selectedItems.size > 0) {
+          UI.clearSelection();
+          return;
+        }
+      }
+
+      // 3. Delete / Backspace -> Trash or Delete selected items
+      if ((e.key === 'Delete' || (e.key === 'Backspace' && (e.ctrlKey || e.metaKey))) && !isInputActive) {
+        if (UI.selectedItems.size > 0) {
+          e.preventDefault();
+          const actionDelete = document.getElementById('action-delete');
+          const actionPermanentDelete = document.getElementById('action-permanent-delete');
+          if (this.currentView === 'trash' && actionPermanentDelete && actionPermanentDelete.style.display !== 'none') {
+            actionPermanentDelete.click();
+          } else if (actionDelete && actionDelete.style.display !== 'none') {
+            actionDelete.click();
+          }
+          return;
+        }
+      }
+
+      // 4. F2 -> Rename selected item
+      if (e.key === 'F2' && !isInputActive) {
+        if (UI.selectedItems.size === 1) {
+          e.preventDefault();
+          const selected = Array.from(UI.selectedItems.values())[0];
+          const fullItem = selected.type === 'folder' ? this.foldersMap.get(selected.id) : this.filesMap.get(selected.id);
+          if (fullItem) this.openRenameModal(fullItem);
+          return;
+        }
+      }
+
+      // 5. Space -> Quick Preview single selected file
+      if (e.key === ' ' && !isInputActive) {
+        const previewModal = document.getElementById('preview-modal');
+        if (!previewModal || !previewModal.classList.contains('visible')) {
+          if (UI.selectedItems.size === 1) {
+            const selected = Array.from(UI.selectedItems.values())[0];
+            if (selected.type === 'file') {
+              e.preventDefault();
+              const file = this.filesMap.get(selected.id);
+              if (file && typeof Preview !== 'undefined' && Preview.open) Preview.open(file);
+              return;
+            }
+          }
+        }
+      }
+    });
   },
 
   setTheme(theme) {

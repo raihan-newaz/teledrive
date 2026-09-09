@@ -2,7 +2,7 @@
  * UI Utilities and DOM Renderers for TeleDrive
  */
 const UI = {
-  selectedItems: new Set(),
+  selectedItems: new Map(),
 
   // ─── Toasts ────────────────────────────────────────────────────────
   showToast(message, type = 'info', duration = 3500) {
@@ -82,12 +82,82 @@ const UI = {
     if (sk) sk.style.display = 'none';
   },
 
-  // ─── Selection ─────────────────────────────────────────────────────
+  // ─── Selection Management ──────────────────────────────────────────
+  toggleSelection(id, type, item, forceState) {
+    const shouldSelect = forceState !== undefined ? forceState : !this.selectedItems.has(id);
+    if (shouldSelect) {
+      this.selectedItems.set(id, { id, type, item });
+    } else {
+      this.selectedItems.delete(id);
+    }
+
+    const card = document.querySelector(`[data-id="${id}"]`);
+    if (card) {
+      card.classList.toggle('selected', shouldSelect);
+    }
+
+    this.updateActionBar();
+  },
+
+  selectAll(itemsList) {
+    if (!itemsList || itemsList.length === 0) return;
+    itemsList.forEach(item => {
+      const type = item.type || (item.mime_type ? 'file' : 'folder');
+      this.selectedItems.set(item.id, { id: item.id, type, item });
+      const card = document.querySelector(`[data-id="${item.id}"]`);
+      if (card) card.classList.add('selected');
+    });
+    this.updateActionBar();
+  },
+
   clearSelection() {
     this.selectedItems.clear();
     const actionBar = document.getElementById('action-bar');
     if (actionBar) actionBar.style.display = 'none';
     document.querySelectorAll('.file-card, .folder-card').forEach(c => c.classList.remove('selected'));
+  },
+
+  updateActionBar() {
+    const actionBar = document.getElementById('action-bar');
+    const selectedCount = document.getElementById('selected-count');
+    if (!actionBar) return;
+
+    const count = this.selectedItems.size;
+    if (count === 0) {
+      actionBar.style.display = 'none';
+      return;
+    }
+
+    actionBar.style.display = 'flex';
+    if (selectedCount) {
+      selectedCount.textContent = `${count} selected`;
+    }
+
+    const isTrashView = typeof App !== 'undefined' && App.currentView === 'trash';
+    const restoreBtn = document.getElementById('action-restore');
+    const permDeleteBtn = document.getElementById('action-permanent-delete');
+    const downloadBtn = document.getElementById('action-download');
+    const moveBtn = document.getElementById('action-move');
+    const starBtn = document.getElementById('action-star');
+    const deleteBtn = document.getElementById('action-delete');
+
+    if (isTrashView) {
+      if (restoreBtn) restoreBtn.style.display = 'inline-flex';
+      if (permDeleteBtn) permDeleteBtn.style.display = 'inline-flex';
+      if (deleteBtn) deleteBtn.style.display = 'none';
+      if (downloadBtn) downloadBtn.style.display = 'none';
+      if (moveBtn) moveBtn.style.display = 'none';
+      if (starBtn) starBtn.style.display = 'none';
+    } else {
+      if (restoreBtn) restoreBtn.style.display = 'none';
+      if (permDeleteBtn) permDeleteBtn.style.display = 'none';
+      if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+      if (moveBtn) moveBtn.style.display = 'inline-flex';
+
+      const hasFiles = Array.from(this.selectedItems.values()).some(i => i.type === 'file');
+      if (downloadBtn) downloadBtn.style.display = hasFiles ? 'inline-flex' : 'none';
+      if (starBtn) starBtn.style.display = hasFiles ? 'inline-flex' : 'none';
+    }
   },
 
   // ─── Formatters ────────────────────────────────────────────────────
@@ -154,8 +224,13 @@ const UI = {
   // ─── Render Card HTML (Clean & Robust, No broken inline JS) ───────
   renderFolderCard(folder) {
     const safeName = folder.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isSelected = this.selectedItems.has(folder.id);
+    const selectedClass = isSelected ? ' selected' : '';
     return `
-      <div class="folder-card" data-id="${folder.id}" data-type="folder" draggable="true">
+      <div class="folder-card${selectedClass}" data-id="${folder.id}" data-type="folder" draggable="true">
+        <button class="card-select-btn icon-btn" title="Select folder" data-id="${folder.id}" data-type="folder" aria-label="Select">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </button>
         <div class="folder-icon-wrap">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="#5f6368">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
@@ -171,6 +246,8 @@ const UI = {
 
   renderFileCard(file) {
     const safeName = file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isSelected = this.selectedItems.has(file.id);
+    const selectedClass = isSelected ? ' selected' : '';
     const cat = this.getFileTypeCategory(file.mime_type);
     const icon = this.getFileIconSvg(file.mime_type);
     const size = this.formatFileSize(file.size);
@@ -207,7 +284,10 @@ const UI = {
     }
 
     return `
-      <div class="file-card" data-id="${file.id}" data-type="file" draggable="true">
+      <div class="file-card${selectedClass}" data-id="${file.id}" data-type="file" draggable="true">
+        <button class="card-select-btn icon-btn" title="Select file" data-id="${file.id}" data-type="file" aria-label="Select">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </button>
         ${previewHtml}
         <div class="file-card-info">
           <div class="file-card-title-row">
@@ -326,10 +406,114 @@ const UI = {
     menu.style.top = `${y}px`;
   },
 
-  // ─── Generate Real Video Thumbnails via Canvas ─────────────────────
+  // ─── Generate Real Video Thumbnails via Canvas (Lazy & Concurrency-Throttled) ───
+  _videoObserver: null,
+  _thumbnailQueue: [],
+  _activeThumbnailWorkers: 0,
+  _MAX_THUMBNAIL_WORKERS: 2,
+
+  _processThumbnailQueue() {
+    while (this._activeThumbnailWorkers < this._MAX_THUMBNAIL_WORKERS && this._thumbnailQueue.length > 0) {
+      const task = this._thumbnailQueue.shift();
+      this._activeThumbnailWorkers++;
+
+      const { file, imgEl } = task;
+      if (!imgEl || !document.body.contains(imgEl) || imgEl.classList.contains('loaded')) {
+        this._activeThumbnailWorkers--;
+        continue;
+      }
+
+      const cached = sessionStorage.getItem(`vthumb_${file.id}`);
+      if (cached) {
+        imgEl.src = cached;
+        imgEl.classList.add('loaded');
+        this._activeThumbnailWorkers--;
+        continue;
+      }
+
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.preload = 'metadata';
+      video.playsInline = true;
+      video.src = API.getStreamUrl(file.id);
+
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        try {
+          video.removeAttribute('src');
+          video.load();
+          video.remove();
+        } catch (e) {}
+        this._activeThumbnailWorkers--;
+        this._processThumbnailQueue();
+      };
+
+      const timeoutId = setTimeout(done, 12000); // 12s fallback timeout
+
+      video.onloadedmetadata = () => {
+        try {
+          video.currentTime = Math.min(1.5, (video.duration || 2) * 0.1);
+        } catch (e) {
+          clearTimeout(timeoutId);
+          done();
+        }
+      };
+
+      video.onseeked = () => {
+        clearTimeout(timeoutId);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.min(480, video.videoWidth || 320);
+          canvas.height = Math.min(270, video.videoHeight || 180);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          if (imgEl && document.body.contains(imgEl)) {
+            imgEl.src = dataUrl;
+            imgEl.classList.add('loaded');
+          }
+          try {
+            sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
+          } catch(e) {}
+        } catch (e) {
+          // Canvas error fallback
+        } finally {
+          done();
+        }
+      };
+
+      video.onerror = () => {
+        clearTimeout(timeoutId);
+        done();
+      };
+    }
+  },
+
   loadVideoThumbnails(files) {
     if (!files || files.length === 0) return;
     const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type) === 'video');
+    if (videoFiles.length === 0) return;
+
+    if (!this._videoObserver && window.IntersectionObserver) {
+      this._videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const el = entry.target;
+            this._videoObserver.unobserve(el);
+            const fileId = el.getAttribute('data-vid');
+            const file = App && App.filesMap ? App.filesMap.get(fileId) : null;
+            if (file) {
+              this._thumbnailQueue.push({ file, imgEl: el });
+              this._processThumbnailQueue();
+            }
+          }
+        });
+      }, { rootMargin: '200px' });
+    }
 
     videoFiles.forEach(file => {
       const imgEl = document.getElementById(`vthumb-${file.id}`);
@@ -342,46 +526,13 @@ const UI = {
         return;
       }
 
-      // Generate video thumbnail on the fly
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.muted = true;
-      video.preload = 'metadata';
-      video.playsInline = true;
-      video.src = API.getStreamUrl(file.id);
-
-      video.onloadedmetadata = () => {
-        video.currentTime = Math.min(1.5, (video.duration || 2) * 0.1);
-      };
-
-      video.onseeked = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.min(480, video.videoWidth || 320);
-          canvas.height = Math.min(270, video.videoHeight || 180);
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          
-          if (imgEl) {
-            imgEl.src = dataUrl;
-            imgEl.classList.add('loaded');
-          }
-          try {
-            sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
-          } catch(e) {}
-        } catch(e) {
-          // Canvas error fallback
-        } finally {
-          video.removeAttribute('src');
-          video.load();
-          video.remove();
-        }
-      };
-
-      video.onerror = () => {
-        video.remove();
-      };
+      imgEl.setAttribute('data-vid', file.id);
+      if (this._videoObserver) {
+        this._videoObserver.observe(imgEl);
+      } else {
+        this._thumbnailQueue.push({ file, imgEl });
+        this._processThumbnailQueue();
+      }
     });
   }
 };

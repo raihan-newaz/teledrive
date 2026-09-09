@@ -102,9 +102,12 @@ const API = {
   },
 
   // ─── Folders ──────────────────────────────────────────────────────
-  async getFolderContents(parentId = null) {
-    const query = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';
-    return this.request('GET', `/api/folders${query}`);
+  async getFolderContents(parentId = null, search = null) {
+    const params = new URLSearchParams();
+    if (parentId && parentId !== 'null') params.append('parentId', parentId);
+    if (search) params.append('search', search);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request('GET', `/api/folders${qs}`);
   },
 
   async getFolderTree() {
@@ -165,6 +168,26 @@ const API = {
 
   async restoreFile(id) {
     return this.request('POST', `/api/files/${id}/restore`);
+  },
+
+  async batchTrash(fileIds = [], folderIds = []) {
+    return this.request('POST', '/api/files/batch-trash', { fileIds, folderIds });
+  },
+
+  async batchRestore(fileIds = []) {
+    return this.request('POST', '/api/files/batch-restore', { fileIds });
+  },
+
+  async batchDelete(fileIds = [], folderIds = []) {
+    return this.request('POST', '/api/files/batch-delete', { fileIds, folderIds });
+  },
+
+  async batchStar(fileIds = [], isStarred = true) {
+    return this.request('POST', '/api/files/batch-star', { fileIds, isStarred });
+  },
+
+  async batchMove(fileIds = [], folderIds = [], targetFolderId = null) {
+    return this.request('POST', '/api/files/batch-move', { fileIds, folderIds, targetFolderId });
   },
 
   async getStorageStats() {

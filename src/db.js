@@ -220,6 +220,15 @@ function searchFiles(query) {
 }
 
 /**
+ * Searches for folders by name
+ * @param {string} query - The search query
+ * @returns {Array} Array of matching folders
+ */
+function searchFolders(query) {
+  return all('SELECT * FROM folders WHERE name LIKE ? ORDER BY name ASC', ['%' + query + '%']);
+}
+
+/**
  * Gets all starred files
  * @returns {Array} Array of starred files
  */
@@ -367,6 +376,7 @@ module.exports = {
   getFolder,
   getFolderContents,
   searchFiles,
+  searchFolders,
   getStarredFiles,
   getTrashedFiles,
   getRecentFiles,
