@@ -15,7 +15,9 @@ const API = {
   },
 
   async request(method, url, body = null, options = {}) {
-    const headers = { ...options.headers };
+    const { headers: customHeaders, ...restOptions } = options;
+    const headers = { ...customHeaders };
+
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
@@ -26,10 +28,10 @@ const API = {
 
     try {
       const response = await fetch(url, {
+        ...restOptions,
         method,
         headers,
-        body: method !== 'GET' ? body : null,
-        ...options
+        body: method !== 'GET' ? body : null
       });
 
       const contentType = response.headers.get('content-type');
@@ -38,10 +40,14 @@ const API = {
         data = await response.json();
       }
 
+      // Only wipe session if the main auth token is invalid, not on folder/share password mismatches
       if (response.status === 401) {
-        this.setToken(null);
-        if (typeof App !== 'undefined' && App.showScreen) {
-          App.showScreen('login');
+        const isSubPasswordCheck = url.includes('/verify-lock') || url.includes('/unlock') || url.includes('/share/public');
+        if (!isSubPasswordCheck) {
+          this.setToken(null);
+          if (typeof App !== 'undefined' && App.showScreen) {
+            App.showScreen('login');
+          }
         }
         const err = new Error(data?.error || 'Unauthorized');
         err.status = 401;
