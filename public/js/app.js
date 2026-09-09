@@ -372,13 +372,24 @@ const App = {
         }
       }
 
-      // 5. If currently in selection mode, regular click on a card toggles its selection
+      // 5. If currently in selection mode:
       if (UI.selectedItems.size > 0) {
-        const card = e.target.closest('.file-card, .folder-card');
+        // Clicking a folder card navigates directly into it (like Google Drive)
+        const folderCard = e.target.closest('.folder-card');
+        if (folderCard) {
+          const id = folderCard.getAttribute('data-id');
+          UI.clearSelection();
+          this.lastSelectedId = id;
+          this.navigateToFolder(id);
+          return;
+        }
+
+        // Clicking a file card toggles selection
+        const card = e.target.closest('.file-card');
         if (card) {
           const id = card.getAttribute('data-id');
           const type = card.getAttribute('data-type');
-          const item = type === 'folder' ? this.foldersMap.get(id) : this.filesMap.get(id);
+          const item = this.filesMap.get(id);
           UI.toggleSelection(id, type, item);
           this.lastSelectedId = id;
           return;
@@ -403,6 +414,25 @@ const App = {
           Preview.open(file);
         }
         return;
+      }
+    });
+
+    // Double-click handler as instant guarantee
+    fileContainer.addEventListener('dblclick', (e) => {
+      const folderCard = e.target.closest('.folder-card');
+      if (folderCard) {
+        const id = folderCard.getAttribute('data-id');
+        UI.clearSelection();
+        this.navigateToFolder(id);
+        return;
+      }
+      const fileCard = e.target.closest('.file-card');
+      if (fileCard) {
+        const id = fileCard.getAttribute('data-id');
+        const file = this.filesMap.get(id);
+        if (file) {
+          Preview.open(file);
+        }
       }
     });
 
@@ -943,8 +973,8 @@ const App = {
       };
     }
 
-    if (actionTrash) {
-      actionTrash.onclick = async () => {
+    if (actionDelete) {
+      actionDelete.onclick = async () => {
         const selectedItems = Array.from(UI.selectedItems.values());
         if (selectedItems.length === 0) return;
         const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);

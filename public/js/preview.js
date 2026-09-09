@@ -22,6 +22,8 @@ const Preview = {
 
     if (!overlay || !contentEl) return;
 
+    overlay.style.display = 'flex';
+
     const streamUrl = API.getStreamUrl(file.id);
     const downloadUrl = API.getDownloadUrl(file.id);
 
