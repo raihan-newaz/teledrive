@@ -16,9 +16,12 @@ function generateShareAccessToken(token) {
 }
 
 function verifyShareAccessToken(token, accessKey) {
-  if (!accessKey) return false;
+  if (!accessKey || typeof accessKey !== 'string') return false;
   const expected = generateShareAccessToken(token);
-  return crypto.timingSafeEqual(Buffer.from(accessKey), Buffer.from(expected));
+  const keyBuf = Buffer.from(accessKey);
+  const expBuf = Buffer.from(expected);
+  if (keyBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(keyBuf, expBuf);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
