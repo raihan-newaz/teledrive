@@ -405,7 +405,17 @@ const Upload = {
       workerPromises.push(uploadWorker(w));
     }
 
-    await Promise.all(workerPromises);
+    try {
+      await Promise.all(workerPromises);
+    } catch (err) {
+      if (item.activeXHRs) {
+        for (const xhr of item.activeXHRs) {
+          try { xhr.abort(); } catch (e) {}
+        }
+        item.activeXHRs.clear();
+      }
+      throw err;
+    }
     return finalResult;
   },
 
@@ -507,7 +517,11 @@ const Upload = {
 
           let overallLoaded = 0;
           if (item.uploadedIndices) {
-            overallLoaded += item.uploadedIndices.length * this.CHUNK_SIZE;
+            for (const idx of item.uploadedIndices) {
+              const isLast = idx === totalChunks - 1;
+              const chunkBytes = isLast ? (totalSize - (totalChunks - 1) * this.CHUNK_SIZE) : this.CHUNK_SIZE;
+              overallLoaded += chunkBytes;
+            }
           }
           if (chunkLoadedMap) {
             for (const b of chunkLoadedMap.values()) {

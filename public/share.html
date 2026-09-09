@@ -687,17 +687,35 @@
 
       const copyBtn = document.getElementById('btn-copy-link');
       copyBtn.onclick = () => {
-        navigator.clipboard.writeText(window.location.href);
-        showToast('Link copied to clipboard!');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(window.location.href)
+            .then(() => showToast('Link copied to clipboard!'))
+            .catch(() => fallbackCopy(window.location.href));
+        } else {
+          fallbackCopy(window.location.href);
+        }
       };
+
+      function fallbackCopy(text) {
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        showToast('Link copied to clipboard!');
+      }
 
       // Render Media Preview
       const previewBody = document.getElementById('preview-body');
       previewBody.innerHTML = '';
 
       const mime = (data.mime_type || '').toLowerCase();
+      const ext = (data.name || '').split('.').pop().toLowerCase();
+      const isCodeOrText = mime.startsWith('text/') || 
+        ['json', 'js', 'ts', 'html', 'css', 'py', 'md', 'xml', 'yaml', 'yml', 'sql', 'sh', 'csv', 'env', 'log', 'txt'].includes(ext);
 
-      if (mime.startsWith('video/')) {
+      if (mime.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv', 'wmv'].includes(ext)) {
         const video = document.createElement('video');
         video.className = 'preview-media-video';
         video.controls = true;
@@ -705,7 +723,7 @@
         video.preload = 'metadata';
         video.src = streamUrl;
         previewBody.appendChild(video);
-      } else if (mime.startsWith('audio/')) {
+      } else if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus'].includes(ext)) {
         previewBody.style.background = 'var(--card-bg)';
         const audioWrap = document.createElement('div');
         audioWrap.style.textAlign = 'center';
@@ -718,17 +736,36 @@
 
         audioWrap.appendChild(audio);
         previewBody.appendChild(audioWrap);
-      } else if (mime.startsWith('image/')) {
+      } else if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) {
         const img = document.createElement('img');
         img.className = 'preview-media-img';
         img.src = streamUrl;
         img.alt = data.name;
         previewBody.appendChild(img);
-      } else if (mime === 'application/pdf') {
+      } else if (mime === 'application/pdf' || ext === 'pdf') {
         const iframe = document.createElement('iframe');
         iframe.className = 'preview-media-pdf';
         iframe.src = streamUrl;
         previewBody.appendChild(iframe);
+      } else if (isCodeOrText) {
+        previewBody.style.background = 'var(--card-bg)';
+        const codeWrap = document.createElement('div');
+        codeWrap.style.width = '100%';
+        codeWrap.style.maxHeight = '480px';
+        codeWrap.style.overflow = 'auto';
+        codeWrap.style.padding = '20px';
+        codeWrap.style.fontFamily = 'Consolas, Monaco, "Courier New", monospace';
+        codeWrap.style.fontSize = '13px';
+        codeWrap.style.whiteSpace = 'pre-wrap';
+        codeWrap.style.lineHeight = '1.6';
+        codeWrap.style.borderRadius = '12px';
+        codeWrap.textContent = 'Loading file content...';
+        previewBody.appendChild(codeWrap);
+
+        fetch(streamUrl)
+          .then(r => r.text())
+          .then(t => { codeWrap.textContent = t; })
+          .catch(() => { codeWrap.textContent = 'Failed to load text preview. Please use download button.'; });
       } else {
         // Generic File Card
         previewBody.style.background = 'var(--card-bg)';

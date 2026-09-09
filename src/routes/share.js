@@ -10,9 +10,12 @@ const router = express.Router();
 /**
  * Helper to generate HMAC verification token for password-protected shared files
  */
-const SECRET = process.env.JWT_SECRET || 'teledrive_share_secret_fallback';
+function getSecret() {
+  return process.env.JWT_SECRET || 'teledrive_share_secret_fallback';
+}
+
 function generateShareAccessToken(token) {
-  return crypto.createHmac('sha256', SECRET).update(`access:${token}`).digest('hex');
+  return crypto.createHmac('sha256', getSecret()).update(`access:${token}`).digest('hex');
 }
 
 function verifyShareAccessToken(token, accessKey) {
@@ -116,7 +119,7 @@ router.post('/public/:token/verify', async (req, res) => {
 /**
  * Helper to check password access for download and stream
  */
-function checkPublicAccess(req, res, file) {
+async function checkPublicAccess(req, res, file) {
   if (!file.share_password) return true;
 
   const accessKey = req.query.key || req.headers['x-share-key'];
@@ -125,8 +128,8 @@ function checkPublicAccess(req, res, file) {
   }
 
   // Fallback: support ?pw=password directly in URL
-  if (req.query.pw && bcrypt.compareSync(req.query.pw, file.share_password)) {
-    return true;
+  if (req.query.pw) {
+    return await bcrypt.compare(req.query.pw, file.share_password);
   }
 
   return false;
@@ -148,7 +151,8 @@ router.get('/public/:token/download', async (req, res) => {
       return res.status(410).send('This share link has expired.');
     }
 
-    if (!checkPublicAccess(req, res, file)) {
+    const hasAccess = await checkPublicAccess(req, res, file);
+    if (!hasAccess) {
       return res.status(403).send('Password required to download this file.');
     }
 
@@ -181,7 +185,8 @@ router.get('/public/:token/stream', async (req, res) => {
       return res.status(410).send('This share link has expired.');
     }
 
-    if (!checkPublicAccess(req, res, file)) {
+    const hasAccess = await checkPublicAccess(req, res, file);
+    if (!hasAccess) {
       return res.status(403).send('Password required to stream this file.');
     }
 

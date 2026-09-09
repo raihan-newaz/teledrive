@@ -124,9 +124,12 @@ const API = {
   },
 
   // ─── Folders ──────────────────────────────────────────────────────
-  async getFolderContents(folderId = null) {
+  async getFolderContents(folderId = null, search = '') {
     const fid = (folderId && folderId !== 'null') ? folderId : null;
-    const qs = fid ? `?parentId=${encodeURIComponent(fid)}` : '';
+    const params = new URLSearchParams();
+    if (fid) params.append('parentId', fid);
+    if (search && search.trim()) params.append('search', search.trim());
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const headers = {};
     if (fid && this.folderTokens[String(fid)]) {
       headers['X-Folder-Token'] = this.folderTokens[String(fid)];
@@ -250,25 +253,26 @@ const API = {
     return this.request('GET', '/api/files/stats');
   },
 
-  getDownloadUrl(fileId) {
+  buildMediaUrl(fileId, endpoint) {
     const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
-    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
-    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
-    return `/api/files/${fileId}/download${qs}`;
+    const folderToken = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const params = new URLSearchParams();
+    if (this.token) params.append('token', this.token);
+    if (folderToken) params.append('folderToken', folderToken);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return `/api/files/${fileId}/${endpoint}${qs}`;
+  },
+
+  getDownloadUrl(fileId) {
+    return this.buildMediaUrl(fileId, 'download');
   },
 
   getThumbnailUrl(fileId) {
-    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
-    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
-    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
-    return `/api/files/${fileId}/thumbnail${qs}`;
+    return this.buildMediaUrl(fileId, 'thumbnail');
   },
 
   getStreamUrl(fileId) {
-    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
-    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
-    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
-    return `/api/files/${fileId}/stream${qs}`;
+    return this.buildMediaUrl(fileId, 'stream');
   },
 
   // ─── Settings ─────────────────────────────────────────────────────

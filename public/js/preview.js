@@ -6,6 +6,20 @@ const Preview = {
   zoomLevel: 1,
   rotationAngle: 0,
   controlsTimeout: null,
+  _activeListeners: [],
+
+  _addListener(target, type, handler) {
+    if (!target) return;
+    target.addEventListener(type, handler);
+    this._activeListeners.push({ target, type, handler });
+  },
+
+  _clearListeners() {
+    for (const { target, type, handler } of this._activeListeners) {
+      try { target.removeEventListener(type, handler); } catch (e) {}
+    }
+    this._activeListeners = [];
+  },
 
   open(file) {
     if (!file || file.type === 'folder') return;
@@ -235,7 +249,9 @@ const Preview = {
           <div class="code-content" id="code-content">Loading text content...</div>
         </div>
       `;
-      fetch(downloadUrl)
+      fetch(downloadUrl, {
+        headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
+      })
         .then(r => r.text())
         .then(text => {
           const codeEl = document.getElementById('code-content');
@@ -275,14 +291,25 @@ const Preview = {
   },
 
   close() {
+    clearTimeout(this.controlsTimeout);
+    this._clearListeners();
+
     const overlay = document.getElementById('preview-overlay');
     const contentEl = document.getElementById('preview-content');
     
     // Stop any playing video/audio
     const vid = document.getElementById('main-video');
-    if (vid) vid.pause();
+    if (vid) {
+      vid.pause();
+      vid.removeAttribute('src');
+      vid.load();
+    }
     const aud = document.getElementById('main-audio');
-    if (aud) aud.pause();
+    if (aud) {
+      aud.pause();
+      aud.removeAttribute('src');
+      aud.load();
+    }
 
     if (contentEl) contentEl.innerHTML = '';
     if (overlay) overlay.style.display = 'none';
@@ -472,7 +499,7 @@ const Preview = {
         if (video.duration) video.currentTime = pos * video.duration;
       });
 
-      window.addEventListener('mousemove', (e) => {
+      this._addListener(window, 'mousemove', (e) => {
         if (isDragging && progressWrap && video.duration) {
           const pos = getPosFromEvent(e);
           video.currentTime = pos * video.duration;
@@ -484,7 +511,7 @@ const Preview = {
         }
       });
 
-      window.addEventListener('mouseup', () => {
+      this._addListener(window, 'mouseup', () => {
         if (isDragging) {
           isDragging = false;
           if (timeTooltip) timeTooltip.style.display = 'none';
@@ -536,7 +563,7 @@ const Preview = {
         };
       });
 
-      document.addEventListener('click', () => {
+      this._addListener(document, 'click', () => {
         if (speedMenu) speedMenu.style.display = 'none';
       });
     }
@@ -578,7 +605,7 @@ const Preview = {
         fullscreenBtn.title = isFs ? 'Exit Fullscreen (F)' : 'Fullscreen (F)';
       }
     };
-    document.addEventListener('fullscreenchange', onFsChange);
+    this._addListener(document, 'fullscreenchange', onFsChange);
 
     // Auto-hide controls when playing
     const showControls = () => {

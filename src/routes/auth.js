@@ -9,33 +9,49 @@ const { authLimiter } = require('../middleware/rateLimiter');
 const router = express.Router();
 
 /**
- * Utility to update .env file
+ * Utility to update .env and config.env files across persistent data locations
  * @param {string} key 
  * @param {string} value 
  */
 async function updateEnvFile(key, value) {
-    const envPath = path.join(__dirname, '../../.env');
-    let content = '';
-    try {
-        content = await fs.readFile(envPath, 'utf8');
-    } catch (e) {
-        // File might not exist, ignore and create new
-    }
+    const envPaths = [
+        path.join(__dirname, '../../data/config.env'),
+        path.join(__dirname, '../../data/.env'),
+        path.join(__dirname, '../../.env')
+    ];
 
-    const lines = content.split('\n');
-    let found = false;
-    for (let i = 0; i < lines.length; i++) {
-        if (lines[i].startsWith(`${key}=`)) {
-            lines[i] = `${key}=${value}`;
-            found = true;
-            break;
+    for (const envPath of envPaths) {
+        let content = '';
+        try {
+            content = await fs.readFile(envPath, 'utf8');
+        } catch (e) {
+            // If file doesn't exist, check if data dir exists
+            const dir = path.dirname(envPath);
+            try {
+                const fsSync = require('fs');
+                if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true });
+            } catch (err) {}
+        }
+
+        const lines = content ? content.split('\n') : [];
+        let found = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith(`${key}=`)) {
+                lines[i] = `${key}=${value}`;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            lines.push(`${key}=${value}`);
+        }
+
+        try {
+            await fs.writeFile(envPath, lines.join('\n').trim() + '\n');
+        } catch (err) {
+            console.warn(`[Auth] Warning writing to ${envPath}:`, err.message);
         }
     }
-    if (!found) {
-        lines.push(`${key}=${value}`);
-    }
-
-    await fs.writeFile(envPath, lines.join('\n').trim() + '\n');
 }
 
 /**

@@ -221,10 +221,19 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
   });
 
-  const cacheWriteStream = createWriteStream(cachedPath);
+  const tempCachedPath = `${cachedPath}.tmp`;
+  const cacheWriteStream = createWriteStream(tempCachedPath);
   let isClientClosed = false;
+  let streamCompleted = false;
+
   req.on('close', () => {
     isClientClosed = true;
+    if (!streamCompleted) {
+      cacheWriteStream.destroy();
+      try {
+        if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath);
+      } catch (e) {}
+    }
   });
 
   try {
@@ -260,11 +269,21 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
 
     cacheWriteStream.end();
     if (!isClientClosed) {
+      streamCompleted = true;
+      try {
+        if (existsSync(tempCachedPath)) {
+          const fs = require('fs');
+          fs.renameSync(tempCachedPath, cachedPath);
+        }
+      } catch (e) {}
       res.end();
     }
   } catch (err) {
     console.error('[Stream] Streaming error:', err);
-    cacheWriteStream.end();
+    cacheWriteStream.destroy();
+    try {
+      if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath);
+    } catch (e) {}
     if (!isClientClosed && !res.headersSent) {
       res.status(500).json({ error: 'Streaming failed: ' + err.message });
     }
@@ -320,50 +339,61 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
   }
 });
 
+const assemblyLocks = new Set();
+
 /**
- * Helper to commit completed chunked file to database
+ * Helper to commit completed chunked file to database (with mutex lock)
  */
 function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
-  const existingFile = db.getFile(uploadId);
-  if (existingFile && existingFile.size === totalFileSize) {
+  if (assemblyLocks.has(uploadId)) {
+    return res.json({ success: true, message: 'Assembly in progress' });
+  }
+  assemblyLocks.add(uploadId);
+
+  try {
+    const existingFile = db.getFile(uploadId);
+    if (existingFile && existingFile.size === totalFileSize) {
+      db.deleteUploadSession(uploadId);
+      return res.json({ success: true, done: true, file: existingFile });
+    }
+
+    const allChunks = db.getUploadedSessionChunks(uploadId);
+    const chunksToUse = allChunks.length >= totalChunks ? allChunks : chunks;
+    chunksToUse.sort((a, b) => a.chunk_index - b.chunk_index);
+
+    const fileId = uploadId;
+    const mimeType = getMimeType(safeName);
+    const now = new Date().toISOString();
+    const firstChunk = chunksToUse[0] || {};
+
+    db.run(
+      `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+      [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
+    );
+
+    // Clear any old records for this file ID in file_chunks, then commit all chunks
+    db.deleteFileChunks(fileId);
+    for (const ch of chunksToUse) {
+      db.addFileChunk({
+        id: ch.id,
+        fileId,
+        chunkIndex: ch.chunk_index,
+        telegramMessageId: ch.telegram_message_id,
+        size: ch.size,
+        iv: ch.iv,
+        salt: ch.salt
+      });
+    }
+
+    // Remove upload session
     db.deleteUploadSession(uploadId);
-    return res.json({ success: true, done: true, file: existingFile });
+
+    const fileRecord = db.getFile(fileId);
+    return res.json({ success: true, done: true, file: fileRecord });
+  } finally {
+    assemblyLocks.delete(uploadId);
   }
-
-  const allChunks = db.getUploadedSessionChunks(uploadId);
-  const chunksToUse = allChunks.length >= totalChunks ? allChunks : chunks;
-  chunksToUse.sort((a, b) => a.chunk_index - b.chunk_index);
-
-  const fileId = uploadId;
-  const mimeType = getMimeType(safeName);
-  const now = new Date().toISOString();
-  const firstChunk = chunksToUse[0] || {};
-
-  db.run(
-    `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-    [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
-  );
-
-  // Clear any old records for this file ID in file_chunks, then commit all chunks
-  db.deleteFileChunks(fileId);
-  for (const ch of chunksToUse) {
-    db.addFileChunk({
-      id: ch.id,
-      fileId,
-      chunkIndex: ch.chunk_index,
-      telegramMessageId: ch.telegram_message_id,
-      size: ch.size,
-      iv: ch.iv,
-      salt: ch.salt
-    });
-  }
-
-  // Remove upload session
-  db.deleteUploadSession(uploadId);
-
-  const fileRecord = db.getFile(fileId);
-  return res.json({ success: true, done: true, file: fileRecord });
 }
 
 /**

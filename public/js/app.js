@@ -2451,8 +2451,8 @@ const App = {
           UI.hideAllModals();
           return;
         }
-        const previewModal = document.getElementById('preview-modal');
-        if (previewModal && previewModal.classList.contains('visible')) {
+        const previewOverlay = document.getElementById('preview-overlay');
+        if (previewOverlay && previewOverlay.style.display !== 'none') {
           if (typeof Preview !== 'undefined' && Preview.close) Preview.close();
           return;
         }
@@ -2490,8 +2490,8 @@ const App = {
 
       // 5. Space -> Quick Preview single selected file
       if (e.key === ' ' && !isInputActive) {
-        const previewModal = document.getElementById('preview-modal');
-        if (!previewModal || !previewModal.classList.contains('visible')) {
+        const previewOverlay = document.getElementById('preview-overlay');
+        if (!previewOverlay || previewOverlay.style.display === 'none') {
           if (UI.selectedItems.size === 1) {
             const selected = Array.from(UI.selectedItems.values())[0];
             if (selected.type === 'file') {

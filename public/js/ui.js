@@ -318,18 +318,20 @@ const UI = {
     });
   },
 
-  getFileTypeCategory(mimeType) {
-    if (!mimeType) return 'document';
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.includes('pdf') || mimeType.includes('word') || mimeType.includes('text') || mimeType.includes('sheet')) return 'document';
-    if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z') || mimeType.includes('tar') || mimeType.includes('gzip')) return 'archive';
+  getFileTypeCategory(mimeType, fileName = '') {
+    const mime = (mimeType || '').toLowerCase();
+    const ext = (fileName || '').split('.').pop().toLowerCase();
+
+    if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'].includes(ext)) return 'image';
+    if (mime.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv', 'wmv', 'm4v', '3gp'].includes(ext)) return 'video';
+    if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'wma'].includes(ext)) return 'audio';
+    if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z') || mime.includes('tar') || mime.includes('gzip') || ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return 'archive';
+    if (mime.includes('pdf') || ext === 'pdf') return 'document';
     return 'document';
   },
 
-  getFileIconSvg(mimeType) {
-    const cat = this.getFileTypeCategory(mimeType);
+  getFileIconSvg(mimeType, fileName = '') {
+    const cat = this.getFileTypeCategory(mimeType, fileName);
     if (cat === 'image') {
       return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#34A853"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`;
     }
@@ -342,7 +344,7 @@ const UI = {
     if (cat === 'archive') {
       return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#F9AB00"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10v-2h-4v2H8v-4h2v2h4v-2h2v4h-2z"/></svg>`;
     }
-    if (mimeType && mimeType.includes('pdf')) {
+    if ((mimeType && mimeType.includes('pdf')) || (fileName && fileName.toLowerCase().endsWith('.pdf'))) {
       return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#EA4335"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v4zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5z"/></svg>`;
     }
     return `<svg viewBox="0 0 24 24" width="28" height="28" fill="#1A73E8"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`;

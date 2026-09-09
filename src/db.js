@@ -118,26 +118,57 @@ async function initialize() {
     );
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-  `);
+  // Performance indexes for scale
+  try {
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_trashed ON files(is_trashed);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_starred ON files(is_starred);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_share_token ON files(share_token);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_upload_session_chunks_sid ON upload_session_chunks(session_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);');
+  } catch (e) {
+    console.warn('[DB] Index creation warning:', e.message);
+  }
 
-  save();
+  save(true);
   console.log('[DB] SQLite database initialized at', dbPath);
   return db;
 }
 
+let saveTimeout = null;
+
 /**
- * Save database to disk
+ * Save database to disk (debounced atomic write)
+ * @param {boolean} immediate - Whether to write immediately or debounce
  */
-function save() {
+function save(immediate = false) {
   if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+  const doSave = () => {
+    try {
+      const data = db.export();
+      const tmpPath = dbPath + '.tmp';
+      fs.writeFileSync(tmpPath, Buffer.from(data));
+      fs.renameSync(tmpPath, dbPath);
+    } catch (e) {
+      console.error('[DB] Save error:', e.message);
+    }
+  };
+
+  if (immediate) {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      saveTimeout = null;
+    }
+    doSave();
+  } else {
+    if (!saveTimeout) {
+      saveTimeout = setTimeout(() => {
+        saveTimeout = null;
+        doSave();
+      }, 300);
+    }
+  }
 }
 
 /**

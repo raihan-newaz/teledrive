@@ -36,10 +36,10 @@ const securityMiddleware = () => {
             next();
         },
 
-        // CORS protection: Enforce same-host requests for API endpoints
+        // CORS protection: Enforce same-host requests for API endpoints (whitelisting public share endpoints)
         (req, res, next) => {
             const origin = req.headers.origin;
-            if (origin && req.path.startsWith('/api/')) {
+            if (origin && req.path.startsWith('/api/') && !req.path.startsWith('/api/share/public')) {
                 try {
                     const originUrl = new URL(origin);
                     const host = req.get('host');

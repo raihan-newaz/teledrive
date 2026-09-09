@@ -1222,9 +1222,9 @@ input:focus, select:focus, textarea:focus {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
-  z-index: 800;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+  z-index: 1100;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
@@ -1249,7 +1249,7 @@ input:focus, select:focus, textarea:focus {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  z-index: 900;
+  z-index: 1150;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
   font-family: inherit;
