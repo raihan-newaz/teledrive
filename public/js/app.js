@@ -15,7 +15,18 @@ const App = {
   breadcrumbs: [],
   selectedItem: null,
   activeFilter: 'all',
-  unlockedFolders: new Set(),
+  unlockedFolders: (() => {
+    const set = new Set();
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('teledrive_unlocked_')) {
+          set.add(key.replace('teledrive_unlocked_', ''));
+        }
+      }
+    } catch (e) {}
+    return set;
+  })(),
   pendingUnlockFolder: null,
   isManagingLock: false,
 
@@ -1550,69 +1561,91 @@ const App = {
     }
 
     // Lock folder confirm
+    const formLock = document.getElementById('form-lock-folder');
     const btnConfirmLock = document.getElementById('btn-confirm-lock-folder');
-    if (btnConfirmLock) {
-      btnConfirmLock.onclick = async () => {
-        const pass = document.getElementById('lock-folder-pass')?.value;
-        const confirmPass = document.getElementById('lock-folder-confirm-pass')?.value;
-        if (!pass || pass.length < 3) {
-          return UI.showToast('Folder password must be at least 3 characters', 'warning');
-        }
-        if (pass !== confirmPass) {
-          return UI.showToast('Passwords do not match', 'error');
-        }
-        if (!this.selectedItem || this.selectedItem.type !== 'folder') return;
+    const handleLockSubmit = async (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const pass = document.getElementById('lock-folder-pass')?.value;
+      const confirmPass = document.getElementById('lock-folder-confirm-pass')?.value;
+      if (!pass || pass.length < 3) {
+        return UI.showToast('Folder password must be at least 3 characters', 'warning');
+      }
+      if (pass !== confirmPass) {
+        return UI.showToast('Passwords do not match', 'error');
+      }
+      if (!this.selectedItem || this.selectedItem.type !== 'folder') return;
+      try {
+        if (btnConfirmLock) btnConfirmLock.disabled = true;
+        await API.lockFolder(this.selectedItem.id, pass);
+        const fid = String(this.selectedItem.id);
+        this.unlockedFolders.delete(fid);
         try {
-          btnConfirmLock.disabled = true;
-          await API.lockFolder(this.selectedItem.id, pass);
-          this.unlockedFolders.delete(String(this.selectedItem.id));
-          UI.showToast(`Folder "${this.selectedItem.name}" locked successfully`, 'success');
-          UI.hideAllModals();
-          this.refreshCurrentView();
-        } catch (e) {
-          UI.showToast('Failed to lock folder: ' + e.message, 'error');
-        } finally {
-          btnConfirmLock.disabled = false;
-        }
-      };
-    }
+          sessionStorage.removeItem('teledrive_unlocked_' + fid);
+        } catch (err) {}
+        UI.showToast(`Folder "${this.selectedItem.name}" locked successfully`, 'success');
+        UI.hideAllModals();
+        this.refreshCurrentView();
+      } catch (err) {
+        UI.showToast('Failed to lock folder: ' + err.message, 'error');
+      } finally {
+        if (btnConfirmLock) btnConfirmLock.disabled = false;
+      }
+    };
+    if (formLock) formLock.onsubmit = handleLockSubmit;
+    if (btnConfirmLock) btnConfirmLock.onclick = handleLockSubmit;
 
     // Unlock folder confirm
+    const formUnlock = document.getElementById('form-unlock-folder');
     const btnConfirmUnlock = document.getElementById('btn-confirm-unlock-folder');
-    if (btnConfirmUnlock) {
-      btnConfirmUnlock.onclick = async () => {
-        const pass = document.getElementById('unlock-folder-pass')?.value;
-        if (!pass) {
-          return UI.showToast('Please enter the folder password', 'warning');
-        }
-        const targetFolder = this.pendingUnlockFolder || this.selectedItem;
-        if (!targetFolder) return;
+    const handleUnlockSubmit = async (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const pass = document.getElementById('unlock-folder-pass')?.value;
+      if (!pass) {
+        return UI.showToast('Please enter the folder password', 'warning');
+      }
+      const targetFolder = this.pendingUnlockFolder || this.selectedItem;
+      if (!targetFolder) return;
 
+      try {
+        if (btnConfirmUnlock) btnConfirmUnlock.disabled = true;
+        await API.verifyFolderLock(targetFolder.id, pass);
+        const fid = String(targetFolder.id);
+        this.unlockedFolders.add(fid);
         try {
-          btnConfirmUnlock.disabled = true;
-          await API.verifyFolderLock(targetFolder.id, pass);
-          this.unlockedFolders.add(String(targetFolder.id));
-          UI.showToast('Folder unlocked!', 'success');
-          UI.hideAllModals();
+          sessionStorage.setItem('teledrive_unlocked_' + fid, '1');
+        } catch (err) {}
+        UI.showToast('Folder unlocked!', 'success');
+        UI.hideAllModals();
 
-          if (this.isManagingLock) {
-            this.selectedItem = targetFolder;
-            this.openLockFolderModal(targetFolder);
-          } else {
-            this.navigateToFolder(targetFolder.id);
-          }
-        } catch (e) {
-          UI.showToast(e.message || 'Incorrect folder password', 'error');
-        } finally {
-          btnConfirmUnlock.disabled = false;
+        if (this.isManagingLock) {
+          this.selectedItem = targetFolder;
+          this.openLockFolderModal(targetFolder);
+        } else {
+          this.navigateToFolder(targetFolder.id);
         }
-      };
-    }
+      } catch (err) {
+        UI.showToast(err.message || 'Incorrect folder password', 'error');
+      } finally {
+        if (btnConfirmUnlock) btnConfirmUnlock.disabled = false;
+      }
+    };
+    if (formUnlock) formUnlock.onsubmit = handleUnlockSubmit;
+    if (btnConfirmUnlock) btnConfirmUnlock.onclick = handleUnlockSubmit;
 
     // Remove lock permanently
     const btnRemoveLock = document.getElementById('btn-remove-lock');
     if (btnRemoveLock) {
-      btnRemoveLock.onclick = async () => {
+      btnRemoveLock.onclick = async (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         const pass = document.getElementById('unlock-folder-pass')?.value;
         if (!pass) {
           return UI.showToast('Enter current password to remove lock', 'warning');
@@ -1623,12 +1656,16 @@ const App = {
         try {
           btnRemoveLock.disabled = true;
           await API.unlockFolderPermanently(targetFolder.id, pass);
-          this.unlockedFolders.delete(String(targetFolder.id));
+          const fid = String(targetFolder.id);
+          this.unlockedFolders.delete(fid);
+          try {
+            sessionStorage.removeItem('teledrive_unlocked_' + fid);
+          } catch (err) {}
           UI.showToast(`Lock removed from "${targetFolder.name}"`, 'success');
           UI.hideAllModals();
           this.refreshCurrentView();
-        } catch (e) {
-          UI.showToast('Failed to remove lock: ' + e.message, 'error');
+        } catch (err) {
+          UI.showToast('Failed to remove lock: ' + err.message, 'error');
         } finally {
           btnRemoveLock.disabled = false;
         }

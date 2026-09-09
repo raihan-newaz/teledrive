@@ -499,7 +499,7 @@
       <h3 id="lock-modal-title" style="margin: 0;">Lock Folder</h3>
       <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Set a custom password to protect this folder</p>
     </div>
-    <form id="form-lock-folder" onsubmit="return false;">
+    <form id="form-lock-folder">
       <div class="form-group">
         <label for="lock-folder-pass">Folder Password <span class="req">*</span></label>
         <div class="input-with-action">
@@ -516,7 +516,7 @@
       </div>
       <div class="modal-actions" style="margin-top: 20px;">
         <button type="button" class="btn-secondary" data-modal-cancel>Cancel</button>
-        <button type="button" class="btn-primary" id="btn-confirm-lock-folder">Set Lock</button>
+        <button type="submit" class="btn-primary" id="btn-confirm-lock-folder">Set Lock</button>
       </div>
     </form>
   </div>
@@ -530,11 +530,11 @@
       <h3 id="unlock-modal-title" style="margin: 0;">Protected Folder</h3>
       <p id="unlock-modal-sub" style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Enter password to unlock this folder</p>
     </div>
-    <form id="form-unlock-folder" onsubmit="return false;">
+    <form id="form-unlock-folder">
       <div class="form-group">
         <label for="unlock-folder-pass">Folder Password <span class="req">*</span></label>
         <div class="input-with-action">
-          <input type="password" id="unlock-folder-pass" placeholder="Enter folder password" required>
+          <input type="password" id="unlock-folder-pass" placeholder="Enter folder password" required autocomplete="current-password">
           <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="unlock-folder-pass" title="Show/Hide">👁️</button>
         </div>
       </div>
@@ -542,7 +542,7 @@
         <button type="button" class="btn-danger" id="btn-remove-lock" style="display:none; font-size: 12px; padding: 6px 12px;">Remove Lock</button>
         <div style="display: flex; gap: 8px; margin-left: auto;">
           <button type="button" class="btn-secondary" data-modal-cancel>Cancel</button>
-          <button type="button" class="btn-primary" id="btn-confirm-unlock-folder">Unlock & Open</button>
+          <button type="submit" class="btn-primary" id="btn-confirm-unlock-folder">Unlock & Open</button>
         </div>
       </div>
     </form>

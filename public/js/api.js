@@ -3,7 +3,18 @@
  */
 const API = {
   token: localStorage.getItem('teledrive_token'),
-  folderTokens: {},
+  folderTokens: (() => {
+    const tokens = {};
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('teledrive_ftok_')) {
+          tokens[key.replace('teledrive_ftok_', '')] = sessionStorage.getItem(key);
+        }
+      }
+    } catch (e) {}
+    return tokens;
+  })(),
 
   setToken(t) {
     this.token = t;
@@ -140,20 +151,34 @@ const API = {
   },
 
   async lockFolder(id, password) {
-    delete this.folderTokens[String(id)];
+    const fid = String(id);
+    delete this.folderTokens[fid];
+    try {
+      sessionStorage.removeItem('teledrive_ftok_' + fid);
+      sessionStorage.removeItem('teledrive_unlocked_' + fid);
+    } catch (e) {}
     return this.request('POST', `/api/folders/${id}/lock`, { password });
   },
 
   async verifyFolderLock(id, password) {
+    const fid = String(id);
     const res = await this.request('POST', `/api/folders/${id}/verify-lock`, { password });
     if (res && res.folderToken) {
-      this.folderTokens[String(id)] = res.folderToken;
+      this.folderTokens[fid] = res.folderToken;
+      try {
+        sessionStorage.setItem('teledrive_ftok_' + fid, res.folderToken);
+      } catch (e) {}
     }
     return res;
   },
 
   async unlockFolderPermanently(id, password) {
-    delete this.folderTokens[String(id)];
+    const fid = String(id);
+    delete this.folderTokens[fid];
+    try {
+      sessionStorage.removeItem('teledrive_ftok_' + fid);
+      sessionStorage.removeItem('teledrive_unlocked_' + fid);
+    } catch (e) {}
     return this.request('POST', `/api/folders/${id}/unlock-permanently`, { password });
   },
 
