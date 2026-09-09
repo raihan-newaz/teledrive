@@ -6,6 +6,7 @@ const Preview = {
   zoomLevel: 1,
   rotationAngle: 0,
   controlsTimeout: null,
+  navTimeout: null,
   _activeListeners: [],
 
   _addListener(target, type, handler) {
@@ -19,6 +20,60 @@ const Preview = {
       try { target.removeEventListener(type, handler); } catch (e) {}
     }
     this._activeListeners = [];
+  },
+
+  getNavFiles() {
+    const files = (typeof App !== 'undefined' && App.getVisibleFiles) ? App.getVisibleFiles() : ((typeof App !== 'undefined' && App.files) ? App.files : []);
+    if (!this.currentFile || !files.length) return { prev: null, next: null };
+    const currentId = String(this.currentFile.id);
+    const idx = files.findIndex(f => String(f.id) === currentId);
+    if (idx === -1) return { prev: null, next: null };
+    return {
+      prev: idx > 0 ? files[idx - 1] : null,
+      next: idx < files.length - 1 ? files[idx + 1] : null
+    };
+  },
+
+  navigate(direction) {
+    const { prev, next } = this.getNavFiles();
+    const targetFile = direction === 'prev' ? prev : next;
+    if (targetFile) {
+      this.open(targetFile);
+    }
+  },
+
+  updateNavButtons() {
+    const prevBtn = document.getElementById('preview-nav-prev');
+    const nextBtn = document.getElementById('preview-nav-next');
+    const { prev, next } = this.getNavFiles();
+
+    if (prevBtn) {
+      if (prev) {
+        prevBtn.style.display = 'flex';
+        prevBtn.title = `Previous: ${prev.name} (Left Arrow)`;
+        prevBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.navigate('prev');
+        };
+      } else {
+        prevBtn.style.display = 'none';
+        prevBtn.onclick = null;
+      }
+    }
+
+    if (nextBtn) {
+      if (next) {
+        nextBtn.style.display = 'flex';
+        nextBtn.title = `Next: ${next.name} (Right Arrow)`;
+        nextBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.navigate('next');
+        };
+      } else {
+        nextBtn.style.display = 'none';
+        nextBtn.onclick = null;
+      }
+    }
   },
 
   open(file) {
@@ -38,6 +93,25 @@ const Preview = {
     if (!overlay || !contentEl) return;
 
     overlay.style.display = 'flex';
+
+    // Google Drive style prev/next update & auto-hide
+    this.updateNavButtons();
+    const prevBtn = document.getElementById('preview-nav-prev');
+    const nextBtn = document.getElementById('preview-nav-next');
+    
+    const showNavButtons = () => {
+      if (prevBtn) prevBtn.classList.remove('preview-nav-hidden');
+      if (nextBtn) nextBtn.classList.remove('preview-nav-hidden');
+      clearTimeout(this.navTimeout);
+      this.navTimeout = setTimeout(() => {
+        if (prevBtn && !prevBtn.matches(':hover')) prevBtn.classList.add('preview-nav-hidden');
+        if (nextBtn && !nextBtn.matches(':hover')) nextBtn.classList.add('preview-nav-hidden');
+      }, 2500);
+    };
+
+    this._addListener(overlay, 'mousemove', showNavButtons);
+    this._addListener(overlay, 'touchstart', showNavButtons);
+    showNavButtons();
 
     const streamUrl = API.getStreamUrl(file.id);
     const downloadUrl = API.getDownloadUrl(file.id);
@@ -315,6 +389,7 @@ const Preview = {
 
   close() {
     clearTimeout(this.controlsTimeout);
+    clearTimeout(this.navTimeout);
     this._clearListeners();
 
     const overlay = document.getElementById('preview-overlay');
@@ -806,6 +881,12 @@ window.addEventListener('keydown', (e) => {
   } else if ((e.key === 'ArrowRight' || e.key.toLowerCase() === 'l') && target) {
     e.preventDefault();
     target.currentTime = Math.min(target.duration || 0, target.currentTime + 10);
+  } else if (e.key === 'ArrowLeft' && !target) {
+    e.preventDefault();
+    Preview.navigate('prev');
+  } else if (e.key === 'ArrowRight' && !target) {
+    e.preventDefault();
+    Preview.navigate('next');
   } else if (e.key.toLowerCase() === 'm' && target) {
     e.preventDefault();
     target.muted = !target.muted;

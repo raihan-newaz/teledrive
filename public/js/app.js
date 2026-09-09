@@ -446,6 +446,15 @@ const App = {
     });
   },
 
+  getVisibleFiles() {
+    let list = Array.isArray(this.files) ? [...this.files] : [];
+    if (this.activeFilter && this.activeFilter !== 'all') {
+      list = list.filter(f => UI.getFileTypeCategory(f.mime_type) === this.activeFilter);
+    }
+    this.sortArray(list);
+    return list;
+  },
+
   // ─── Event Delegation on File Container (Rock Solid) ───────────────
   initFileContainerEvents() {
     const fileContainer = document.getElementById('file-container');
