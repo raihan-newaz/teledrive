@@ -893,6 +893,26 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--text-disabled);
 }
 
+.folder-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.folder-lock-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -5px;
+  font-size: 10px;
+  background: var(--bg-card);
+  border-radius: 50%;
+  padding: 1px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  line-height: 1;
+}
+
 /* Drag and Drop States */
 .folder-card.is-dragging,
 .file-card.is-dragging {

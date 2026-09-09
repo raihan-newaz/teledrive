@@ -490,6 +490,64 @@
     </div>
   </div>
 
+  <!-- LOCK FOLDER MODAL -->
+  <div class="modal" id="lock-folder-modal" style="display:none;">
+    <div style="text-align: center; margin-bottom: 16px;">
+      <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(26, 115, 232, 0.1); color: var(--accent-color); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+      </div>
+      <h3 id="lock-modal-title" style="margin: 0;">Lock Folder</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Set a custom password to protect this folder</p>
+    </div>
+    <form id="form-lock-folder" onsubmit="return false;">
+      <div class="form-group">
+        <label for="lock-folder-pass">Folder Password <span class="req">*</span></label>
+        <div class="input-with-action">
+          <input type="password" id="lock-folder-pass" placeholder="Enter folder password" required autocomplete="new-password">
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-pass" title="Show/Hide">👁️</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="lock-folder-confirm-pass">Confirm Password <span class="req">*</span></label>
+        <div class="input-with-action">
+          <input type="password" id="lock-folder-confirm-pass" placeholder="Confirm folder password" required autocomplete="new-password">
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-confirm-pass" title="Show/Hide">👁️</button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button type="button" class="btn-secondary" data-modal-cancel>Cancel</button>
+        <button type="button" class="btn-primary" id="btn-confirm-lock-folder">Set Lock</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- UNLOCK FOLDER MODAL -->
+  <div class="modal" id="unlock-folder-modal" style="display:none;">
+    <div style="text-align: center; margin-bottom: 16px;">
+      <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(234, 67, 53, 0.1); color: #ea4335; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+      </div>
+      <h3 id="unlock-modal-title" style="margin: 0;">Protected Folder</h3>
+      <p id="unlock-modal-sub" style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Enter password to unlock this folder</p>
+    </div>
+    <form id="form-unlock-folder" onsubmit="return false;">
+      <div class="form-group">
+        <label for="unlock-folder-pass">Folder Password <span class="req">*</span></label>
+        <div class="input-with-action">
+          <input type="password" id="unlock-folder-pass" placeholder="Enter folder password" required>
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="unlock-folder-pass" title="Show/Hide">👁️</button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn-danger" id="btn-remove-lock" style="display:none; font-size: 12px; padding: 6px 12px;">Remove Lock</button>
+        <div style="display: flex; gap: 8px; margin-left: auto;">
+          <button type="button" class="btn-secondary" data-modal-cancel>Cancel</button>
+          <button type="button" class="btn-primary" id="btn-confirm-unlock-folder">Unlock & Open</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
   <!-- SHARE FILE MODAL (Google Drive Style) -->
   <div class="modal share-modal" id="share-modal" style="display:none;" role="dialog" aria-modal="true">
     <div class="share-modal-header">
@@ -1052,6 +1110,10 @@
     <button class="context-item" data-action="move">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-2h4V8l5 5-5 5z"/></svg>
       <span>Move to...</span>
+    </button>
+    <button class="context-item" data-action="lock-folder" id="ctx-lock-folder" style="display:none;">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+      <span id="ctx-lock-folder-text">Lock Folder</span>
     </button>
     <button class="context-item" data-action="star">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>

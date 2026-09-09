@@ -89,6 +89,8 @@ async function initialize() {
   try { db.run('ALTER TABLE files ADD COLUMN share_expires_at DATETIME;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_views INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_downloads INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE folders ADD COLUMN is_locked INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE folders ADD COLUMN password_hash TEXT;'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS upload_sessions (
@@ -201,6 +203,20 @@ function getFile(id) {
  */
 function getFolder(id) {
   return get('SELECT * FROM folders WHERE id = ?', [id]);
+}
+
+/**
+ * Locks a folder with a hashed password
+ */
+function lockFolder(id, passwordHash) {
+  return run('UPDATE folders SET is_locked = 1, password_hash = ? WHERE id = ?', [passwordHash, id]);
+}
+
+/**
+ * Removes lock password from a folder permanently
+ */
+function unlockFolderPermanently(id) {
+  return run('UPDATE folders SET is_locked = 0, password_hash = NULL WHERE id = ?', [id]);
 }
 
 /**
@@ -439,6 +455,8 @@ module.exports = {
   incrementShareViews,
   incrementShareDownloads,
   getFolder,
+  lockFolder,
+  unlockFolderPermanently,
   getFolderContents,
   searchFiles,
   searchFolders,

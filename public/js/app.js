@@ -15,6 +15,9 @@ const App = {
   breadcrumbs: [],
   selectedItem: null,
   activeFilter: 'all',
+  unlockedFolders: new Set(),
+  pendingUnlockFolder: null,
+  isManagingLock: false,
 
   async init() {
     try {
@@ -147,6 +150,13 @@ const App = {
 
   // ─── View & Navigation ─────────────────────────────────────────────
   async navigateToFolder(folderId) {
+    if (folderId) {
+      const folder = this.foldersMap.get(String(folderId));
+      if (folder && folder.is_locked && !this.unlockedFolders.has(String(folderId))) {
+        this.openUnlockFolderModal(folder, false);
+        return;
+      }
+    }
     this.currentView = 'drive';
     this.currentFolderId = folderId;
     this.updateSidebarActive('drive');
@@ -712,6 +722,14 @@ const App = {
       }
     } else if (action === 'rename') {
       this.openRenameModal(itemData);
+    } else if (action === 'lock-folder') {
+      if (itemData.type === 'folder') {
+        if (itemData.is_locked) {
+          this.openUnlockFolderModal(itemData, true);
+        } else {
+          this.openLockFolderModal(itemData);
+        }
+      }
     } else if (action === 'move') {
       this.openMoveModal(itemData);
     } else if (action === 'trash') {
@@ -1423,6 +1441,92 @@ const App = {
       };
     }
 
+    // Lock folder confirm
+    const btnConfirmLock = document.getElementById('btn-confirm-lock-folder');
+    if (btnConfirmLock) {
+      btnConfirmLock.onclick = async () => {
+        const pass = document.getElementById('lock-folder-pass')?.value;
+        const confirmPass = document.getElementById('lock-folder-confirm-pass')?.value;
+        if (!pass || pass.length < 3) {
+          return UI.showToast('Folder password must be at least 3 characters', 'warning');
+        }
+        if (pass !== confirmPass) {
+          return UI.showToast('Passwords do not match', 'error');
+        }
+        if (!this.selectedItem || this.selectedItem.type !== 'folder') return;
+        try {
+          btnConfirmLock.disabled = true;
+          await API.lockFolder(this.selectedItem.id, pass);
+          this.unlockedFolders.add(String(this.selectedItem.id));
+          UI.showToast(`Folder "${this.selectedItem.name}" locked successfully`, 'success');
+          UI.hideAllModals();
+          this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to lock folder: ' + e.message, 'error');
+        } finally {
+          btnConfirmLock.disabled = false;
+        }
+      };
+    }
+
+    // Unlock folder confirm
+    const btnConfirmUnlock = document.getElementById('btn-confirm-unlock-folder');
+    if (btnConfirmUnlock) {
+      btnConfirmUnlock.onclick = async () => {
+        const pass = document.getElementById('unlock-folder-pass')?.value;
+        if (!pass) {
+          return UI.showToast('Please enter the folder password', 'warning');
+        }
+        const targetFolder = this.pendingUnlockFolder || this.selectedItem;
+        if (!targetFolder) return;
+
+        try {
+          btnConfirmUnlock.disabled = true;
+          await API.verifyFolderLock(targetFolder.id, pass);
+          this.unlockedFolders.add(String(targetFolder.id));
+          UI.showToast('Folder unlocked!', 'success');
+          UI.hideAllModals();
+
+          if (this.isManagingLock) {
+            this.selectedItem = targetFolder;
+            this.openLockFolderModal(targetFolder);
+          } else {
+            this.navigateToFolder(targetFolder.id);
+          }
+        } catch (e) {
+          UI.showToast(e.message || 'Incorrect folder password', 'error');
+        } finally {
+          btnConfirmUnlock.disabled = false;
+        }
+      };
+    }
+
+    // Remove lock permanently
+    const btnRemoveLock = document.getElementById('btn-remove-lock');
+    if (btnRemoveLock) {
+      btnRemoveLock.onclick = async () => {
+        const pass = document.getElementById('unlock-folder-pass')?.value;
+        if (!pass) {
+          return UI.showToast('Enter current password to remove lock', 'warning');
+        }
+        const targetFolder = this.pendingUnlockFolder || this.selectedItem;
+        if (!targetFolder) return;
+
+        try {
+          btnRemoveLock.disabled = true;
+          await API.unlockFolderPermanently(targetFolder.id, pass);
+          this.unlockedFolders.delete(String(targetFolder.id));
+          UI.showToast(`Lock removed from "${targetFolder.name}"`, 'success');
+          UI.hideAllModals();
+          this.refreshCurrentView();
+        } catch (e) {
+          UI.showToast('Failed to remove lock: ' + e.message, 'error');
+        } finally {
+          btnRemoveLock.disabled = false;
+        }
+      };
+    }
+
     // Permanent Delete confirm
     const deleteConfirm = document.getElementById('delete-confirm');
     if (deleteConfirm) {
@@ -1681,6 +1785,37 @@ const App = {
         treeContainer.innerHTML = '<p class="error-text">Failed to load folders</p>';
       }
     }
+  },
+
+  openLockFolderModal(folder) {
+    if (!folder) return;
+    this.selectedItem = folder;
+    const titleEl = document.getElementById('lock-modal-title');
+    if (titleEl) titleEl.textContent = `Lock "${folder.name}"`;
+    const passInput = document.getElementById('lock-folder-pass');
+    const confirmInput = document.getElementById('lock-folder-confirm-pass');
+    if (passInput) passInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+    UI.showModal('lock-folder-modal');
+    setTimeout(() => { if (passInput) passInput.focus(); }, 100);
+  },
+
+  openUnlockFolderModal(folder, isManagingLock = false) {
+    if (!folder) return;
+    this.pendingUnlockFolder = folder;
+    this.isManagingLock = isManagingLock;
+    const titleEl = document.getElementById('unlock-modal-title');
+    const subEl = document.getElementById('unlock-modal-sub');
+    const removeLockBtn = document.getElementById('btn-remove-lock');
+    const unlockPassInput = document.getElementById('unlock-folder-pass');
+
+    if (titleEl) titleEl.textContent = `Protected: "${folder.name}"`;
+    if (subEl) subEl.textContent = isManagingLock ? 'Enter password to change or remove lock' : 'Enter folder password to unlock and access contents';
+    if (removeLockBtn) removeLockBtn.style.display = isManagingLock ? 'inline-flex' : 'none';
+    if (unlockPassInput) unlockPassInput.value = '';
+
+    UI.showModal('unlock-folder-modal');
+    setTimeout(() => { if (unlockPassInput) unlockPassInput.focus(); }, 100);
   },
 
   async openDeleteModal(item) {

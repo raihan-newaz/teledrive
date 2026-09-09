@@ -97,6 +97,17 @@ async function permanentlyDeleteFolderRecursive(folderId) {
 }
 
 
+const bcrypt = require('bcryptjs');
+
+function sanitizeFolder(f) {
+    if (!f) return null;
+    const { password_hash, ...rest } = f;
+    return {
+        ...rest,
+        is_locked: (f.is_locked === 1 || Boolean(password_hash)) ? 1 : 0
+    };
+}
+
 /**
  * GET /
  */
@@ -104,7 +115,8 @@ router.get('/', async (req, res) => {
     try {
         const { search } = req.query;
         if (search) {
-            const folders = db.searchFolders(search);
+            const rawFolders = db.searchFolders(search);
+            const folders = (rawFolders || []).map(sanitizeFolder);
             return res.json({ folders, files: [], breadcrumbs: [] });
         }
 
@@ -114,7 +126,8 @@ router.get('/', async (req, res) => {
             'SELECT * FROM folders WHERE parent_id = ?' : 
             'SELECT * FROM folders WHERE parent_id IS NULL';
         
-        const folders = await db.all(foldersQuery, parentId ? [parentId] : []);
+        const rawFolders = await db.all(foldersQuery, parentId ? [parentId] : []);
+        const folders = (rawFolders || []).map(sanitizeFolder);
         
         const filesQuery = parentId ? 
             'SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0' : 
@@ -136,7 +149,8 @@ router.get('/', async (req, res) => {
  */
 router.get('/tree', async (req, res) => {
     try {
-        const folders = await db.all('SELECT * FROM folders');
+        const rawFolders = await db.all('SELECT * FROM folders');
+        const folders = (rawFolders || []).map(sanitizeFolder);
         
         const folderMap = new Map();
         folders.forEach(f => folderMap.set(f.id, { ...f, children: [] }));
@@ -155,6 +169,96 @@ router.get('/tree', async (req, res) => {
     } catch (error) {
         console.error('Tree error:', error);
         res.status(500).json({ error: 'Failed to generate folder tree' });
+    }
+});
+
+/**
+ * POST /:id/lock
+ * Sets a password to lock this folder
+ */
+router.post('/:id/lock', async (req, res) => {
+    try {
+        const folderId = req.params.id;
+        const { password } = req.body;
+        if (!password || password.trim().length < 3) {
+            return res.status(400).json({ error: 'Folder password must be at least 3 characters long' });
+        }
+
+        const folder = await db.getFolder(folderId);
+        if (!folder) return res.status(404).json({ error: 'Folder not found' });
+
+        const hash = await bcrypt.hash(password.trim(), 10);
+        await db.lockFolder(folderId, hash);
+
+        res.json({ success: true, message: 'Folder locked successfully' });
+    } catch (error) {
+        console.error('Lock folder error:', error);
+        res.status(500).json({ error: 'Failed to lock folder' });
+    }
+});
+
+/**
+ * POST /:id/verify-lock
+ * Verifies folder password for access
+ */
+router.post('/:id/verify-lock', async (req, res) => {
+    try {
+        const folderId = req.params.id;
+        const { password } = req.body;
+        if (!password) {
+            return res.status(400).json({ error: 'Password is required' });
+        }
+
+        const folder = await db.getFolder(folderId);
+        if (!folder) return res.status(404).json({ error: 'Folder not found' });
+
+        if (!folder.password_hash) {
+            return res.json({ success: true, message: 'Folder is not locked' });
+        }
+
+        const isMatch = await bcrypt.compare(password, folder.password_hash);
+        const isMasterMatch = process.env.MASTER_PASSWORD_HASH ? await bcrypt.compare(password, process.env.MASTER_PASSWORD_HASH) : false;
+
+        if (!isMatch && !isMasterMatch) {
+            return res.status(401).json({ error: 'Incorrect folder password' });
+        }
+
+        res.json({ success: true, message: 'Folder unlocked successfully' });
+    } catch (error) {
+        console.error('Verify folder lock error:', error);
+        res.status(500).json({ error: 'Failed to verify folder password' });
+    }
+});
+
+/**
+ * POST /:id/unlock-permanently
+ * Removes folder password lock permanently
+ */
+router.post('/:id/unlock-permanently', async (req, res) => {
+    try {
+        const folderId = req.params.id;
+        const { password } = req.body;
+        if (!password) {
+            return res.status(400).json({ error: 'Current password is required to remove lock' });
+        }
+
+        const folder = await db.getFolder(folderId);
+        if (!folder) return res.status(404).json({ error: 'Folder not found' });
+
+        if (folder.password_hash) {
+            const isMatch = await bcrypt.compare(password, folder.password_hash);
+            const isMasterMatch = process.env.MASTER_PASSWORD_HASH ? await bcrypt.compare(password, process.env.MASTER_PASSWORD_HASH) : false;
+
+            if (!isMatch && !isMasterMatch) {
+                return res.status(401).json({ error: 'Incorrect password' });
+            }
+        }
+
+        await db.unlockFolderPermanently(folderId);
+        res.json({ success: true, message: 'Folder lock removed permanently' });
+    } catch (error) {
+        console.error('Unlock permanently error:', error);
+        res.status(500).json({ error: 'Failed to remove folder lock' });
     }
 });
 

@@ -130,6 +130,18 @@ const API = {
     return this.request('DELETE', `/api/folders/${id}${permanent ? '?permanent=true' : ''}`);
   },
 
+  async lockFolder(id, password) {
+    return this.request('POST', `/api/folders/${id}/lock`, { password });
+  },
+
+  async verifyFolderLock(id, password) {
+    return this.request('POST', `/api/folders/${id}/verify-lock`, { password });
+  },
+
+  async unlockFolderPermanently(id, password) {
+    return this.request('POST', `/api/folders/${id}/unlock-permanently`, { password });
+  },
+
   // ─── Files ────────────────────────────────────────────────────────
   async getFiles(params = {}) {
     const query = new URLSearchParams();

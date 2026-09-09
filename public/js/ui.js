@@ -354,15 +354,18 @@ const UI = {
     const safeName = folder.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const isSelected = this.selectedItems.has(folderIdStr) || this.selectedItems.has(folder.id);
     const selectedClass = isSelected ? ' selected' : '';
+    const isLocked = Boolean(folder.is_locked);
+    const lockBadge = isLocked ? `<span class="folder-lock-badge" title="Password Protected Folder">🔒</span>` : '';
     return `
-      <div class="folder-card${selectedClass}" data-id="${folderIdStr}" data-type="folder" draggable="true">
+      <div class="folder-card${selectedClass}${isLocked ? ' is-locked' : ''}" data-id="${folderIdStr}" data-type="folder" data-locked="${isLocked ? '1' : '0'}" draggable="true">
         <button class="card-select-btn icon-btn" title="Select folder" data-id="${folderIdStr}" data-type="folder" aria-label="Select">
           <svg viewBox="0 0 24 24" width="14" height="14"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </button>
         <div class="folder-icon-wrap">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="#5f6368">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="${isLocked ? '#ea4335' : '#5f6368'}">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
           </svg>
+          ${lockBadge}
         </div>
         <div class="folder-name" title="${safeName}">${safeName}</div>
         <button class="item-more-btn icon-btn" title="More options" data-id="${folderIdStr}" data-type="folder">
@@ -527,8 +530,18 @@ const UI = {
     if (permDeleteBtn) permDeleteBtn.style.display = isTrashed ? 'flex' : 'none';
     if (downloadBtn) downloadBtn.style.display = item.type === 'file' ? 'flex' : 'none';
     if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
-    if (shareBtn) shareBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
-    if (infoBtn) infoBtn.style.display = 'flex';
+    const lockFolderBtn = menu.querySelector('[data-action="lock-folder"]');
+    const lockFolderText = document.getElementById('ctx-lock-folder-text');
+    if (lockFolderBtn) {
+      if (!isTrashed && item.type === 'folder') {
+        lockFolderBtn.style.display = 'flex';
+        if (lockFolderText) {
+          lockFolderText.textContent = item.is_locked ? 'Unlock / Remove Lock' : 'Lock Folder';
+        }
+      } else {
+        lockFolderBtn.style.display = 'none';
+      }
+    }
 
     menu.style.display = 'block';
     const x = Math.min(event.pageX, window.innerWidth - 220);
