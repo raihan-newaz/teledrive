@@ -75,7 +75,7 @@ router.post('/login', authLimiter, async (req, res) => {
             return res.status(401).json({ error: 'Invalid password' });
         }
 
-        const expiresIn = 3600; // 1 hour
+        const expiresIn = 30 * 24 * 3600; // 30 days (prevents premature expiration during long multi-GB uploads)
         const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn });
 
         res.cookie('teledrive_token', token, {
@@ -97,6 +97,27 @@ router.post('/login', authLimiter, async (req, res) => {
  */
 router.get('/verify', authMiddleware, (req, res) => {
     return res.json({ valid: true, expiresAt: req.user.exp });
+});
+
+/**
+ * POST /refresh
+ * Refreshes the authentication token for active users
+ */
+router.post('/refresh', authMiddleware, (req, res) => {
+    try {
+        const expiresIn = 30 * 24 * 3600; // 30 days
+        const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn });
+
+        res.cookie('teledrive_token', token, {
+            httpOnly: true,
+            sameSite: 'strict',
+            maxAge: expiresIn * 1000
+        });
+
+        return res.json({ token, expiresIn });
+    } catch (error) {
+        return res.status(500).json({ error: 'Failed to refresh token' });
+    }
 });
 
 /**

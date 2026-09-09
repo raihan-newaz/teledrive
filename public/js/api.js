@@ -25,6 +25,16 @@ const API = {
     }
   },
 
+  async refreshToken() {
+    if (!this.token) return;
+    try {
+      const res = await this.request('POST', '/api/auth/refresh');
+      if (res && res.token) {
+        this.setToken(res.token);
+      }
+    } catch (e) {}
+  },
+
   async request(method, url, body = null, options = {}) {
     const { headers: customHeaders, ...restOptions } = options;
     const headers = { ...customHeaders };
