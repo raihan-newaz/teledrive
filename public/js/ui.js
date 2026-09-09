@@ -597,11 +597,11 @@ const UI = {
         clearTimeout(timeoutId);
         try {
           const canvas = document.createElement('canvas');
-          canvas.width = Math.min(480, video.videoWidth || 320);
-          canvas.height = Math.min(270, video.videoHeight || 180);
+          canvas.width = Math.min(240, video.videoWidth || 240);
+          canvas.height = Math.min(135, video.videoHeight || 135);
           const ctx = canvas.getContext('2d');
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
           
           if (imgEl && document.body.contains(imgEl)) {
             imgEl.src = dataUrl;
