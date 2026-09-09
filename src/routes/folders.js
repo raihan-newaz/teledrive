@@ -99,6 +99,20 @@ async function permanentlyDeleteFolderRecursive(folderId) {
 
 const bcrypt = require('bcryptjs');
 
+function generateFolderToken(folderId) {
+    const secret = process.env.JWT_SECRET || 'teledrive_folder_secret';
+    return crypto.createHmac('sha256', secret).update(`folder_access:${folderId}`).digest('hex');
+}
+
+function verifyFolderToken(folderId, token) {
+    if (!token || typeof token !== 'string') return false;
+    const expected = generateFolderToken(folderId);
+    const bufA = Buffer.from(token);
+    const bufB = Buffer.from(expected);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
+
 function sanitizeFolder(f) {
     if (!f) return null;
     const { password_hash, ...rest } = f;
@@ -121,6 +135,23 @@ router.get('/', async (req, res) => {
         }
 
         const parentId = req.query.parentId && req.query.parentId !== 'null' ? req.query.parentId : null;
+        const currentFolder = parentId ? await db.getFolder(parentId) : null;
+        const breadcrumbs = await getBreadcrumbs(parentId);
+
+        // Security: If current folder is locked, verify HMAC folder token before returning contents
+        if (currentFolder && (currentFolder.is_locked === 1 || Boolean(currentFolder.password_hash))) {
+            const token = req.headers['x-folder-token'] || req.query.folderToken;
+            const isUnlocked = verifyFolderToken(parentId, token);
+            if (!isUnlocked) {
+                return res.json({
+                    currentFolder: sanitizeFolder(currentFolder),
+                    folders: [],
+                    files: [],
+                    breadcrumbs,
+                    isLocked: true
+                });
+            }
+        }
         
         const foldersQuery = parentId ? 
             'SELECT * FROM folders WHERE parent_id = ?' : 
@@ -134,10 +165,8 @@ router.get('/', async (req, res) => {
             'SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0';
             
         const files = await db.all(filesQuery, parentId ? [parentId] : []);
-        const breadcrumbs = await getBreadcrumbs(parentId);
-        const currentFolder = parentId ? await db.getFolder(parentId) : null;
 
-        res.json({ currentFolder: sanitizeFolder(currentFolder), folders, files, breadcrumbs });
+        res.json({ currentFolder: sanitizeFolder(currentFolder), folders, files, breadcrumbs, isLocked: false });
     } catch (error) {
         console.error('Get folders error:', error);
         res.status(500).json({ error: 'Failed to retrieve folders' });
@@ -214,7 +243,7 @@ router.post('/:id/verify-lock', async (req, res) => {
         if (!folder) return res.status(404).json({ error: 'Folder not found' });
 
         if (!folder.password_hash) {
-            return res.json({ success: true, message: 'Folder is not locked' });
+            return res.json({ success: true, folderToken: generateFolderToken(folderId), message: 'Folder is not locked' });
         }
 
         const isMatch = await bcrypt.compare(password, folder.password_hash);
@@ -224,7 +253,8 @@ router.post('/:id/verify-lock', async (req, res) => {
             return res.status(401).json({ error: 'Incorrect folder password' });
         }
 
-        res.json({ success: true, message: 'Folder unlocked successfully' });
+        const folderToken = generateFolderToken(folderId);
+        res.json({ success: true, folderToken, message: 'Folder unlocked successfully' });
     } catch (error) {
         console.error('Verify folder lock error:', error);
         res.status(500).json({ error: 'Failed to verify folder password' });
@@ -363,4 +393,6 @@ router.delete('/:id', async (req, res) => {
 
 router.deleteFolderRecursive = deleteFolderRecursive;
 router.permanentlyDeleteFolderRecursive = permanentlyDeleteFolderRecursive;
+router.generateFolderToken = generateFolderToken;
+router.verifyFolderToken = verifyFolderToken;
 module.exports = router;

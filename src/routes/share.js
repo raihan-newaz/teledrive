@@ -93,7 +93,20 @@ router.post('/public/:token/verify', async (req, res) => {
     }
 
     const accessKey = generateShareAccessToken(token);
-    res.json({ success: true, accessKey });
+    res.json({
+      success: true,
+      accessKey,
+      file: {
+        name: file.name,
+        size: file.size,
+        mime_type: file.mime_type,
+        created_at: file.created_at,
+        requiresPassword: false,
+        expiresAt: file.share_expires_at || null,
+        views: file.share_views || 0,
+        downloads: file.share_downloads || 0
+      }
+    });
   } catch (err) {
     console.error('[Share] Verify error:', err);
     res.status(500).json({ error: 'Failed to verify password' });

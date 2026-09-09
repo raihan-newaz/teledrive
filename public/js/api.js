@@ -3,6 +3,7 @@
  */
 const API = {
   token: localStorage.getItem('teledrive_token'),
+  folderTokens: {},
 
   setToken(t) {
     this.token = t;
@@ -102,12 +103,14 @@ const API = {
   },
 
   // ─── Folders ──────────────────────────────────────────────────────
-  async getFolderContents(parentId = null, search = null) {
-    const params = new URLSearchParams();
-    if (parentId && parentId !== 'null') params.append('parentId', parentId);
-    if (search) params.append('search', search);
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    return this.request('GET', `/api/folders${qs}`);
+  async getFolderContents(folderId = null) {
+    const fid = (folderId && folderId !== 'null') ? folderId : null;
+    const qs = fid ? `?parentId=${encodeURIComponent(fid)}` : '';
+    const headers = {};
+    if (fid && this.folderTokens[String(fid)]) {
+      headers['X-Folder-Token'] = this.folderTokens[String(fid)];
+    }
+    return this.request('GET', `/api/folders${qs}`, null, { headers });
   },
 
   async getFolderTree() {
@@ -131,14 +134,20 @@ const API = {
   },
 
   async lockFolder(id, password) {
+    delete this.folderTokens[String(id)];
     return this.request('POST', `/api/folders/${id}/lock`, { password });
   },
 
   async verifyFolderLock(id, password) {
-    return this.request('POST', `/api/folders/${id}/verify-lock`, { password });
+    const res = await this.request('POST', `/api/folders/${id}/verify-lock`, { password });
+    if (res && res.folderToken) {
+      this.folderTokens[String(id)] = res.folderToken;
+    }
+    return res;
   },
 
   async unlockFolderPermanently(id, password) {
+    delete this.folderTokens[String(id)];
     return this.request('POST', `/api/folders/${id}/unlock-permanently`, { password });
   },
 
@@ -207,15 +216,24 @@ const API = {
   },
 
   getDownloadUrl(fileId) {
-    return `/api/files/${fileId}/download`;
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
+    return `/api/files/${fileId}/download${qs}`;
   },
 
   getThumbnailUrl(fileId) {
-    return `/api/files/${fileId}/thumbnail`;
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
+    return `/api/files/${fileId}/thumbnail${qs}`;
   },
 
   getStreamUrl(fileId) {
-    return `/api/files/${fileId}/stream`;
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const token = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const qs = token ? `?folderToken=${encodeURIComponent(token)}` : '';
+    return `/api/files/${fileId}/stream${qs}`;
   },
 
   // ─── Settings ─────────────────────────────────────────────────────

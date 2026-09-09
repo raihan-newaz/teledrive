@@ -646,7 +646,8 @@
 
         const data = await res.json();
         verifiedPassword = pw;
-        renderActiveShare(data);
+        const fileObj = data.file || data;
+        renderActiveShare(fileObj);
       } catch (err) {
         pwError.textContent = 'Failed to verify password: ' + err.message;
         pwError.style.display = 'block';

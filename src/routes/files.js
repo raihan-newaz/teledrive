@@ -487,6 +487,21 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
   }
 });
 
+function checkFileFolderAccess(file, req) {
+  if (!file || !file.folder_id) return true;
+  try {
+    const folder = db.getFolder(file.folder_id);
+    if (folder && (folder.is_locked === 1 || Boolean(folder.password_hash))) {
+      const token = req.headers['x-folder-token'] || req.query.folderToken;
+      const foldersRouter = require('./folders');
+      if (foldersRouter.verifyFolderToken && !foldersRouter.verifyFolderToken(file.folder_id, token)) {
+        return false;
+      }
+    }
+  } catch (e) {}
+  return true;
+}
+
 /**
  * GET /:id/stream — REAL-TIME PROGRESSIVE STREAMING (Plays immediately without waiting for full download!)
  */
@@ -494,6 +509,9 @@ router.get('/:id/stream', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
+    if (!checkFileFolderAccess(file, req)) {
+      return res.status(403).json({ error: 'Folder is locked. Please unlock the folder to stream this file.' });
+    }
     await streamFileToResponse(file, req, res, false);
   } catch (error) {
     console.error('Stream handler error:', error);
@@ -508,6 +526,9 @@ router.get('/:id/thumbnail', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
+    if (!checkFileFolderAccess(file, req)) {
+      return res.status(403).json({ error: 'Folder is locked.' });
+    }
 
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
 
@@ -565,6 +586,9 @@ router.get('/:id/download', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
+    if (!checkFileFolderAccess(file, req)) {
+      return res.status(403).json({ error: 'Folder is locked. Please unlock the folder to download this file.' });
+    }
     await streamFileToResponse(file, req, res, true);
   } catch (error) {
     console.error('Download error:', error);

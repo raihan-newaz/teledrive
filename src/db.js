@@ -239,12 +239,18 @@ function getFolderContents(folderId) {
 }
 
 /**
- * Searches for files by name
+ * Searches for files by name (excluding files in locked folders for privacy)
  * @param {string} query - The search query
  * @returns {Array} Array of matching files
  */
 function searchFiles(query) {
-  return all('SELECT * FROM files WHERE name LIKE ? AND is_trashed = 0 ORDER BY name ASC', ['%' + query + '%']);
+  return all(
+    `SELECT f.* FROM files f
+     LEFT JOIN folders fo ON f.folder_id = fo.id
+     WHERE f.name LIKE ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     ORDER BY f.name ASC`,
+    ['%' + query + '%']
+  );
 }
 
 /**
@@ -257,11 +263,16 @@ function searchFolders(query) {
 }
 
 /**
- * Gets all starred files
+ * Gets all starred files (excluding files in locked folders for privacy)
  * @returns {Array} Array of starred files
  */
 function getStarredFiles() {
-  return all('SELECT * FROM files WHERE is_starred = 1 AND is_trashed = 0 ORDER BY updated_at DESC');
+  return all(
+    `SELECT f.* FROM files f
+     LEFT JOIN folders fo ON f.folder_id = fo.id
+     WHERE f.is_starred = 1 AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     ORDER BY f.updated_at DESC`
+  );
 }
 
 /**
@@ -273,12 +284,18 @@ function getTrashedFiles() {
 }
 
 /**
- * Gets recent files
+ * Gets recent files (excluding files in locked folders for privacy)
  * @param {number} limit - Max number of files to return
  * @returns {Array} Array of recent files
  */
 function getRecentFiles(limit = 20) {
-  return all('SELECT * FROM files WHERE is_trashed = 0 ORDER BY created_at DESC LIMIT ?', [limit]);
+  return all(
+    `SELECT f.* FROM files f
+     LEFT JOIN folders fo ON f.folder_id = fo.id
+     WHERE f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     ORDER BY f.created_at DESC LIMIT ?`,
+    [limit]
+  );
 }
 
 /**

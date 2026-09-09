@@ -477,10 +477,11 @@ const UI = {
     const renderNodes = (nodes, depth = 1) => {
       nodes.forEach(node => {
         const padding = depth * 18;
+        const safeName = (node.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         html += `
           <div class="tree-item" data-folder-id="${node.id}" style="padding-left: ${padding}px">
             <span class="tree-icon">📁</span>
-            <span class="tree-label">${node.name}</span>
+            <span class="tree-label">${safeName}</span>
           </div>
         `;
         if (node.children && node.children.length > 0) {
