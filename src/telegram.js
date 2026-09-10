@@ -218,7 +218,7 @@ async function* iterDownloadFile(messageId, requestSize = 512 * 1024) {
   for await (const chunk of tClient.iterDownload({
     file: messages[0].media,
     requestSize: requestSize,
-    workers: 8,
+    workers: 4,
   })) {
     yield chunk;
   }

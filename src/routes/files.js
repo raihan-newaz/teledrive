@@ -139,40 +139,48 @@ function sanitizeFilename(filename) {
 }
 
 /**
- * Unified Stream/Download Pipe Helper
+ * Unified Stream/Download Pipe Helper with 100% Byte-Accurate Range (Pause & Resume) Support
  */
 async function streamFileToResponse(file, req, res, isDownload = false) {
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+  const fileSize = file.size;
 
-  // 1. If cached, serve from cache with Range request support
+  // Parse Range header if requested by client (Chrome, Edge, IDM, curl, media players)
+  const range = req.headers.range;
+  let start = 0;
+  let end = fileSize - 1;
+  let isRangeRequest = false;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const parsedStart = parseInt(parts[0], 10);
+    const parsedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+    if (!isNaN(parsedStart) && parsedStart >= 0 && parsedStart < fileSize) {
+      start = parsedStart;
+      end = (!isNaN(parsedEnd) && parsedEnd >= start && parsedEnd < fileSize) ? parsedEnd : fileSize - 1;
+      isRangeRequest = true;
+    } else if (parsedStart >= fileSize) {
+      return res.status(416).header('Content-Range', `bytes */${fileSize}`).send();
+    }
+  }
+
+  const chunkSize = (end - start) + 1;
+
+  // 1. If cached locally, serve directly from cache with byte-accurate slice
   if (existsSync(cachedPath)) {
     try {
       const stats = statSync(cachedPath);
-      if (stats.size === file.size) {
-        const range = req.headers.range;
-        const fileSize = stats.size;
-
-        if (range) {
-          const parts = range.replace(/bytes=/, '').split('-');
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-          if (start >= fileSize || end >= fileSize) {
-            res.status(416).header('Content-Range', `bytes */${fileSize}`).send();
-            return;
-          }
-
-          const chunksize = (end - start) + 1;
-          const fileStream = createReadStream(cachedPath, { start, end });
-
+      if (stats.size === fileSize) {
+        if (isRangeRequest) {
           res.writeHead(206, {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
             'Accept-Ranges': 'bytes',
-            'Content-Length': chunksize,
+            'Content-Length': chunkSize,
             'Content-Type': file.mime_type || 'application/octet-stream',
             'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
           });
-
+          const fileStream = createReadStream(cachedPath, { start, end });
           fileStream.pipe(res);
           req.on('close', () => fileStream.destroy());
           return;
@@ -194,8 +202,8 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     }
   }
 
-  // 2. Stream from Telegram on-the-fly
-  console.log(`[Stream] Streaming "${file.name}" (${file.id}, chunked: ${file.is_chunked})...`);
+  // 2. Stream from Telegram on-the-fly with Full Range & Multi-Part Slicing Support
+  console.log(`[Stream] Streaming "${file.name}" (ID: ${file.id}, bytes: ${start}-${end}/${fileSize}, chunked: ${file.is_chunked})...`);
 
   let partsToStream = [];
   if (file.is_chunked === 1) {
@@ -210,25 +218,46 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     }];
   }
 
-  if (partsToStream.length === 0) {
+  if (!partsToStream || partsToStream.length === 0) {
     return res.status(404).json({ error: 'File parts not found' });
   }
 
-  res.writeHead(200, {
-    'Content-Type': file.mime_type || 'application/octet-stream',
-    'Content-Length': file.size,
-    'Accept-Ranges': 'bytes',
-    'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
-  });
+  // Sort chunks by index ascending
+  partsToStream.sort((a, b) => a.chunk_index - b.chunk_index);
 
+  // Send proper HTTP 206 Partial Content or HTTP 200 OK headers
+  if (isRangeRequest) {
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
+    });
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Accept-Ranges': 'bytes',
+      'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
+    });
+  }
+
+  const isFullDownload = (start === 0 && end === fileSize - 1);
   const tempCachedPath = `${cachedPath}.tmp`;
-  const cacheWriteStream = createWriteStream(tempCachedPath);
+  let cacheWriteStream = null;
+  if (isFullDownload) {
+    try {
+      cacheWriteStream = createWriteStream(tempCachedPath);
+    } catch (e) {}
+  }
+
   let isClientClosed = false;
   let streamCompleted = false;
 
   req.on('close', () => {
     isClientClosed = true;
-    if (!streamCompleted) {
+    if (!streamCompleted && cacheWriteStream) {
       cacheWriteStream.destroy();
       try {
         if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath);
@@ -237,56 +266,95 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
   });
 
   try {
+    let currentFileOffset = 0;
+
     for (const part of partsToStream) {
       if (isClientClosed) break;
+
+      const partSize = part.size;
+      const partStartOffset = currentFileOffset;
+      const partEndOffset = currentFileOffset + partSize - 1;
+      currentFileOffset += partSize;
+
+      // Skip parts that are completely outside the requested [start, end] Range
+      if (partEndOffset < start || partStartOffset > end) {
+        continue;
+      }
+
+      const neededStartInPart = Math.max(0, start - partStartOffset);
+      const neededEndInPart = Math.min(partSize - 1, end - partStartOffset);
 
       const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
       const iv = Buffer.from(part.iv, 'base64');
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
 
       let totalEncReceived = 0;
-      const expectedPartSize = part.size;
+      let partDecryptedOffset = 0;
 
-      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 256 * 1024)) {
+      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
         if (isClientClosed) break;
         totalEncReceived += chunk.length;
 
         let cipherChunk = chunk;
-        if (totalEncReceived > expectedPartSize) {
-          const overflow = totalEncReceived - expectedPartSize;
+        if (totalEncReceived > partSize) {
+          const overflow = totalEncReceived - partSize;
           cipherChunk = chunk.subarray(0, chunk.length - overflow);
         }
 
         if (cipherChunk.length > 0) {
           const decrypted = decipher.update(cipherChunk);
-          if (!isClientClosed) {
-            res.write(decrypted);
+          const chunkDecStart = partDecryptedOffset;
+          const chunkDecEnd = partDecryptedOffset + decrypted.length - 1;
+          partDecryptedOffset += decrypted.length;
+
+          // Check if this decrypted chunk overlaps [neededStartInPart, neededEndInPart]
+          if (chunkDecEnd >= neededStartInPart && chunkDecStart <= neededEndInPart) {
+            const sliceStart = Math.max(0, neededStartInPart - chunkDecStart);
+            const sliceEnd = Math.min(decrypted.length, neededEndInPart - chunkDecStart + 1);
+            const sliceToSend = decrypted.subarray(sliceStart, sliceEnd);
+
+            if (!isClientClosed && sliceToSend.length > 0) {
+              const canContinue = res.write(sliceToSend);
+              if (!canContinue) {
+                await new Promise(r => res.once('drain', r));
+              }
+            }
           }
-          cacheWriteStream.write(decrypted);
+
+          if (cacheWriteStream && !isClientClosed) {
+            cacheWriteStream.write(decrypted);
+          }
         }
       }
     }
 
-    cacheWriteStream.end(() => {
-      if (!isClientClosed && existsSync(tempCachedPath)) {
-        try {
-          const fs = require('fs');
-          fs.renameSync(tempCachedPath, cachedPath);
-        } catch (e) {}
-      }
-    });
+    if (cacheWriteStream) {
+      cacheWriteStream.end(() => {
+        if (!isClientClosed && existsSync(tempCachedPath)) {
+          try {
+            const fs = require('fs');
+            fs.renameSync(tempCachedPath, cachedPath);
+          } catch (e) {}
+        }
+      });
+    }
+
     if (!isClientClosed) {
       streamCompleted = true;
       res.end();
     }
   } catch (err) {
-    console.error('[Stream] Streaming error:', err);
-    cacheWriteStream.destroy();
-    try {
-      if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath);
-    } catch (e) {}
-    if (!isClientClosed && !res.headersSent) {
+    console.error('[Stream] Streaming error:', err.message);
+    if (cacheWriteStream) {
+      cacheWriteStream.destroy();
+      try {
+        if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath);
+      } catch (e) {}
+    }
+    if (!res.headersSent) {
       res.status(500).json({ error: 'Streaming failed: ' + err.message });
+    } else {
+      res.destroy(err);
     }
   }
 }
