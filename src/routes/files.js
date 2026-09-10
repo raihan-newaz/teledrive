@@ -231,16 +231,6 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
   // Sort chunks by index ascending
   partsToStream.sort((a, b) => a.chunk_index - b.chunk_index);
 
-  const commonHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-    'Access-Control-Allow-Headers': 'Range, Authorization, x-folder-token',
-    'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type',
-    'Accept-Ranges': 'bytes',
-    'Content-Type': file.mime_type || 'application/octet-stream',
-    'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
-  };
-
   // Send proper HTTP 206 Partial Content or HTTP 200 OK headers
   if (isRangeRequest) {
     res.writeHead(206, {
