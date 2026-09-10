@@ -130,7 +130,7 @@ const Preview = {
       };
     }
     if (downloadBtn) {
-      downloadBtn.onclick = () => window.open(downloadUrl, '_blank');
+      downloadBtn.onclick = () => UI.triggerDownload(downloadUrl, file.name);
     }
     if (closeBtn) {
       closeBtn.onclick = () => this.close();
@@ -281,7 +281,7 @@ const Preview = {
               <span class="audio-vol-icon">🔊</span>
               <input type="range" class="audio-vol-slider" id="audio-vol-slider" min="0" max="1" step="0.05" value="1">
             </div>
-            <a href="${downloadUrl}" class="audio-dl-link" target="_blank">⬇ Download</a>
+            <a href="${downloadUrl}" class="audio-dl-link" download="${file.name}">⬇ Download</a>
           </div>
         </div>
       `;
@@ -377,7 +377,7 @@ const Preview = {
           <h2>${file.name}</h2>
           <p class="unsupported-size">${UI.formatFileSize(file.size)} · ${mime || 'Binary file'}</p>
           <p class="unsupported-hint">This file format can be downloaded and opened with your computer's native app.</p>
-          <a href="${downloadUrl}" class="btn-primary btn-lg" target="_blank" download="${file.name}">
+          <a href="${downloadUrl}" class="btn-primary btn-lg" download="${file.name}">
             <span>⬇ Download Decrypted File</span>
           </a>
         </div>

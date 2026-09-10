@@ -4,6 +4,18 @@
 const UI = {
   selectedItems: new Map(),
 
+  // ─── Direct Background Download (No Blank Tabs) ────────────────────
+  triggerDownload(url, filename) {
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    if (filename) a.setAttribute('download', filename);
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 1000);
+  },
+
   // ─── Toasts ────────────────────────────────────────────────────────
   showToast(message, type = 'info', duration = 3500) {
     const container = document.getElementById('toast-container');

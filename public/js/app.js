@@ -925,7 +925,7 @@ const App = {
       }
     } else if (action === 'download') {
       if (itemData.type !== 'folder') {
-        window.open(API.getDownloadUrl(itemData.id), '_blank');
+        UI.triggerDownload(API.getDownloadUrl(itemData.id), itemData.name);
       }
     } else if (action === 'share') {
       if (itemData.type !== 'folder') {
@@ -1377,7 +1377,7 @@ const App = {
           return;
         }
         if (selectedFiles.length === 1) {
-          window.open(API.getDownloadUrl(selectedFiles[0].id), '_blank');
+          UI.triggerDownload(API.getDownloadUrl(selectedFiles[0].id), selectedFiles[0].name);
         } else {
           UI.showToast(`Downloading ${selectedFiles.length} file(s)...`, 'info');
           selectedFiles.forEach((fileItem, idx) => {
