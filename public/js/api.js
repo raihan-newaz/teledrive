@@ -306,6 +306,14 @@ const API = {
     return '/api/settings/export-db';
   },
 
+  async getBackupStatus() {
+    return this.request('GET', '/api/settings/backup-status');
+  },
+
+  async backupNow() {
+    return this.request('POST', '/api/settings/backup-now');
+  },
+
   async importDatabase(file) {
     const formData = new FormData();
     formData.append('database', file);

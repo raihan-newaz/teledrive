@@ -30,6 +30,10 @@ const App = {
   pendingUnlockFolder: null,
   isManagingLock: false,
   _navReqCounter: 0,
+  filteredFiles: [],
+  renderedFileCount: 0,
+  _virtualScrollObserver: null,
+  _VIRTUAL_PAGE_SIZE: 40,
 
   async init() {
     try {
@@ -426,12 +430,30 @@ const App = {
       foldersSection.style.display = 'none';
     }
 
-    // Render Files
+    // Disconnect old scroll observer
+    if (this._virtualScrollObserver) {
+      this._virtualScrollObserver.disconnect();
+    }
+
+    // Render Files (Progressive Batch Windowing for 60fps scrolling on large folders)
+    this.filteredFiles = filteredFiles;
     if (hasFiles) {
       filesSection.style.display = 'block';
-      filesGrid.innerHTML = filteredFiles.map(f => UI.renderFileCard(f)).join('');
-      UI.loadVideoThumbnails(filteredFiles);
+      if (filteredFiles.length <= this._VIRTUAL_PAGE_SIZE) {
+        this.renderedFileCount = filteredFiles.length;
+        filesGrid.innerHTML = filteredFiles.map(f => UI.renderFileCard(f)).join('');
+        UI.loadVideoThumbnails(filteredFiles);
+      } else {
+        this.renderedFileCount = this._VIRTUAL_PAGE_SIZE;
+        const initialBatch = filteredFiles.slice(0, this._VIRTUAL_PAGE_SIZE);
+        filesGrid.innerHTML = initialBatch.map(f => UI.renderFileCard(f)).join('') + `
+          <div id="virtual-scroll-sentinel" style="grid-column: 1 / -1; height: 30px; width: 100%; display: flex; align-items: center; justify-content: center;"></div>
+        `;
+        UI.loadVideoThumbnails(initialBatch);
+        this.initVirtualScrollObserver();
+      }
     } else {
+      this.renderedFileCount = 0;
       filesSection.style.display = 'none';
     }
 
@@ -454,6 +476,68 @@ const App = {
         viewToggle.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`;
       }
     }
+  },
+
+  // ─── Virtual Scrolling & Batch Windowing ───────────────────────────
+  initVirtualScrollObserver() {
+    const sentinel = document.getElementById('virtual-scroll-sentinel');
+    if (!sentinel) return;
+
+    if (this._virtualScrollObserver) {
+      this._virtualScrollObserver.disconnect();
+    }
+
+    if (!window.IntersectionObserver) {
+      this.renderAllRemainingFiles();
+      return;
+    }
+
+    this._virtualScrollObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          this.renderNextBatch();
+        }
+      });
+    }, { rootMargin: '350px' });
+
+    this._virtualScrollObserver.observe(sentinel);
+  },
+
+  renderNextBatch() {
+    if (!this.filteredFiles || this.renderedFileCount >= this.filteredFiles.length) {
+      const sentinel = document.getElementById('virtual-scroll-sentinel');
+      if (sentinel) sentinel.remove();
+      if (this._virtualScrollObserver) this._virtualScrollObserver.disconnect();
+      return;
+    }
+
+    const nextBatch = this.filteredFiles.slice(this.renderedFileCount, this.renderedFileCount + this._VIRTUAL_PAGE_SIZE);
+    this.renderedFileCount += nextBatch.length;
+
+    const sentinel = document.getElementById('virtual-scroll-sentinel');
+    if (sentinel) {
+      const html = nextBatch.map(f => UI.renderFileCard(f)).join('');
+      sentinel.insertAdjacentHTML('beforebegin', html);
+      UI.loadVideoThumbnails(nextBatch);
+
+      if (this.renderedFileCount >= this.filteredFiles.length) {
+        sentinel.remove();
+        if (this._virtualScrollObserver) this._virtualScrollObserver.disconnect();
+      }
+    }
+  },
+
+  renderAllRemainingFiles() {
+    const sentinel = document.getElementById('virtual-scroll-sentinel');
+    if (!sentinel || !this.filteredFiles) return;
+    const remaining = this.filteredFiles.slice(this.renderedFileCount);
+    if (remaining.length > 0) {
+      const html = remaining.map(f => UI.renderFileCard(f)).join('');
+      sentinel.insertAdjacentHTML('beforebegin', html);
+      UI.loadVideoThumbnails(remaining);
+    }
+    sentinel.remove();
+    this.renderedFileCount = this.filteredFiles.length;
   },
 
   sortArray(arr) {
@@ -2337,6 +2421,26 @@ const App = {
       };
     }
 
+    // Telegram Cloud Backup Now button
+    const btnCloudBackup = document.getElementById('btn-cloud-backup-now');
+    if (btnCloudBackup) {
+      btnCloudBackup.onclick = async () => {
+        btnCloudBackup.disabled = true;
+        btnCloudBackup.innerHTML = '<span>Backing up...</span>';
+        try {
+          UI.showToast('Creating encrypted cloud snapshot & uploading to Telegram...', 'info');
+          const res = await API.backupNow();
+          UI.showToast(res.message || 'Encrypted cloud backup created successfully!', 'success');
+          this.loadBackupStatus();
+        } catch (err) {
+          UI.showToast('Cloud backup failed: ' + err.message, 'error');
+        } finally {
+          btnCloudBackup.disabled = false;
+          btnCloudBackup.innerHTML = '<span>⚡ Backup Now</span>';
+        }
+      };
+    }
+
     // Export Database button
     const btnExportDb = document.getElementById('btn-export-db');
     if (btnExportDb) {
@@ -2493,8 +2597,27 @@ const App = {
         if (bytesEl) bytesEl.textContent = UI.formatFileSize(data.storage.totalBytes);
         if (cacheEl) cacheEl.textContent = `${UI.formatFileSize(data.storage.cacheBytes)} (${data.storage.cacheFiles} files)`;
       }
+
+      await this.loadBackupStatus();
     } catch (e) {
       console.warn('Could not fetch settings details:', e);
+    }
+  },
+
+  async loadBackupStatus() {
+    try {
+      const statusEl = document.getElementById('backup-status-text');
+      if (!statusEl) return;
+      const data = await API.getBackupStatus();
+      if (data && data.latestBackup) {
+        const d = new Date(data.latestBackup.created_at);
+        const timeAgo = UI.formatDate(data.latestBackup.created_at);
+        statusEl.innerHTML = `Last backup created: <strong>${timeAgo}</strong> (${UI.formatFileSize(data.latestBackup.size)} encrypted snapshot · Msg #${data.latestBackup.telegram_message_id})`;
+      } else {
+        statusEl.innerHTML = 'Automatic schedule active. First automated cloud backup will run within 24h.';
+      }
+    } catch (e) {
+      // Ignore
     }
   },
 

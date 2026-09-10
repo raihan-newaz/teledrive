@@ -118,15 +118,30 @@ async function initialize() {
     );
   `);
 
-  // Performance indexes for scale
+  db.run(`
+    CREATE TABLE IF NOT EXISTS backups (
+      id TEXT PRIMARY KEY,
+      file_name TEXT NOT NULL,
+      telegram_message_id INTEGER NOT NULL,
+      size INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Performance compound indexes for lightning-fast scale
   try {
     db.run('CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);');
     db.run('CREATE INDEX IF NOT EXISTS idx_files_trashed ON files(is_trashed);');
     db.run('CREATE INDEX IF NOT EXISTS idx_files_starred ON files(is_starred);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_folder_trashed ON files(folder_id, is_trashed);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_starred_trashed ON files(is_starred, is_trashed);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_name ON files(name);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);');
     db.run('CREATE INDEX IF NOT EXISTS idx_files_share_token ON files(share_token);');
     db.run('CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id);');
     db.run('CREATE INDEX IF NOT EXISTS idx_upload_session_chunks_sid ON upload_session_chunks(session_id);');
     db.run('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_backups_created ON backups(created_at);');
   } catch (e) {
     console.warn('[DB] Index creation warning:', e.message);
   }
@@ -473,6 +488,32 @@ function incrementShareDownloads(token) {
 }
 
 /**
+ * Record a new cloud database backup
+ */
+function addBackup(id, fileName, telegramMessageId, size) {
+  run(
+    'INSERT INTO backups (id, file_name, telegram_message_id, size) VALUES (?, ?, ?, ?)',
+    [id, fileName, telegramMessageId, size]
+  );
+  save();
+  return getLatestBackup();
+}
+
+/**
+ * Get the most recent database backup
+ */
+function getLatestBackup() {
+  return get('SELECT * FROM backups ORDER BY created_at DESC LIMIT 1');
+}
+
+/**
+ * Get all database backups history
+ */
+function getAllBackups(limit = 20) {
+  return all('SELECT * FROM backups ORDER BY created_at DESC LIMIT ?', [limit]);
+}
+
+/**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
  */
@@ -511,5 +552,8 @@ module.exports = {
   getStarredFiles,
   getTrashedFiles,
   getRecentFiles,
-  getStorageStats
+  getStorageStats,
+  addBackup,
+  getLatestBackup,
+  getAllBackups
 };

@@ -657,8 +657,15 @@ const UI = {
             canvas.width = Math.min(240, video.videoWidth || 240);
             canvas.height = Math.min(135, video.videoHeight || 135);
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+            let dataUrl;
+            try {
+              dataUrl = canvas.toDataURL('image/webp', 0.7);
+              if (!dataUrl || !dataUrl.startsWith('data:image/webp')) {
+                dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+              }
+            } catch (e) {
+              dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+            }
             
             if (imgEl && document.body.contains(imgEl)) {
               imgEl.src = dataUrl;

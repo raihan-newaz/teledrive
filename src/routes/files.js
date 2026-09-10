@@ -639,9 +639,15 @@ router.get('/:id/thumbnail', async (req, res) => {
 
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
 
+    const etag = `"${file.id}_${file.size}"`;
+    res.setHeader('ETag', etag);
     res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
 
     if (existsSync(cachedPath) && statSync(cachedPath).size === file.size) {
       res.setHeader('Content-Length', file.size);

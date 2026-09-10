@@ -103,6 +103,12 @@ async function startServer() {
         process.env.BOT_TOKEN
       ).then(() => {
         console.log('[Telegram] Client connected successfully.');
+        try {
+          const backupService = require('./src/services/backup');
+          backupService.startAutoBackupSchedule();
+        } catch (bErr) {
+          console.warn('[Backup] Could not start auto backup schedule:', bErr.message);
+        }
       }).catch(err => {
         console.error('[Telegram] Initialization failed:', err.message);
       });

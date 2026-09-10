@@ -338,7 +338,31 @@ router.post('/import-db', uploadDb.single('database'), async (req, res) => {
       try { await fsPromises.unlink(uploadedPath); } catch (e) {}
     }
     console.error('Error importing database:', error);
-    return res.status(400).json({ error: error.message || 'Failed to import database: Invalid SQLite file' });
+/**
+ * GET /api/settings/backup-status
+ * Get status of automated cloud backups
+ */
+router.get('/backup-status', async (req, res) => {
+  try {
+    const backupService = require('../services/backup');
+    const status = backupService.getBackupStatus();
+    return res.json(status);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to retrieve backup status: ' + error.message });
+  }
+});
+
+/**
+ * POST /api/settings/backup-now
+ * Trigger immediate encrypted database backup to Telegram
+ */
+router.post('/backup-now', async (req, res) => {
+  try {
+    const backupService = require('../services/backup');
+    const result = await backupService.createEncryptedBackup();
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Failed to create backup' });
   }
 });
 
