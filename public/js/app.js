@@ -29,6 +29,7 @@ const App = {
   })(),
   pendingUnlockFolder: null,
   isManagingLock: false,
+  _navReqCounter: 0,
 
   async init() {
     try {
@@ -269,9 +270,11 @@ const App = {
   },
 
   async loadFolderContents(folderId) {
+    const reqId = ++this._navReqCounter;
     UI.showSkeletons();
     try {
       const data = await API.getFolderContents(folderId);
+      if (reqId !== this._navReqCounter) return;
       if (data.currentFolder && Boolean(data.currentFolder.is_locked) && !this.unlockedFolders.has(String(data.currentFolder.id))) {
         this.openUnlockFolderModal(data.currentFolder, false);
         return;
@@ -282,54 +285,79 @@ const App = {
       this.renderContents();
       UI.renderBreadcrumbs(this.breadcrumbs, data.currentFolder);
     } catch (e) {
-      UI.showToast('Failed to load files: ' + e.message, 'error');
+      if (reqId === this._navReqCounter) {
+        UI.showToast('Failed to load files: ' + e.message, 'error');
+      }
     } finally {
-      UI.hideSkeletons();
+      if (reqId === this._navReqCounter) {
+        UI.hideSkeletons();
+      }
     }
   },
 
   async loadStarredFiles() {
+    const reqId = ++this._navReqCounter;
     UI.showSkeletons();
     try {
       this.folders = [];
-      this.files = await API.getFiles({ starred: true });
+      const res = await API.getFiles({ starred: true });
+      if (reqId !== this._navReqCounter) return;
+      this.files = Array.isArray(res) ? res : [];
       this.breadcrumbs = [{ id: null, name: 'Starred' }];
       this.renderContents();
       UI.renderBreadcrumbs(this.breadcrumbs);
     } catch (e) {
-      UI.showToast('Failed to load starred files', 'error');
+      if (reqId === this._navReqCounter) {
+        UI.showToast('Failed to load starred files', 'error');
+      }
     } finally {
-      UI.hideSkeletons();
+      if (reqId === this._navReqCounter) {
+        UI.hideSkeletons();
+      }
     }
   },
 
   async loadRecentFiles() {
+    const reqId = ++this._navReqCounter;
     UI.showSkeletons();
     try {
       this.folders = [];
-      this.files = await API.getFiles();
+      const res = await API.getFiles();
+      if (reqId !== this._navReqCounter) return;
+      this.files = Array.isArray(res) ? res : [];
       this.breadcrumbs = [{ id: null, name: 'Recent Files' }];
       this.renderContents();
       UI.renderBreadcrumbs(this.breadcrumbs);
     } catch (e) {
-      UI.showToast('Failed to load recent files', 'error');
+      if (reqId === this._navReqCounter) {
+        UI.showToast('Failed to load recent files', 'error');
+      }
     } finally {
-      UI.hideSkeletons();
+      if (reqId === this._navReqCounter) {
+        UI.hideSkeletons();
+      }
     }
   },
 
   async loadTrashedFiles() {
+    const reqId = ++this._navReqCounter;
     UI.showSkeletons();
     try {
       this.folders = [];
-      this.files = await API.getFiles({ trashed: true });
+      const res = await API.getFiles({ trashed: true });
+      if (reqId !== this._navReqCounter) return;
+      this.files = Array.isArray(res) ? res : [];
       this.breadcrumbs = [{ id: null, name: 'Trash' }];
       this.renderContents();
       UI.renderBreadcrumbs(this.breadcrumbs);
     } catch (e) {
-      UI.showToast('Failed to load trash', 'error');
+      if (reqId === this._navReqCounter) {
+        UI.showToast('Failed to load trash', 'error');
+      }
     } finally {
-      UI.hideSkeletons();
+      if (reqId === this._navReqCounter) {
+        UI.hideSkeletons();
+      }
     }
   },
 
@@ -380,13 +408,15 @@ const App = {
     const hasFiles = filteredFiles.length > 0;
 
     if (!hasFolders && !hasFiles) {
-      foldersSection.style.display = 'none';
-      filesSection.style.display = 'none';
-      emptyState.style.display = 'flex';
+      if (fileContainer) fileContainer.style.display = 'none';
+      if (foldersSection) foldersSection.style.display = 'none';
+      if (filesSection) filesSection.style.display = 'none';
+      if (emptyState) emptyState.style.display = 'flex';
       return;
     }
 
-    emptyState.style.display = 'none';
+    if (fileContainer) fileContainer.style.display = 'block';
+    if (emptyState) emptyState.style.display = 'none';
 
     // Render Folders
     if (hasFolders) {
@@ -1450,12 +1480,14 @@ const App = {
             this.navigateToFolder(this.currentFolderId);
             return;
           }
+          const reqId = ++this._navReqCounter;
           UI.showSkeletons();
           try {
             const [folderData, fileData] = await Promise.all([
               API.getFolderContents(null, query).catch(() => ({ folders: [] })),
               API.getFiles({ search: query }).catch(() => [])
             ]);
+            if (reqId !== this._navReqCounter) return;
             this.folders = (folderData && folderData.folders) ? folderData.folders : [];
             this.files = Array.isArray(fileData) ? fileData : [];
             this.breadcrumbs = [{ id: null, name: `Search: "${query}"` }];
@@ -1464,7 +1496,9 @@ const App = {
           } catch (e) {
             // Ignore
           } finally {
-            UI.hideSkeletons();
+            if (reqId === this._navReqCounter) {
+              UI.hideSkeletons();
+            }
           }
         }, 300);
       };

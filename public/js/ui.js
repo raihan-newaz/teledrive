@@ -195,7 +195,11 @@ const UI = {
   // ─── Loading Skeletons ─────────────────────────────────────────────
   showSkeletons() {
     const sk = document.getElementById('skeleton-container');
+    const fc = document.getElementById('file-container');
+    const empty = document.getElementById('empty-state');
     if (sk) sk.style.display = 'grid';
+    if (fc) fc.style.display = 'none';
+    if (empty) empty.style.display = 'none';
   },
 
   hideSkeletons() {
