@@ -401,6 +401,10 @@ const Preview = {
       `;
     }
 
+    if (typeof UI !== 'undefined' && UI.pauseThumbnailQueue) {
+      UI.pauseThumbnailQueue();
+    }
+
     overlay.style.display = 'flex';
   },
 
@@ -408,6 +412,10 @@ const Preview = {
     clearTimeout(this.controlsTimeout);
     clearTimeout(this.navTimeout);
     this._clearListeners();
+
+    if (typeof UI !== 'undefined' && UI.resumeThumbnailQueue) {
+      UI.resumeThumbnailQueue();
+    }
 
     const overlay = document.getElementById('preview-overlay');
     const contentEl = document.getElementById('preview-content');

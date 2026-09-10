@@ -24,6 +24,35 @@ if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
 
+// Serialized worker queue for background thumbnail generation (keeps Telegram stream 100% smooth)
+let isThumbnailJobRunning = false;
+const thumbnailJobQueue = [];
+
+function runThumbnailTask(taskFn) {
+  return new Promise((resolve, reject) => {
+    if (thumbnailJobQueue.length > 30) {
+      thumbnailJobQueue.shift();
+    }
+    thumbnailJobQueue.push({ taskFn, resolve, reject });
+    processThumbnailJobQueue();
+  });
+}
+
+async function processThumbnailJobQueue() {
+  if (isThumbnailJobRunning || thumbnailJobQueue.length === 0) return;
+  isThumbnailJobRunning = true;
+  const { taskFn, resolve, reject } = thumbnailJobQueue.shift();
+  try {
+    const res = await taskFn();
+    resolve(res);
+  } catch (err) {
+    reject(err);
+  } finally {
+    isThumbnailJobRunning = false;
+    setTimeout(processThumbnailJobQueue, 30);
+  }
+}
+
 function generateVideoThumbnailServer(videoPath, outputPath) {
   return new Promise((resolve) => {
     const isUrl = typeof videoPath === 'string' && (videoPath.startsWith('http://') || videoPath.startsWith('https://'));
@@ -891,7 +920,7 @@ router.get('/:id/thumbnail', async (req, res) => {
     
     // 2. If image, generate lightweight 240px thumbnail, save permanently to data/thumbnails, and serve
     if (mime.startsWith('image/')) {
-      const ok = await generateServerImageThumbnailForFile(file, thumbPath);
+      const ok = await runThumbnailTask(() => generateServerImageThumbnailForFile(file, thumbPath)).catch(() => false);
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
@@ -910,7 +939,7 @@ router.get('/:id/thumbnail', async (req, res) => {
 
     // 3. If video, generate thumbnail with FFmpeg on demand, save permanently to data/thumbnails, and serve
     if (mime.startsWith('video/')) {
-      const ok = await generateServerThumbnailForFile(file, thumbPath);
+      const ok = await runThumbnailTask(() => generateServerThumbnailForFile(file, thumbPath)).catch(() => false);
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',

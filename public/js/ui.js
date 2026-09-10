@@ -659,7 +659,17 @@ const UI = {
   _videoObserver: null,
   _thumbnailQueue: [],
   _activeThumbnailWorkers: 0,
-  _MAX_THUMBNAIL_WORKERS: 6,
+  _MAX_THUMBNAIL_WORKERS: 2,
+  _isQueuePaused: false,
+
+  pauseThumbnailQueue() {
+    this._isQueuePaused = true;
+  },
+
+  resumeThumbnailQueue() {
+    this._isQueuePaused = false;
+    this._processThumbnailQueue();
+  },
 
   isCanvasBlankOrBlack(canvas) {
     try {
@@ -788,6 +798,7 @@ const UI = {
   },
 
   _processThumbnailQueue() {
+    if (this._isQueuePaused) return;
     // Purge legacy black thumbnails once
     if (!localStorage.getItem('teledrive_vthumb_v6_cleared')) {
       try {
