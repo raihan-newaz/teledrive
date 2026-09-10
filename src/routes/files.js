@@ -31,8 +31,8 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
       '-ss', '00:00:02',
       '-i', videoPath,
       '-vframes', '1',
-      '-vf', 'scale=320:-1',
-      '-q:v', '3',
+      '-vf', 'scale=240:-1',
+      '-q:v', '4',
       '-y',
       outputPath
     ], { timeout: 10000 }, (err) => {
@@ -41,8 +41,8 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
           '-ss', '00:00:00.5',
           '-i', videoPath,
           '-vframes', '1',
-          '-vf', 'scale=320:-1',
-          '-q:v', '3',
+          '-vf', 'scale=240:-1',
+          '-q:v', '4',
           '-y',
           outputPath
         ], { timeout: 10000 }, (err2) => {
@@ -51,6 +51,21 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
       } else {
         resolve(existsSync(outputPath));
       }
+    });
+  });
+}
+
+function generateImageThumbnailServer(imagePath, outputPath) {
+  return new Promise((resolve) => {
+    if (!existsSync(imagePath)) return resolve(false);
+    execFile('ffmpeg', [
+      '-i', imagePath,
+      '-vf', 'scale=240:-1',
+      '-q:v', '4',
+      '-y',
+      outputPath
+    ], { timeout: 10000 }, (err) => {
+      resolve(!err && existsSync(outputPath));
     });
   });
 }
@@ -489,12 +504,12 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const mimeType = getMimeType(safeName);
     const now = new Date().toISOString();
 
-    // 5. Try generating server-side video thumbnail immediately
+    // 5. Try generating server-side lightweight thumbnail (10-20 KB)
+    const thumbPath = path.join(thumbnailsDir, `${fileId}.jpg`);
     if (mimeType.startsWith('video/')) {
-      const thumbPath = path.join(thumbnailsDir, `${fileId}.jpg`);
-      try {
-        await generateVideoThumbnailServer(originalPath, thumbPath);
-      } catch (e) {}
+      try { await generateVideoThumbnailServer(originalPath, thumbPath); } catch (e) {}
+    } else if (mimeType.startsWith('image/')) {
+      try { await generateImageThumbnailServer(originalPath, thumbPath); } catch (e) {}
     }
 
     db.run(
@@ -767,8 +782,23 @@ router.get('/:id/thumbnail', async (req, res) => {
 
     const mime = (file.mime_type || '').toLowerCase();
     
-    // 2. If image, stream directly
+    // 2. If image, check if local cache exists to generate lightweight 240px thumbnail, else stream
     if (mime.startsWith('image/')) {
+      const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+      if (existsSync(cachedPath)) {
+        await generateImageThumbnailServer(cachedPath, thumbPath);
+        if (existsSync(thumbPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+            'Access-Control-Allow-Origin': '*',
+          });
+          const stream = createReadStream(thumbPath);
+          stream.pipe(res);
+          req.on('close', () => stream.destroy());
+          return;
+        }
+      }
       await streamFileToResponse(file, req, res, false);
       return;
     }

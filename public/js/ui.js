@@ -706,7 +706,7 @@ const UI = {
         video.setAttribute('webkit-playsinline', '');
         video.setAttribute('muted', '');
         video.preload = 'auto';
-        video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
+        video.style.cssText = 'position:fixed;bottom:0;right:0;width:320px;height:180px;opacity:0.001;pointer-events:none;z-index:-9999;clip:rect(0,0,0,0);';
         document.body.appendChild(video);
 
         let done = false;
@@ -728,7 +728,7 @@ const UI = {
           try {
             if (video.videoWidth > 0 && video.videoHeight > 0) {
               const canvas = document.createElement('canvas');
-              const targetWidth = Math.min(320, video.videoWidth);
+              const targetWidth = Math.min(240, video.videoWidth);
               const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
               canvas.width = targetWidth;
               canvas.height = targetHeight;
@@ -744,8 +744,8 @@ const UI = {
               }
 
               let dataUrl = null;
-              try { dataUrl = canvas.toDataURL('image/jpeg', 0.7); } catch (e) {}
-              if (dataUrl && dataUrl.length > 500) {
+              try { dataUrl = canvas.toDataURL('image/jpeg', 0.65); } catch (e) {}
+              if (dataUrl && dataUrl.length > 300) {
                 cleanup(dataUrl);
                 return true;
               }
@@ -780,12 +780,12 @@ const UI = {
 
   _processThumbnailQueue() {
     // Purge legacy black thumbnails once
-    if (!localStorage.getItem('teledrive_vthumb_v4_cleared')) {
+    if (!localStorage.getItem('teledrive_vthumb_v5_cleared')) {
       try {
         Object.keys(localStorage).forEach(k => {
           if (k.startsWith('vthumb_')) localStorage.removeItem(k);
         });
-        localStorage.setItem('teledrive_vthumb_v4_cleared', '1');
+        localStorage.setItem('teledrive_vthumb_v5_cleared', '1');
       } catch (e) {}
     }
 
@@ -800,7 +800,7 @@ const UI = {
       }
 
       const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
-      if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500) {
+      if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 300) {
         imgEl.src = cached;
         imgEl.style.display = 'block';
         this._activeThumbnailWorkers--;
@@ -815,7 +815,7 @@ const UI = {
       video.setAttribute('webkit-playsinline', '');
       video.setAttribute('muted', '');
       video.preload = 'metadata';
-      video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
+      video.style.cssText = 'position:fixed;bottom:0;right:0;width:320px;height:180px;opacity:0.001;pointer-events:none;z-index:-9999;clip:rect(0,0,0,0);';
       document.body.appendChild(video);
 
       let finished = false;
@@ -841,7 +841,7 @@ const UI = {
         try {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             const canvas = document.createElement('canvas');
-            const targetWidth = Math.min(320, video.videoWidth);
+            const targetWidth = Math.min(240, video.videoWidth);
             const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
             canvas.width = targetWidth;
             canvas.height = targetHeight;
@@ -858,12 +858,12 @@ const UI = {
 
             let dataUrl;
             try {
-              dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+              dataUrl = canvas.toDataURL('image/jpeg', 0.65);
             } catch (e) {
               dataUrl = null;
             }
             
-            if (dataUrl && dataUrl.length > 500) {
+            if (dataUrl && dataUrl.length > 300) {
               if (imgEl && document.body.contains(imgEl)) {
                 imgEl.src = dataUrl;
                 imgEl.style.display = 'block';
