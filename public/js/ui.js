@@ -457,14 +457,14 @@ const UI = {
       previewHtml = `
         <div class="file-card-preview has-thumbnail">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="${safeName}" onload="this.classList.add('loaded')" onerror="this.style.display='none'">
+          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="${safeName}" onerror="this.style.display='none'">
         </div>
       `;
     } else if (cat === 'video') {
       previewHtml = `
         <div class="file-card-preview has-thumbnail video-preview">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img id="vthumb-${file.id}" class="file-thumb-media" loading="lazy" alt="${safeName}" onerror="this.style.display='none'">
+          <img id="vthumb-${file.id}" class="file-thumb-media" loading="lazy" alt="${safeName}" style="display:none;" onerror="this.style.display='none'">
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
@@ -658,15 +658,15 @@ const UI = {
       this._activeThumbnailWorkers++;
 
       const { file, imgEl } = task;
-      if (!imgEl || !document.body.contains(imgEl) || imgEl.classList.contains('loaded')) {
+      if (!imgEl || !document.body.contains(imgEl) || (imgEl.style.display === 'block' && imgEl.src && imgEl.src.startsWith('data:image'))) {
         this._activeThumbnailWorkers--;
         continue;
       }
 
       const cached = sessionStorage.getItem(`vthumb_${file.id}`);
-      if (cached) {
+      if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500) {
         imgEl.src = cached;
-        imgEl.classList.add('loaded');
+        imgEl.style.display = 'block';
         this._activeThumbnailWorkers--;
         continue;
       }
@@ -691,7 +691,7 @@ const UI = {
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 6000); // 6s fast fallback timeout
+      const timeoutId = setTimeout(done, 7000); // 7s fast fallback timeout
 
       const captureFrame = () => {
         if (finished) return false;
@@ -704,24 +704,23 @@ const UI = {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             let dataUrl;
             try {
-              dataUrl = canvas.toDataURL('image/webp', 0.7);
-              if (!dataUrl || !dataUrl.startsWith('data:image/webp')) {
-                dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-              }
+              dataUrl = canvas.toDataURL('image/jpeg', 0.7);
             } catch (e) {
-              dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+              dataUrl = null;
             }
             
-            if (imgEl && document.body.contains(imgEl)) {
-              imgEl.src = dataUrl;
-              imgEl.classList.add('loaded');
+            if (dataUrl && dataUrl.length > 500) {
+              if (imgEl && document.body.contains(imgEl)) {
+                imgEl.src = dataUrl;
+                imgEl.style.display = 'block';
+              }
+              try {
+                sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
+              } catch(e) {}
+              clearTimeout(timeoutId);
+              done();
+              return true;
             }
-            try {
-              sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
-            } catch(e) {}
-            clearTimeout(timeoutId);
-            done();
-            return true;
           }
         } catch (e) {}
         return false;
@@ -783,13 +782,15 @@ const UI = {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             let dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            if (imgEl && document.body.contains(imgEl)) {
-              imgEl.src = dataUrl;
-              imgEl.classList.add('loaded');
+            if (dataUrl && dataUrl.length > 500) {
+              if (imgEl && document.body.contains(imgEl)) {
+                imgEl.src = dataUrl;
+                imgEl.style.display = 'block';
+              }
+              try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e) {}
+              cleanup();
+              return true;
             }
-            try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e) {}
-            cleanup();
-            return true;
           }
         } catch (e) {}
         return false;
@@ -838,9 +839,9 @@ const UI = {
       if (!imgEl) return;
 
       const cached = sessionStorage.getItem(`vthumb_${file.id}`);
-      if (cached) {
+      if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500) {
         imgEl.src = cached;
-        imgEl.classList.add('loaded');
+        imgEl.style.display = 'block';
         return;
       }
 
