@@ -80,6 +80,14 @@ async function startServer() {
     await db.initialize();
     console.log('[DB] Database ready.');
 
+    // Initialize Auto LRU Cache Manager (Default 3 GB limit)
+    try {
+      const cacheManager = require('./src/services/cacheManager');
+      cacheManager.startCacheMaintenanceSchedule();
+    } catch (cErr) {
+      console.warn('[Cache] Could not start cache manager:', cErr.message);
+    }
+
     const port = process.env.PORT || 3000;
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`\n  ╔══════════════════════════════════════════╗`);

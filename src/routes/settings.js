@@ -131,6 +131,8 @@ router.get('/', async (req, res) => {
         totalBytes: stats ? stats.totalSize : 0,
         cacheBytes: cacheStats.totalSize,
         cacheFiles: cacheStats.fileCount,
+        maxCacheBytes: require('../services/cacheManager').getMaxCacheLimitBytes(),
+        maxCacheLimitGb: 3
       },
       encryption: {
         algorithm: 'AES-256-GCM',

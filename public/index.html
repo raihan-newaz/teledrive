@@ -1034,7 +1034,7 @@
           <div class="storage-card">
             <div class="storage-card-icon">💾</div>
             <div class="storage-card-content">
-              <span class="storage-card-label">Local Decryption Cache</span>
+              <span class="storage-card-label">Local Cache (3 GB Limit)</span>
               <strong id="settings-cache-size" class="storage-card-val">0 B</strong>
             </div>
           </div>
@@ -1043,13 +1043,13 @@
 
       <div class="settings-section">
         <div class="settings-section-title">
-          <h4>Local Cache Management</h4>
-          <p>Decrypted files are cached locally for instant streaming. You can safely clear this cache anytime.</p>
+          <h4>Local Cache Management <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-left: 6px;">Auto LRU Active</span></h4>
+          <p>Decrypted files are cached locally for instant streaming up to <strong>3 GB</strong>. When the limit is reached, older files are automatically pruned to protect your disk space.</p>
         </div>
         <div class="cache-action-box">
           <div>
             <strong>Clear Temporary Cache</strong>
-            <p>Freed disk space on your computer. Files remain completely safe and untouched in your Telegram Cloud.</p>
+            <p>Free disk space immediately. Files remain completely safe and untouched in your Telegram Cloud.</p>
           </div>
           <button type="button" class="btn-danger" id="btn-clear-cache">
             <span>Clear Cache</span>
