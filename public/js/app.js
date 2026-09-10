@@ -1128,10 +1128,14 @@ const App = {
 
     if (copyLinkBtn) {
       copyLinkBtn.style.display = item.type === 'file' ? 'inline-block' : 'none';
-      copyLinkBtn.onclick = () => {
+      copyLinkBtn.onclick = async () => {
         const url = window.location.origin + API.getStreamUrl(item.id);
-        navigator.clipboard.writeText(url);
-        UI.showToast('Stream link copied to clipboard!', 'success');
+        const success = await UI.copyToClipboard(url);
+        if (success) {
+          UI.showToast('Stream link copied to clipboard!', 'success');
+        } else {
+          UI.showToast('Failed to copy stream link', 'error');
+        }
       };
     }
 
@@ -1964,17 +1968,15 @@ const App = {
           UI.showToast('Please save changes first to get active link', 'info');
           return;
         }
-        try {
-          await navigator.clipboard.writeText(url);
+        const success = await UI.copyToClipboard(url, linkInput);
+        if (success) {
           if (copyBtnText) copyBtnText.textContent = 'Copied!';
           UI.showToast('Share link copied to clipboard!', 'success');
           setTimeout(() => {
             if (copyBtnText) copyBtnText.textContent = 'Copy link';
           }, 2000);
-        } catch (e) {
-          linkInput.select();
-          document.execCommand('copy');
-          UI.showToast('Share link copied!', 'success');
+        } else {
+          UI.showToast('Failed to copy share link', 'error');
         }
       };
     }
@@ -2641,7 +2643,7 @@ const App = {
       btnSaveWebdav.onclick = async () => {
         const enabled = document.getElementById('webdav-enabled')?.checked;
         const permissionMode = document.getElementById('webdav-permission-mode')?.value || 'full';
-        const username = document.getElementById('webdav-username')?.value || 'admin';
+        const username = document.getElementById('webdav-username')?.value.trim() || 'admin';
         const password = document.getElementById('webdav-password')?.value || '';
 
         btnSaveWebdav.disabled = true;
@@ -2659,6 +2661,7 @@ const App = {
             const passInput = document.getElementById('webdav-password');
             if (passInput) passInput.value = '';
           }
+          await this.loadWebDavSettings();
         } catch (err) {
           UI.showToast('Failed to update WebDAV settings: ' + err.message, 'error');
         } finally {
@@ -2671,16 +2674,20 @@ const App = {
     // WebDAV Copy URL Button
     const btnCopyWebdavUrl = document.getElementById('btn-copy-webdav-url');
     if (btnCopyWebdavUrl) {
-      btnCopyWebdavUrl.onclick = () => {
+      btnCopyWebdavUrl.onclick = async () => {
         const urlInput = document.getElementById('webdav-url');
+        const copyTextSpan = document.getElementById('btn-copy-webdav-url-text');
         if (urlInput && urlInput.value) {
-          navigator.clipboard.writeText(urlInput.value).then(() => {
+          const success = await UI.copyToClipboard(urlInput.value, urlInput);
+          if (success) {
+            if (copyTextSpan) copyTextSpan.textContent = 'Copied!';
             UI.showToast('WebDAV Server URL copied to clipboard!', 'success');
-          }).catch(() => {
-            urlInput.select();
-            document.execCommand('copy');
-            UI.showToast('WebDAV Server URL copied!', 'success');
-          });
+            setTimeout(() => {
+              if (copyTextSpan) copyTextSpan.textContent = 'Copy';
+            }, 2000);
+          } else {
+            UI.showToast('Failed to copy WebDAV URL', 'error');
+          }
         }
       };
     }
@@ -2714,8 +2721,18 @@ const App = {
     // WebDAV Sessions Refresh Button
     const btnRefreshWebdavSessions = document.getElementById('btn-refresh-webdav-sessions');
     if (btnRefreshWebdavSessions) {
-      btnRefreshWebdavSessions.onclick = () => {
-        this.loadWebDavSessions(true);
+      btnRefreshWebdavSessions.onclick = async () => {
+        const iconSvg = btnRefreshWebdavSessions.querySelector('svg');
+        if (iconSvg) iconSvg.classList.add('spin-refresh');
+        btnRefreshWebdavSessions.disabled = true;
+        try {
+          await this.loadWebDavSessions(true);
+        } catch (err) {
+          UI.showToast('Failed to refresh devices: ' + err.message, 'error');
+        } finally {
+          if (iconSvg) iconSvg.classList.remove('spin-refresh');
+          btnRefreshWebdavSessions.disabled = false;
+        }
       };
     }
   },
@@ -2906,22 +2923,22 @@ const App = {
           }
 
           return `
-            <div class="cache-action-box" style="padding: 10px 14px; background: var(--bg-hover); display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: var(--radius-sm);">
-              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);">
+            <div class="webdav-session-card" style="padding: 10px 12px; background: var(--bg-hover); display: flex; align-items: center; justify-content: space-between; gap: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 200px;">
+                <div style="width: 34px; height: 34px; border-radius: 8px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);">
                   ${getDeviceSvg(s.osType)}
                 </div>
-                <div style="min-width: 0;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.clientName}</strong>
+                <div style="min-width: 0; flex: 1;">
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;">${s.clientName}</strong>
                     ${statusBadge}
                   </div>
-                  <p style="font-size: 11px; margin: 2px 0 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  <p style="font-size: 11px; margin: 3px 0 0; color: var(--text-secondary); line-height: 1.4; word-break: break-word;">
                     IP: <code>${s.ip}</code> · User: <strong>${s.username}</strong> · Last active: ${timeAgo} · <em>${s.lastAction || 'Active'}</em>
                   </p>
                 </div>
               </div>
-              <div>
+              <div style="flex-shrink: 0; margin-left: auto;">
                 ${actionBtn}
               </div>
             </div>

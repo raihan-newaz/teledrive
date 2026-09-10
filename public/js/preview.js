@@ -371,9 +371,13 @@ const Preview = {
 
           const copyBtn = document.getElementById('btn-copy-code');
           if (copyBtn) {
-            copyBtn.onclick = () => {
-              navigator.clipboard.writeText(text);
-              UI.showToast('Copied to clipboard!', 'success');
+            copyBtn.onclick = async () => {
+              const success = await UI.copyToClipboard(text);
+              if (success) {
+                UI.showToast('Copied to clipboard!', 'success');
+              } else {
+                UI.showToast('Failed to copy to clipboard', 'error');
+              }
             };
           }
         })

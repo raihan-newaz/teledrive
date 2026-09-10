@@ -785,5 +785,55 @@ const UI = {
         this._processThumbnailQueue();
       }
     });
+  },
+
+  async copyToClipboard(text, fallbackInputEl = null) {
+    if (!text && fallbackInputEl && fallbackInputEl.value) {
+      text = fallbackInputEl.value;
+    }
+    if (!text) return false;
+
+    // 1. Try modern Clipboard API if available and permitted
+    if (navigator.clipboard && navigator.clipboard.writeText && (window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('navigator.clipboard.writeText failed, falling back to execCommand:', err);
+      }
+    }
+
+    // 2. Fallback: input element selection or temporary offscreen textarea
+    try {
+      if (fallbackInputEl && typeof fallbackInputEl.select === 'function') {
+        fallbackInputEl.focus();
+        fallbackInputEl.select();
+        if (fallbackInputEl.setSelectionRange) {
+          fallbackInputEl.setSelectionRange(0, 99999);
+        }
+        const success = document.execCommand('copy');
+        if (success) return true;
+      }
+
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-9999px';
+      textArea.style.left = '-9999px';
+      textArea.style.opacity = '0';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      if (textArea.setSelectionRange) {
+        textArea.setSelectionRange(0, 99999);
+      }
+      const success = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return !!success;
+    } catch (err) {
+      console.error('Clipboard copy fallback failed:', err);
+      return false;
+    }
   }
 };

@@ -2828,6 +2828,41 @@ input:focus, select:focus, textarea:focus {
   fill: currentColor;
 }
 
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.input-with-btn input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-with-btn button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.webdav-session-card {
+  transition: all 0.2s ease;
+}
+
+.webdav-session-card:hover {
+  background: var(--bg-hover) !important;
+  border-color: var(--accent-color) !important;
+}
+
+@keyframes spin-cw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-refresh {
+  animation: spin-cw 0.7s linear infinite;
+}
+
 .settings-actions {
   display: flex;
   justify-content: flex-end;

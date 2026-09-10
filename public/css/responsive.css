@@ -699,6 +699,29 @@
     border-radius: 6px !important;
   }
 
+  .input-with-btn {
+    display: flex !important;
+    gap: 8px !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+  .input-with-btn input {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    font-size: 12px !important;
+  }
+  .input-with-btn button {
+    flex-shrink: 0 !important;
+    height: 38px !important;
+    padding: 0 12px !important;
+  }
+
+  .webdav-session-card {
+    padding: 10px 12px !important;
+    gap: 10px !important;
+    background: var(--bg-hover) !important;
+  }
+
   /* 10b. Share Modal (Mobile Responsive Bottom Sheet) */
   .share-modal:not(.visible) {
     display: none !important;
