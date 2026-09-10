@@ -248,6 +248,26 @@ const Upload = {
       if (uploadResult && uploadResult.file && typeof App !== 'undefined' && App.addUploadedFileLocally) {
         App.addUploadedFileLocally(uploadResult.file, nextItem.file);
       }
+
+      // If uploaded item is video, extract client thumbnail in 0ms and save to server
+      if (uploadResult && uploadResult.file && nextItem.file && typeof UI !== 'undefined' && UI.extractVideoThumbnail) {
+        const cat = UI.getFileTypeCategory(uploadResult.file.mime_type, uploadResult.file.name);
+        if (cat === 'video') {
+          UI.extractVideoThumbnail(nextItem.file).then(thumbDataUrl => {
+            if (thumbDataUrl && thumbDataUrl.length > 500) {
+              try { localStorage.setItem(`vthumb_${uploadResult.file.id}`, thumbDataUrl); } catch(e) {}
+              if (typeof API !== 'undefined' && API.uploadThumbnail) {
+                API.uploadThumbnail(uploadResult.file.id, thumbDataUrl);
+              }
+              const imgEl = document.getElementById(`vthumb-${uploadResult.file.id}`);
+              if (imgEl) {
+                imgEl.src = thumbDataUrl;
+                imgEl.style.display = 'block';
+              }
+            }
+          }).catch(() => {});
+        }
+      }
     } catch (error) {
       if (nextItem.status === 'cancelled') {
         nextItem.speedText = '';

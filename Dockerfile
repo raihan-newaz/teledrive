@@ -4,8 +4,8 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /app
 
-# Install dependencies needed for node native builds if any
-RUN apk add --no-cache tzdata
+# Install dependencies needed for node native builds, timezone data, and video thumbnailing
+RUN apk add --no-cache tzdata ffmpeg
 
 # Copy package manifests
 COPY package*.json ./

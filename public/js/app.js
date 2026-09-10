@@ -401,6 +401,7 @@ const App = {
 
   // ─── Rendering ─────────────────────────────────────────────────────
   renderContents() {
+    UI.hideSkeletons();
     const fileContainer = document.getElementById('file-container');
     const foldersSection = document.getElementById('folders-section');
     const filesSection = document.getElementById('files-section');

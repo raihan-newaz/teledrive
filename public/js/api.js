@@ -285,6 +285,15 @@ const API = {
     return this.buildMediaUrl(fileId, 'stream');
   },
 
+  async uploadThumbnail(fileId, thumbnailBase64) {
+    if (!fileId || !thumbnailBase64) return null;
+    try {
+      return await this.request('POST', `/api/files/${fileId}/thumbnail`, { thumbnail: thumbnailBase64 });
+    } catch (e) {
+      return null;
+    }
+  },
+
   // ─── Settings ─────────────────────────────────────────────────────
   async getSettings() {
     return this.request('GET', '/api/settings');

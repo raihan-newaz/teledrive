@@ -214,6 +214,7 @@ const UI = {
     const fc = document.getElementById('file-container');
     const empty = document.getElementById('empty-state');
     if (sk) {
+      sk.classList.remove('hidden');
       const mode = (typeof App !== 'undefined' && App.viewMode) || localStorage.getItem('teledrive_view_mode') || 'grid';
       if (mode === 'list') {
         sk.className = 'skeleton-container list-view';
@@ -248,7 +249,11 @@ const UI = {
 
   hideSkeletons() {
     const sk = document.getElementById('skeleton-container');
-    if (sk) sk.style.display = 'none';
+    if (sk) {
+      sk.classList.add('hidden');
+      sk.style.display = 'none';
+      sk.innerHTML = '';
+    }
   },
 
   // ─── Selection Management ──────────────────────────────────────────
@@ -461,14 +466,14 @@ const UI = {
         </div>
       `;
     } else if (cat === 'video') {
+      const thumbUrl = API.getThumbnailUrl(file.id);
       const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
       const hasCached = (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500);
-      const imgStyle = hasCached ? 'display:block;' : 'display:none;';
-      const imgSrc = hasCached ? `src="${cached}"` : '';
+      const imgSrc = hasCached ? cached : thumbUrl;
       previewHtml = `
         <div class="file-card-preview has-thumbnail video-preview">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img id="vthumb-${file.id}" class="file-thumb-media" ${imgSrc} loading="lazy" alt="${safeName}" style="${imgStyle}" onerror="this.style.display='none'">
+          <img id="vthumb-${file.id}" class="file-thumb-media" src="${imgSrc}" loading="lazy" alt="${safeName}" onerror="UI.onVideoThumbError(this, '${file.id}')">
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
@@ -656,6 +661,91 @@ const UI = {
   _activeThumbnailWorkers: 0,
   _MAX_THUMBNAIL_WORKERS: 4,
 
+  onVideoThumbError(imgEl, fileId) {
+    if (!imgEl) return;
+    imgEl.style.display = 'none';
+    const file = (typeof App !== 'undefined' && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
+    if (file) {
+      this._thumbnailQueue.push({ file, imgEl });
+      this._processThumbnailQueue();
+    }
+  },
+
+  extractVideoThumbnail(blob) {
+    return new Promise((resolve) => {
+      if (!blob) return resolve(null);
+      try {
+        const blobUrl = URL.createObjectURL(blob);
+        const video = document.createElement('video');
+        video.muted = true;
+        video.defaultMuted = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('muted', '');
+        video.preload = 'auto';
+        video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
+        document.body.appendChild(video);
+
+        let done = false;
+        const cleanup = (res = null) => {
+          if (done) return;
+          done = true;
+          try {
+            URL.revokeObjectURL(blobUrl);
+            video.removeAttribute('src');
+            video.load();
+            if (video.parentNode) video.parentNode.removeChild(video);
+          } catch (e) {}
+          resolve(res);
+        };
+
+        const capture = () => {
+          if (done) return false;
+          try {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+              const canvas = document.createElement('canvas');
+              const targetWidth = Math.min(320, video.videoWidth);
+              const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
+              canvas.width = targetWidth;
+              canvas.height = targetHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              let dataUrl = null;
+              try { dataUrl = canvas.toDataURL('image/jpeg', 0.7); } catch (e) {}
+              if (dataUrl && dataUrl.length > 500) {
+                cleanup(dataUrl);
+                return true;
+              }
+            }
+          } catch (e) {}
+          return false;
+        };
+
+        video.onloadedmetadata = () => {
+          try { video.currentTime = Math.min(0.2, (video.duration || 1) / 2); } catch (e) {}
+          try {
+            const p = video.play();
+            if (p !== undefined) {
+              p.then(() => { video.pause(); capture(); }).catch(() => {});
+            }
+          } catch (e) {}
+        };
+        video.onloadeddata = () => { if (!capture()) { try { video.currentTime = 0.05; } catch (e) {} } };
+        video.oncanplay = () => capture();
+        video.onseeked = () => { capture(); cleanup(); };
+        video.ontimeupdate = () => { if (capture()) cleanup(); };
+        video.onerror = () => cleanup(null);
+        setTimeout(() => cleanup(null), 8000);
+
+        video.src = blobUrl;
+        video.load();
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  },
+
   _processThumbnailQueue() {
     while (this._activeThumbnailWorkers < this._MAX_THUMBNAIL_WORKERS && this._thumbnailQueue.length > 0) {
       const task = this._thumbnailQueue.shift();
@@ -731,6 +821,10 @@ const UI = {
               } catch(e) {
                 try { sessionStorage.setItem(`vthumb_${file.id}`, dataUrl); } catch(e2) {}
               }
+              // Upload to server so all devices/sessions get this thumbnail permanently
+              if (typeof API !== 'undefined' && API.uploadThumbnail) {
+                API.uploadThumbnail(file.id, dataUrl);
+              }
               clearTimeout(timeoutId);
               done();
               return true;
@@ -788,108 +882,22 @@ const UI = {
 
   generateVideoThumbnailFromBlob(blob, fileId, imgEl) {
     if (!blob || !fileId) return;
-    try {
-      const blobUrl = URL.createObjectURL(blob);
-      const video = document.createElement('video');
-      video.muted = true;
-      video.defaultMuted = true;
-      video.playsInline = true;
-      video.setAttribute('playsinline', '');
-      video.setAttribute('webkit-playsinline', '');
-      video.setAttribute('muted', '');
-      video.preload = 'auto';
-      video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
-      document.body.appendChild(video);
-
-      let cleaned = false;
-      const cleanup = () => {
-        if (cleaned) return;
-        cleaned = true;
-        try {
-          URL.revokeObjectURL(blobUrl);
-          video.removeAttribute('src');
-          video.load();
-          if (video.parentNode) {
-            video.parentNode.removeChild(video);
-          }
-        } catch (e) {}
-      };
-
-      const capture = () => {
-        if (cleaned) return false;
-        try {
-          if (video.videoWidth > 0 && video.videoHeight > 0) {
-            const canvas = document.createElement('canvas');
-            const targetWidth = Math.min(320, video.videoWidth);
-            const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            let dataUrl = null;
-            try {
-              dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            } catch (e) {}
-            if (dataUrl && dataUrl.length > 500) {
-              if (imgEl && document.body.contains(imgEl)) {
-                imgEl.src = dataUrl;
-                imgEl.style.display = 'block';
-              }
-              try {
-                localStorage.setItem(`vthumb_${fileId}`, dataUrl);
-              } catch(e) {
-                try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e2) {}
-              }
-              cleanup();
-              return true;
-            }
-          }
-        } catch (e) {}
-        return false;
-      };
-
-      video.onloadedmetadata = () => {
-        try {
-          video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
-        } catch (e) {}
-        try {
-          const p = video.play();
-          if (p !== undefined) {
-            p.then(() => {
-              video.pause();
-              capture();
-            }).catch(() => {});
-          }
-        } catch (e) {}
-      };
-
-      video.onloadeddata = () => {
-        if (!capture()) {
-          try { video.currentTime = 0.05; } catch (e) { cleanup(); }
+    this.extractVideoThumbnail(blob).then(dataUrl => {
+      if (dataUrl && dataUrl.length > 500) {
+        if (imgEl && document.body.contains(imgEl)) {
+          imgEl.src = dataUrl;
+          imgEl.style.display = 'block';
         }
-      };
-
-      video.oncanplay = () => {
-        capture();
-      };
-
-      video.onseeked = () => {
-        capture();
-        cleanup();
-      };
-
-      video.ontimeupdate = () => {
-        if (capture()) {
-          cleanup();
+        try {
+          localStorage.setItem(`vthumb_${fileId}`, dataUrl);
+        } catch(e) {
+          try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e2) {}
         }
-      };
-
-      video.onerror = () => cleanup();
-      setTimeout(cleanup, 8000);
-
-      video.src = blobUrl;
-      video.load();
-    } catch (e) {}
+        if (typeof API !== 'undefined' && API.uploadThumbnail) {
+          API.uploadThumbnail(fileId, dataUrl);
+        }
+      }
+    }).catch(() => {});
   },
 
   loadVideoThumbnails(files) {

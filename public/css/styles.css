@@ -1239,10 +1239,15 @@ input:focus, select:focus, textarea:focus {
 .skeleton-container {
   width: 100%;
 }
+.skeleton-container[style*="display: none"],
+.skeleton-container.hidden,
+#skeleton-container[style*="display: none"] {
+  display: none !important;
+}
 
 /* Grid View Skeletons */
-.skeleton-container.grid-view,
-.skeleton-container:not(.list-view) {
+.skeleton-container.grid-view:not(.hidden),
+.skeleton-container:not(.list-view):not(.hidden) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const fsPromises = require('fs/promises');
 const { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, copyFileSync, unlinkSync } = require('fs');
+const { execFile } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
@@ -17,9 +18,42 @@ router.use(authMiddleware);
 const dataDir = path.join(__dirname, '../../data');
 const tmpDir = path.join(dataDir, 'tmp');
 const cacheDir = path.join(dataDir, 'cache');
+const thumbnailsDir = path.join(dataDir, 'thumbnails');
 
 if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
+if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
+
+function generateVideoThumbnailServer(videoPath, outputPath) {
+  return new Promise((resolve) => {
+    if (!existsSync(videoPath)) return resolve(false);
+    execFile('ffmpeg', [
+      '-ss', '00:00:01',
+      '-i', videoPath,
+      '-vframes', '1',
+      '-vf', 'scale=320:-1',
+      '-q:v', '3',
+      '-y',
+      outputPath
+    ], { timeout: 10000 }, (err) => {
+      if (err) {
+        execFile('ffmpeg', [
+          '-ss', '00:00:00.1',
+          '-i', videoPath,
+          '-vframes', '1',
+          '-vf', 'scale=320:-1',
+          '-q:v', '3',
+          '-y',
+          outputPath
+        ], { timeout: 10000 }, (err2) => {
+          resolve(!err2 && existsSync(outputPath));
+        });
+      } else {
+        resolve(existsSync(outputPath));
+      }
+    });
+  });
+}
 
 const upload = multer({ dest: tmpDir, limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2GB max
 
@@ -399,6 +433,14 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const mimeType = getMimeType(safeName);
     const now = new Date().toISOString();
 
+    // 5. Try generating server-side video thumbnail immediately
+    if (mimeType.startsWith('video/')) {
+      const thumbPath = path.join(thumbnailsDir, `${fileId}.jpg`);
+      try {
+        await generateVideoThumbnailServer(originalPath, thumbPath);
+      } catch (e) {}
+    }
+
     db.run(
       `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
@@ -643,7 +685,7 @@ router.get('/:id/stream', async (req, res) => {
 });
 
 /**
- * GET /:id/thumbnail — Inline Thumbnail for Images & Videos
+ * GET /:id/thumbnail — High-performance cached thumbnails for Images and Videos
  */
 router.get('/:id/thumbnail', async (req, res) => {
   try {
@@ -652,10 +694,80 @@ router.get('/:id/thumbnail', async (req, res) => {
     if (!checkFileFolderAccess(file, req)) {
       return res.status(403).json({ error: 'Folder is locked.' });
     }
-    await streamFileToResponse(file, req, res, false);
+
+    // 1. If static generated thumbnail exists (JPEG), serve immediately with 24h cache headers
+    const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
+    if (existsSync(thumbPath)) {
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'Access-Control-Allow-Origin': '*',
+      });
+      const stream = createReadStream(thumbPath);
+      stream.pipe(res);
+      req.on('close', () => stream.destroy());
+      return;
+    }
+
+    const mime = (file.mime_type || '').toLowerCase();
+    
+    // 2. If image, stream directly
+    if (mime.startsWith('image/')) {
+      await streamFileToResponse(file, req, res, false);
+      return;
+    }
+
+    // 3. If video and decrypted cache exists, generate thumbnail on demand
+    if (mime.startsWith('video/')) {
+      const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+      if (existsSync(cachedPath)) {
+        const ok = await generateVideoThumbnailServer(cachedPath, thumbPath);
+        if (ok && existsSync(thumbPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'public, max-age=86400',
+            'Access-Control-Allow-Origin': '*',
+          });
+          const stream = createReadStream(thumbPath);
+          stream.pipe(res);
+          req.on('close', () => stream.destroy());
+          return;
+        }
+      }
+    }
+
+    res.status(404).json({ error: 'Thumbnail not available' });
   } catch (error) {
     console.error('Thumbnail error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to load thumbnail' });
+  }
+});
+
+/**
+ * POST /:id/thumbnail — Store client-extracted thumbnail permanently on server
+ */
+router.post('/:id/thumbnail', async (req, res) => {
+  try {
+    const file = db.getFile(req.params.id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    let { thumbnail } = req.body;
+    if (!thumbnail || typeof thumbnail !== 'string') {
+      return res.status(400).json({ error: 'Invalid thumbnail data' });
+    }
+
+    const base64Data = thumbnail.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    if (buffer.length < 100) {
+      return res.status(400).json({ error: 'Thumbnail data too small' });
+    }
+
+    const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
+    await fsPromises.writeFile(thumbPath, buffer);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save thumbnail error:', error);
+    res.status(500).json({ error: 'Failed to save thumbnail' });
   }
 });
 
@@ -825,9 +937,11 @@ async function permanentlyDeleteFile(file, options = {}) {
     db.deleteFileChunks(file.id);
   } catch (e) {}
 
-  // 4. Remove local decrypted cache
+  // 4. Remove local decrypted cache and thumbnail
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
   await fsPromises.unlink(cachedPath).catch(() => {});
+  const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
+  await fsPromises.unlink(thumbPath).catch(() => {});
 
   // 5. Remove file record from database
   db.run('DELETE FROM files WHERE id = ?', [file.id]);

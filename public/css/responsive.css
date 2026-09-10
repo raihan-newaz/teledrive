@@ -178,9 +178,13 @@
   }
 
   /* 6. File & Folder Cards: Grid View (2-Columns) vs List View (1-Column Full Width) */
-  .skeleton-container.grid-view,
-  .skeleton-container:not(.list-view) {
-    display: grid !important;
+  .skeleton-container[style*="display: none"],
+  .skeleton-container.hidden,
+  #skeleton-container[style*="display: none"] {
+    display: none !important;
+  }
+  .skeleton-container.grid-view:not(.hidden),
+  .skeleton-container:not(.list-view):not(.hidden) {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
     width: 100% !important;
@@ -197,8 +201,7 @@
     border-radius: 8px !important;
   }
 
-  .skeleton-container.list-view {
-    display: flex !important;
+  .skeleton-container.list-view:not(.hidden) {
     flex-direction: column !important;
     gap: 8px !important;
     width: 100% !important;
