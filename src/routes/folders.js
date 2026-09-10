@@ -14,14 +14,14 @@ router.use(authMiddleware);
  */
 async function getBreadcrumbs(folderId) {
     const breadcrumbs = [];
-    let currentId = folderId;
+    let currentId = (folderId && folderId !== 'null' && folderId !== 'undefined' && String(folderId).trim() !== '') ? String(folderId).trim() : null;
 
     while (currentId) {
         const folder = await db.get('SELECT id, name, parent_id FROM folders WHERE id = ?', [currentId]);
         if (!folder) break;
         
         breadcrumbs.unshift({ id: folder.id, name: folder.name });
-        currentId = folder.parent_id;
+        currentId = (folder.parent_id && folder.parent_id !== 'null' && folder.parent_id !== 'undefined' && String(folder.parent_id).trim() !== '') ? String(folder.parent_id).trim() : null;
     }
     
     // Add root
@@ -134,7 +134,8 @@ router.get('/', async (req, res) => {
             return res.json({ folders, files: [], breadcrumbs: [] });
         }
 
-        const parentId = req.query.parentId && req.query.parentId !== 'null' ? req.query.parentId : null;
+        const rawParentId = req.query.parentId;
+        const parentId = (rawParentId && rawParentId !== 'null' && rawParentId !== 'undefined' && String(rawParentId).trim() !== '') ? String(rawParentId).trim() : null;
         const currentFolder = parentId ? await db.getFolder(parentId) : null;
         const breadcrumbs = await getBreadcrumbs(parentId);
 
@@ -155,14 +156,14 @@ router.get('/', async (req, res) => {
         
         const foldersQuery = parentId ? 
             'SELECT * FROM folders WHERE parent_id = ?' : 
-            'SELECT * FROM folders WHERE parent_id IS NULL';
+            'SELECT * FROM folders WHERE parent_id IS NULL OR parent_id = "" OR parent_id = "null"';
         
         const rawFolders = await db.all(foldersQuery, parentId ? [parentId] : []);
         const folders = (rawFolders || []).map(sanitizeFolder);
         
         const filesQuery = parentId ? 
             'SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0' : 
-            'SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0';
+            'SELECT * FROM files WHERE (folder_id IS NULL OR folder_id = "" OR folder_id = "null") AND is_trashed = 0';
             
         const files = await db.all(filesQuery, parentId ? [parentId] : []);
 
