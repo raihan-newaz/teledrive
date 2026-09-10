@@ -1200,6 +1200,27 @@
       </div>
 
       <div class="settings-section">
+        <div class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h4>⚡ Real-Time Connected Devices</h4>
+            <p>Active devices and OS clients currently connected via Network Drive</p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span id="webdav-sessions-count" class="badge-count" style="font-size: 11px; padding: 3px 8px; border-radius: 10px; background: rgba(52, 199, 89, 0.15); color: #34c759; font-weight: 600;">0 Active</span>
+            <button type="button" class="btn-secondary icon-btn-sm" id="btn-refresh-webdav-sessions" title="Refresh Connected Devices" style="padding: 0 10px; height: 32px; font-size: 12px;">
+              <span>🔄 Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="webdav-sessions-list" style="display: flex; flex-direction: column; gap: 8px; min-height: 50px;">
+          <div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+            No network devices currently connected. Connect via Windows File Explorer or iOS Files to see live session.
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <div class="settings-section-title">
           <h4>Connection Instructions</h4>
           <p>Quick guides to map TeleDrive on your favorite operating system</p>

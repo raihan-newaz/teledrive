@@ -333,6 +333,18 @@ const API = {
     return this.request('POST', '/api/settings/webdav', data);
   },
 
+  async getWebDavSessions() {
+    return this.request('GET', '/api/settings/webdav/sessions');
+  },
+
+  async revokeWebDavSession(sessionId) {
+    return this.request('POST', '/api/settings/webdav/sessions/revoke', { sessionId });
+  },
+
+  async unrevokeWebDavSession(sessionId) {
+    return this.request('POST', '/api/settings/webdav/sessions/unrevoke', { sessionId });
+  },
+
   // ─── File Sharing ──────────────────────────────────────────────────
   async getShareStatus(fileId) {
     return this.request('GET', `/api/share/file/${fileId}`);

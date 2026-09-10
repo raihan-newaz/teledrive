@@ -2284,6 +2284,12 @@ const App = {
           targetPane.style.display = 'flex';
           targetPane.classList.add('active');
         }
+
+        if (tab === 'webdav') {
+          this.loadWebDavSettings();
+        } else if (tab === 'backup') {
+          this.loadBackupStatus();
+        }
       };
     });
 
@@ -2689,6 +2695,14 @@ const App = {
         }
       };
     }
+
+    // WebDAV Sessions Refresh Button
+    const btnRefreshWebdavSessions = document.getElementById('btn-refresh-webdav-sessions');
+    if (btnRefreshWebdavSessions) {
+      btnRefreshWebdavSessions.onclick = () => {
+        this.loadWebDavSessions(true);
+      };
+    }
   },
 
   async openSettings() {
@@ -2797,8 +2811,114 @@ const App = {
       if (modeSelect && data.permissionMode) modeSelect.value = data.permissionMode;
       if (usernameInput && data.username) usernameInput.value = data.username;
       if (urlInput && data.webdavUrl) urlInput.value = data.webdavUrl;
+
+      await this.loadWebDavSessions();
     } catch (e) {
       console.warn('Failed to load WebDAV settings:', e);
+    }
+  },
+
+  async loadWebDavSessions(showToastOnManual = false) {
+    try {
+      const listEl = document.getElementById('webdav-sessions-list');
+      const countBadge = document.getElementById('webdav-sessions-count');
+      if (!listEl) return;
+
+      const data = await API.getWebDavSessions();
+      const sessions = (data && data.sessions) || [];
+      const onlineCount = sessions.filter(s => s.isOnline).length;
+
+      if (countBadge) {
+        countBadge.textContent = `${onlineCount} Active`;
+        countBadge.style.color = onlineCount > 0 ? '#34c759' : 'var(--text-secondary)';
+        countBadge.style.background = onlineCount > 0 ? 'rgba(52, 199, 89, 0.15)' : 'var(--bg-hover)';
+      }
+
+      if (sessions.length === 0) {
+        listEl.innerHTML = `
+          <div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+            No network devices currently connected. Connect via Windows File Explorer or iOS Files to see live session.
+          </div>
+        `;
+      } else {
+        listEl.innerHTML = sessions.map(s => {
+          let statusBadge = '';
+          if (s.status === 'revoked') {
+            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(255, 69, 58, 0.15); color: #ff453a; font-weight: 600;">🔴 Disconnected</span>';
+          } else if (s.isOnline) {
+            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(52, 199, 89, 0.15); color: #34c759; font-weight: 600;">🟢 Online</span>';
+          } else {
+            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(255, 179, 0, 0.15); color: #ffb300; font-weight: 600;">🟡 Idle</span>';
+          }
+
+          const actionBtn = s.status === 'revoked'
+            ? `<button type="button" class="btn-secondary btn-unrevoke-session" data-session-id="${s.id}" style="padding: 4px 10px; font-size: 11px; color: var(--accent-color);"><span>Re-allow</span></button>`
+            : `<button type="button" class="btn-secondary btn-revoke-session" data-session-id="${s.id}" style="padding: 4px 10px; font-size: 11px; color: #ff453a;"><span>Disconnect</span></button>`;
+
+          let timeAgo = 'Just now';
+          if (s.lastActiveAgoSeconds > 60) {
+            const mins = Math.floor(s.lastActiveAgoSeconds / 60);
+            timeAgo = `${mins}m ago`;
+          }
+
+          return `
+            <div class="cache-action-box" style="padding: 10px 14px; background: var(--bg-hover); display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: var(--radius-sm);">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <span style="font-size: 22px; line-height: 1;">${s.icon || '🌐'}</span>
+                <div style="min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.clientName}</strong>
+                    ${statusBadge}
+                  </div>
+                  <p style="font-size: 11px; margin: 2px 0 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    IP: <code>${s.ip}</code> · User: <strong>${s.username}</strong> · Last active: ${timeAgo} · <em>${s.lastAction || 'Active'}</em>
+                  </p>
+                </div>
+              </div>
+              <div>
+                ${actionBtn}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Attach Revoke & Unrevoke handlers
+        listEl.querySelectorAll('.btn-revoke-session').forEach(btn => {
+          btn.onclick = async () => {
+            const sId = btn.getAttribute('data-session-id');
+            try {
+              btn.disabled = true;
+              await API.revokeWebDavSession(sId);
+              UI.showToast('Device session disconnected!', 'info');
+              this.loadWebDavSessions();
+            } catch (err) {
+              UI.showToast('Failed to disconnect device: ' + err.message, 'error');
+              btn.disabled = false;
+            }
+          };
+        });
+
+        listEl.querySelectorAll('.btn-unrevoke-session').forEach(btn => {
+          btn.onclick = async () => {
+            const sId = btn.getAttribute('data-session-id');
+            try {
+              btn.disabled = true;
+              await API.unrevokeWebDavSession(sId);
+              UI.showToast('Device re-allowed!', 'success');
+              this.loadWebDavSessions();
+            } catch (err) {
+              UI.showToast('Failed to re-allow device: ' + err.message, 'error');
+              btn.disabled = false;
+            }
+          };
+        });
+      }
+
+      if (showToastOnManual) {
+        UI.showToast('Connected devices list refreshed!', 'info');
+      }
+    } catch (e) {
+      console.warn('Failed to load WebDAV sessions:', e);
     }
   },
 

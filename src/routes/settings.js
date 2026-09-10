@@ -346,6 +346,57 @@ router.post('/webdav', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/settings/webdav/sessions
+ * List all real-time connected WebDAV devices & sessions
+ */
+router.get('/webdav/sessions', (req, res) => {
+  try {
+    const sessionTracker = require('../services/sessionTracker');
+    const sessions = sessionTracker.getActiveSessions();
+    return res.json({ sessions });
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    return res.status(500).json({ error: 'Failed to fetch active device sessions' });
+  }
+});
+
+/**
+ * POST /api/settings/webdav/sessions/revoke
+ * Disconnect / Block a specific device session
+ */
+router.post('/webdav/sessions/revoke', (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+    const sessionTracker = require('../services/sessionTracker');
+    sessionTracker.revokeSession(sessionId);
+    return res.json({ success: true, message: 'Device disconnected successfully!' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to revoke device session' });
+  }
+});
+
+/**
+ * POST /api/settings/webdav/sessions/unrevoke
+ * Re-allow a previously disconnected device session
+ */
+router.post('/webdav/sessions/unrevoke', (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+    const sessionTracker = require('../services/sessionTracker');
+    sessionTracker.unrevokeSession(sessionId);
+    return res.json({ success: true, message: 'Device re-allowed successfully!' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to unrevoke device session' });
+  }
+});
+
 const multer = require('multer');
 const tmpDbDir = path.join(__dirname, '../../data/tmp');
 if (!fs.existsSync(tmpDbDir)) {

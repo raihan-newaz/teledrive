@@ -70,7 +70,18 @@ function webdavAuthMiddleware(req, res, next) {
     return res.status(401).set('Content-Type', 'text/plain').send('Invalid WebDAV username or password.');
   }
 
-  // 3. Enforce WebDAV Permission Modes (full, readonly, safemode)
+  // 3. Check Session Revocation & Track Device Session
+  const sessionTracker = require('../services/sessionTracker');
+  const clientIp = sessionTracker.getClientIp(req);
+  const userAgent = req.headers['user-agent'] || 'Generic-WebDAV';
+
+  if (sessionTracker.isRevoked(clientIp, userAgent, username)) {
+    return res.status(403).set('Content-Type', 'text/plain').send('Forbidden: This device session has been disconnected from TeleDrive Settings.');
+  }
+
+  sessionTracker.trackWebDavRequest(req, username);
+
+  // 4. Enforce WebDAV Permission Modes (full, readonly, safemode)
   const mode = process.env.WEBDAV_PERMISSION_MODE || 'full';
   const method = req.method.toUpperCase();
 
