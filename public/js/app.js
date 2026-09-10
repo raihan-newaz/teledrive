@@ -423,7 +423,7 @@ const App = {
     // Filter files
     let filteredFiles = this.files;
     if (this.activeFilter && this.activeFilter !== 'all') {
-      filteredFiles = this.files.filter(f => UI.getFileTypeCategory(f.mime_type) === this.activeFilter);
+      filteredFiles = this.files.filter(f => UI.getFileTypeCategory(f.mime_type, f.name) === this.activeFilter);
     }
 
     // Sort files & folders
@@ -525,7 +525,7 @@ const App = {
 
     // Check active file filter
     if (this.activeFilter && this.activeFilter !== 'all') {
-      const cat = UI.getFileTypeCategory(file.mime_type);
+      const cat = UI.getFileTypeCategory(file.mime_type, file.name);
       if (cat !== this.activeFilter) {
         this.loadStorageStats();
         return;
@@ -561,14 +561,19 @@ const App = {
 
       if (newCard) {
         // Instant preview for local image files
-        const cat = UI.getFileTypeCategory(file.mime_type);
+        const cat = UI.getFileTypeCategory(file.mime_type, file.name);
         if (cat === 'image' && (localFileBlob || file.localBlob)) {
           const imgEl = newCard.querySelector('.file-thumb-media');
           if (imgEl) {
             try {
               imgEl.src = URL.createObjectURL(localFileBlob || file.localBlob);
-              imgEl.classList.add('loaded');
+              imgEl.style.display = 'block';
             } catch (e) {}
+          }
+        } else if (cat === 'video' && (localFileBlob || file.localBlob)) {
+          const imgEl = newCard.querySelector('.file-thumb-media');
+          if (imgEl) {
+            UI.generateVideoThumbnailFromBlob(localFileBlob || file.localBlob, file.id, imgEl);
           }
         }
 
@@ -831,7 +836,7 @@ const App = {
   getVisibleFiles() {
     let list = Array.isArray(this.files) ? [...this.files] : [];
     if (this.activeFilter && this.activeFilter !== 'all') {
-      list = list.filter(f => UI.getFileTypeCategory(f.mime_type) === this.activeFilter);
+      list = list.filter(f => UI.getFileTypeCategory(f.mime_type, f.name) === this.activeFilter);
     }
     this.sortArray(list);
     return list;

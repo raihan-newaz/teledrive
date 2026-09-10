@@ -137,7 +137,7 @@ const Preview = {
     }
 
     const mime = file.mime_type || '';
-    const cat = UI.getFileTypeCategory(mime);
+    const cat = UI.getFileTypeCategory(mime, file.name);
 
     // ─── 1. VIDEO: Custom YouTube-Style Player ─────────────────────────
     if (cat === 'video') {

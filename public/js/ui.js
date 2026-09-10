@@ -443,8 +443,8 @@ const UI = {
     const safeName = file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const isSelected = this.selectedItems.has(fileIdStr) || this.selectedItems.has(file.id);
     const selectedClass = isSelected ? ' selected' : '';
-    const cat = this.getFileTypeCategory(file.mime_type);
-    const icon = this.getFileIconSvg(file.mime_type);
+    const cat = this.getFileTypeCategory(file.mime_type, file.name);
+    const icon = this.getFileIconSvg(file.mime_type, file.name);
     const size = this.formatFileSize(file.size);
     const date = this.formatDate(file.created_at);
     const starIcon = file.is_starred ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fbbc04" style="vertical-align: -2px;"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' : '';
@@ -663,7 +663,7 @@ const UI = {
         continue;
       }
 
-      const cached = sessionStorage.getItem(`vthumb_${file.id}`);
+      const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
       if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500) {
         imgEl.src = cached;
         imgEl.style.display = 'block';
@@ -676,7 +676,6 @@ const UI = {
       video.muted = true;
       video.preload = 'auto';
       video.playsInline = true;
-      video.src = API.getStreamUrl(file.id);
 
       let finished = false;
       const done = () => {
@@ -691,7 +690,7 @@ const UI = {
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 7000); // 7s fast fallback timeout
+      const timeoutId = setTimeout(done, 9000); // 9s timeout for remote video chunk load
 
       const captureFrame = () => {
         if (finished) return false;
@@ -715,8 +714,10 @@ const UI = {
                 imgEl.style.display = 'block';
               }
               try {
-                sessionStorage.setItem(`vthumb_${file.id}`, dataUrl);
-              } catch(e) {}
+                localStorage.setItem(`vthumb_${file.id}`, dataUrl);
+              } catch(e) {
+                try { sessionStorage.setItem(`vthumb_${file.id}`, dataUrl); } catch(e2) {}
+              }
               clearTimeout(timeoutId);
               done();
               return true;
@@ -729,6 +730,15 @@ const UI = {
       video.onloadedmetadata = () => {
         try {
           video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+        } catch (e) {}
+        try {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              video.pause();
+              captureFrame();
+            }).catch(() => {});
+          }
         } catch (e) {}
       };
 
@@ -743,10 +753,19 @@ const UI = {
         done();
       };
 
+      video.ontimeupdate = () => {
+        if (captureFrame()) {
+          done();
+        }
+      };
+
       video.onerror = () => {
         clearTimeout(timeoutId);
         done();
       };
+
+      video.src = API.getStreamUrl(file.id);
+      video.load();
     }
   },
 
@@ -758,7 +777,6 @@ const UI = {
       video.muted = true;
       video.playsInline = true;
       video.preload = 'auto';
-      video.src = blobUrl;
 
       let cleaned = false;
       const cleanup = () => {
@@ -787,13 +805,32 @@ const UI = {
                 imgEl.src = dataUrl;
                 imgEl.style.display = 'block';
               }
-              try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e) {}
+              try {
+                localStorage.setItem(`vthumb_${fileId}`, dataUrl);
+              } catch(e) {
+                try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e2) {}
+              }
               cleanup();
               return true;
             }
           }
         } catch (e) {}
         return false;
+      };
+
+      video.onloadedmetadata = () => {
+        try {
+          video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+        } catch (e) {}
+        try {
+          const p = video.play();
+          if (p !== undefined) {
+            p.then(() => {
+              video.pause();
+              capture();
+            }).catch(() => {});
+          }
+        } catch (e) {}
       };
 
       video.onloadeddata = () => {
@@ -807,14 +844,23 @@ const UI = {
         cleanup();
       };
 
+      video.ontimeupdate = () => {
+        if (capture()) {
+          cleanup();
+        }
+      };
+
       video.onerror = () => cleanup();
-      setTimeout(cleanup, 5000);
+      setTimeout(cleanup, 6000);
+
+      video.src = blobUrl;
+      video.load();
     } catch (e) {}
   },
 
   loadVideoThumbnails(files) {
     if (!files || files.length === 0) return;
-    const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type) === 'video');
+    const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type, f.name) === 'video');
     if (videoFiles.length === 0) return;
 
     if (!this._videoObserver && window.IntersectionObserver) {
@@ -838,7 +884,7 @@ const UI = {
       const imgEl = document.getElementById(`vthumb-${file.id}`);
       if (!imgEl) return;
 
-      const cached = sessionStorage.getItem(`vthumb_${file.id}`);
+      const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
       if (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500) {
         imgEl.src = cached;
         imgEl.style.display = 'block';
