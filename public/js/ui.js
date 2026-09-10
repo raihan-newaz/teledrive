@@ -665,19 +665,26 @@ const UI = {
     try {
       const ctx = canvas.getContext('2d');
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let nonBlackPixels = 0;
+      let totalLuminance = 0;
+      let brightPixels = 0;
       const totalPixels = canvas.width * canvas.height;
       const step = Math.max(1, Math.floor(totalPixels / 400));
+      let sampled = 0;
       for (let i = 0; i < imgData.length; i += step * 4) {
         const r = imgData[i];
         const g = imgData[i + 1];
         const b = imgData[i + 2];
         const a = imgData[i + 3];
-        if (a > 0 && (r > 22 || g > 22 || b > 22)) {
-          nonBlackPixels++;
+        if (a > 0) {
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          totalLuminance += lum;
+          if (lum > 30) brightPixels++;
+          sampled++;
         }
       }
-      return nonBlackPixels < (totalPixels / step) * 0.04;
+      const avgLuminance = sampled > 0 ? (totalLuminance / sampled) : 0;
+      const brightRatio = sampled > 0 ? (brightPixels / sampled) : 0;
+      return avgLuminance < 18 && brightRatio < 0.05;
     } catch (e) {
       return false;
     }
@@ -686,6 +693,7 @@ const UI = {
   onVideoThumbError(imgEl, fileId) {
     if (!imgEl) return;
     imgEl.style.display = 'none';
+    imgEl.removeAttribute('src');
     const file = (typeof App !== 'undefined' && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
     if (file) {
       this._thumbnailQueue.push({ file, imgEl });
@@ -723,7 +731,7 @@ const UI = {
           resolve(res);
         };
 
-        const capture = () => {
+        const tryCapture = () => {
           if (done) return false;
           try {
             if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -735,10 +743,11 @@ const UI = {
               const ctx = canvas.getContext('2d');
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-              if (this.isCanvasBlankOrBlack(canvas) && seekAttempts < 2) {
+              if (this.isCanvasBlankOrBlack(canvas) && seekAttempts < 3) {
                 seekAttempts++;
                 try {
-                  video.currentTime = Math.min(5.0, (video.duration || 10) / 1.5);
+                  const jumpTime = seekAttempts === 1 ? Math.min(10.0, (video.duration || 60) * 0.2) : Math.min(30.0, (video.duration || 60) * 0.4);
+                  video.currentTime = jumpTime;
                 } catch (e) {}
                 return false;
               }
@@ -755,20 +764,20 @@ const UI = {
         };
 
         video.onloadedmetadata = () => {
-          try { video.currentTime = Math.min(2.0, (video.duration || 10) / 2.5); } catch (e) {}
           try {
-            const p = video.play();
-            if (p !== undefined) {
-              p.then(() => { video.pause(); capture(); }).catch(() => {});
-            }
+            const initialSeek = Math.min(5.0, Math.max(2.0, (video.duration || 60) * 0.1));
+            video.currentTime = initialSeek;
           } catch (e) {}
         };
-        video.onloadeddata = () => { if (!capture()) { try { video.currentTime = 1.0; } catch (e) {} } };
-        video.oncanplay = () => capture();
-        video.onseeked = () => { if (capture()) cleanup(); };
-        video.ontimeupdate = () => { if (capture()) cleanup(); };
+
+        video.onseeked = () => {
+          setTimeout(() => {
+            if (tryCapture()) cleanup();
+          }, 60);
+        };
+
         video.onerror = () => cleanup(null);
-        setTimeout(() => cleanup(null), 9000);
+        setTimeout(() => cleanup(null), 10000);
 
         video.src = blobUrl;
         video.load();
@@ -780,12 +789,12 @@ const UI = {
 
   _processThumbnailQueue() {
     // Purge legacy black thumbnails once
-    if (!localStorage.getItem('teledrive_vthumb_v5_cleared')) {
+    if (!localStorage.getItem('teledrive_vthumb_v6_cleared')) {
       try {
         Object.keys(localStorage).forEach(k => {
           if (k.startsWith('vthumb_')) localStorage.removeItem(k);
         });
-        localStorage.setItem('teledrive_vthumb_v5_cleared', '1');
+        localStorage.setItem('teledrive_vthumb_v6_cleared', '1');
       } catch (e) {}
     }
 
@@ -834,9 +843,9 @@ const UI = {
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 12000); // 12s timeout for remote video chunk load
+      const timeoutId = setTimeout(done, 15000); // 15s timeout for remote video chunk load
 
-      const captureFrame = () => {
+      const tryCapture = () => {
         if (finished) return false;
         try {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -848,15 +857,16 @@ const UI = {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            if (this.isCanvasBlankOrBlack(canvas) && seekAttempts < 2) {
+            if (this.isCanvasBlankOrBlack(canvas) && seekAttempts < 3) {
               seekAttempts++;
               try {
-                video.currentTime = Math.min(5.0, (video.duration || 10) / 1.5);
+                const jumpTime = seekAttempts === 1 ? Math.min(10.0, (video.duration || 60) * 0.2) : Math.min(30.0, (video.duration || 60) * 0.4);
+                video.currentTime = jumpTime;
               } catch (e) {}
               return false;
             }
 
-            let dataUrl;
+            let dataUrl = null;
             try {
               dataUrl = canvas.toDataURL('image/jpeg', 0.65);
             } catch (e) {
@@ -888,39 +898,17 @@ const UI = {
 
       video.onloadedmetadata = () => {
         try {
-          video.currentTime = Math.min(2.0, (video.duration || 10) / 2.5);
+          const initialSeek = Math.min(6.0, Math.max(2.0, (video.duration || 60) * 0.1));
+          video.currentTime = initialSeek;
         } catch (e) {}
-        try {
-          const playPromise = video.play();
-          if (playPromise !== undefined) {
-            playPromise.then(() => {
-              video.pause();
-              captureFrame();
-            }).catch(() => {});
-          }
-        } catch (e) {}
-      };
-
-      video.onloadeddata = () => {
-        if (!captureFrame()) {
-          try { video.currentTime = 1.0; } catch (e) { done(); }
-        }
-      };
-
-      video.oncanplay = () => {
-        captureFrame();
       };
 
       video.onseeked = () => {
-        if (captureFrame()) {
-          done();
-        }
-      };
-
-      video.ontimeupdate = () => {
-        if (captureFrame()) {
-          done();
-        }
+        setTimeout(() => {
+          if (tryCapture()) {
+            done();
+          }
+        }, 80);
       };
 
       video.onerror = () => {
