@@ -81,10 +81,10 @@ async function startServer() {
     console.log('[DB] Database ready.');
 
     const port = process.env.PORT || 3000;
-    const server = app.listen(port, () => {
+    const server = app.listen(port, '0.0.0.0', () => {
       console.log(`\n  ╔══════════════════════════════════════════╗`);
       console.log(`  ║  TeleDrive is running!                   ║`);
-      console.log(`  ║  Local:  http://localhost:${port}            ║`);
+      console.log(`  ║  Local:  http://0.0.0.0:${port}            ║`);
       console.log(`  ╚══════════════════════════════════════════╝\n`);
     });
 

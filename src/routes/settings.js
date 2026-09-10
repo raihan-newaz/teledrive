@@ -338,6 +338,10 @@ router.post('/import-db', uploadDb.single('database'), async (req, res) => {
       try { await fsPromises.unlink(uploadedPath); } catch (e) {}
     }
     console.error('Error importing database:', error);
+    return res.status(400).json({ error: error.message || 'Failed to import database: Invalid SQLite file' });
+  }
+});
+
 /**
  * GET /api/settings/backup-status
  * Get status of automated cloud backups
