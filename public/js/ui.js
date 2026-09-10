@@ -209,7 +209,35 @@ const UI = {
     const sk = document.getElementById('skeleton-container');
     const fc = document.getElementById('file-container');
     const empty = document.getElementById('empty-state');
-    if (sk) sk.style.display = 'grid';
+    if (sk) {
+      const mode = (typeof App !== 'undefined' && App.viewMode) || localStorage.getItem('teledrive_view_mode') || 'grid';
+      if (mode === 'list') {
+        sk.className = 'skeleton-container list-view';
+        sk.style.display = 'flex';
+        sk.innerHTML = Array(8).fill(`
+          <div class="skeleton-row">
+            <div class="skeleton-icon skeleton-shimmer"></div>
+            <div class="skeleton-text-group">
+              <div class="skeleton-line skeleton-title skeleton-shimmer"></div>
+              <div class="skeleton-line skeleton-sub skeleton-shimmer"></div>
+            </div>
+            <div class="skeleton-line skeleton-meta skeleton-shimmer"></div>
+          </div>
+        `).join('');
+      } else {
+        sk.className = 'skeleton-container grid-view';
+        sk.style.display = 'grid';
+        sk.innerHTML = Array(8).fill(`
+          <div class="skeleton-card">
+            <div class="skeleton-card-thumb skeleton-shimmer"></div>
+            <div class="skeleton-card-body">
+              <div class="skeleton-line skeleton-title skeleton-shimmer"></div>
+              <div class="skeleton-line skeleton-sub skeleton-shimmer"></div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
     if (fc) fc.style.display = 'none';
     if (empty) empty.style.display = 'none';
   },

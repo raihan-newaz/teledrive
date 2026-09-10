@@ -271,6 +271,81 @@ router.post('/clear-cache', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/settings/webdav
+ * Retrieve WebDAV configuration and status
+ */
+router.get('/webdav', async (req, res) => {
+  try {
+    const enabled = process.env.WEBDAV_ENABLED !== 'false';
+    const permissionMode = process.env.WEBDAV_PERMISSION_MODE || 'full';
+    const username = process.env.WEBDAV_USERNAME || 'admin';
+    const hasCustomPassword = Boolean(process.env.WEBDAV_PASSWORD);
+
+    return res.json({
+      enabled,
+      permissionMode,
+      username,
+      hasCustomPassword,
+      urlPath: '/webdav',
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch WebDAV settings' });
+  }
+});
+
+/**
+ * POST /api/settings/webdav
+ * Update WebDAV configuration, permission mode, and credentials
+ */
+router.post('/webdav', async (req, res) => {
+  try {
+    const { enabled, permissionMode, username, password } = req.body;
+
+    const updates = {};
+    if (enabled !== undefined) {
+      const val = enabled ? 'true' : 'false';
+      process.env.WEBDAV_ENABLED = val;
+      updates.WEBDAV_ENABLED = val;
+    }
+
+    if (permissionMode !== undefined) {
+      const validModes = ['full', 'readonly', 'safemode'];
+      const mode = validModes.includes(permissionMode) ? permissionMode : 'full';
+      process.env.WEBDAV_PERMISSION_MODE = mode;
+      updates.WEBDAV_PERMISSION_MODE = mode;
+    }
+
+    if (username !== undefined && username.trim()) {
+      const user = username.trim();
+      process.env.WEBDAV_USERNAME = user;
+      updates.WEBDAV_USERNAME = user;
+    }
+
+    if (password !== undefined && password.trim()) {
+      const pass = password.trim();
+      process.env.WEBDAV_PASSWORD = pass;
+      updates.WEBDAV_PASSWORD = pass;
+    }
+
+    await updateEnvVariables(updates);
+
+    return res.json({
+      success: true,
+      message: 'WebDAV settings updated successfully!',
+      settings: {
+        enabled: process.env.WEBDAV_ENABLED !== 'false',
+        permissionMode: process.env.WEBDAV_PERMISSION_MODE || 'full',
+        username: process.env.WEBDAV_USERNAME || 'admin',
+        hasCustomPassword: Boolean(process.env.WEBDAV_PASSWORD),
+      }
+    });
+  } catch (error) {
+    console.error('Error updating WebDAV settings:', error);
+    return res.status(500).json({ error: 'Failed to update WebDAV settings: ' + error.message });
+  }
+});
+
 const multer = require('multer');
 const tmpDbDir = path.join(__dirname, '../../data/tmp');
 if (!fs.existsSync(tmpDbDir)) {
@@ -299,7 +374,7 @@ router.get('/export-db', async (req, res) => {
 
 /**
  * POST /api/settings/import-db
- * Upload and restore teledrive.db with integrity validation
+ * Upload and restore database backup (.enc.db or .db) with automatic decryption and integrity check
  */
 router.post('/import-db', uploadDb.single('database'), async (req, res) => {
   let uploadedPath = null;
@@ -308,45 +383,40 @@ router.post('/import-db', uploadDb.single('database'), async (req, res) => {
       return res.status(400).json({ error: 'No database file provided' });
     }
     uploadedPath = req.file.path;
-    const dbPath = path.join(__dirname, '../../data/teledrive.db');
-    
-    // 1. Validate SQLite database file structure before replacing
-    const fileBuffer = await fsPromises.readFile(uploadedPath);
-    const initSqlJs = require('sql.js');
-    const SQL = await initSqlJs();
-    const testDb = new SQL.Database(fileBuffer);
-    
-    // Check tables
-    const testStmt = testDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='files'");
-    const hasFilesTable = testStmt.step();
-    testStmt.free();
-    testDb.close();
-
-    if (!hasFilesTable) {
-      throw new Error('Invalid TeleDrive database format');
-    }
-
-    // 2. Safe to replace active database
-    await fsPromises.copyFile(uploadedPath, dbPath);
-    try { await fsPromises.unlink(uploadedPath); } catch (e) {}
-    await db.initialize();
-
-    return res.json({
-      success: true,
-      message: 'Database imported and restored successfully!'
-    });
+    const backupService = require('../services/backup');
+    const result = await backupService.restoreBackupFromFile(uploadedPath, req.file.originalname);
+    return res.json(result);
   } catch (error) {
     if (uploadedPath && fs.existsSync(uploadedPath)) {
       try { await fsPromises.unlink(uploadedPath); } catch (e) {}
     }
     console.error('Error importing database:', error);
-    return res.status(400).json({ error: error.message || 'Failed to import database: Invalid SQLite file' });
+    return res.status(400).json({ error: error.message || 'Failed to restore database' });
+  }
+});
+
+/**
+ * POST /api/settings/restore-cloud-backup
+ * 1-Click Restore database directly from Telegram Cloud backup
+ */
+router.post('/restore-cloud-backup', async (req, res) => {
+  try {
+    const { telegramMessageId } = req.body;
+    if (!telegramMessageId) {
+      return res.status(400).json({ error: 'telegramMessageId is required' });
+    }
+    const backupService = require('../services/backup');
+    const result = await backupService.restoreBackupFromTelegram(telegramMessageId);
+    return res.json(result);
+  } catch (error) {
+    console.error('Error restoring cloud backup:', error);
+    return res.status(400).json({ error: error.message || 'Failed to restore cloud backup' });
   }
 });
 
 /**
  * GET /api/settings/backup-status
- * Get status of automated cloud backups
+ * Get status of automated cloud backups and history
  */
 router.get('/backup-status', async (req, res) => {
   try {

@@ -273,9 +273,10 @@ const App = {
     });
   },
 
-  async loadFolderContents(folderId) {
+  async loadFolderContents(folderId, options = {}) {
+    const silent = options.silent || false;
     const reqId = ++this._navReqCounter;
-    UI.showSkeletons();
+    if (!silent) UI.showSkeletons();
     try {
       const data = await API.getFolderContents(folderId);
       if (reqId !== this._navReqCounter) return;
@@ -293,15 +294,16 @@ const App = {
         UI.showToast('Failed to load files: ' + e.message, 'error');
       }
     } finally {
-      if (reqId === this._navReqCounter) {
+      if (reqId === this._navReqCounter && !silent) {
         UI.hideSkeletons();
       }
     }
   },
 
-  async loadStarredFiles() {
+  async loadStarredFiles(options = {}) {
+    const silent = options.silent || false;
     const reqId = ++this._navReqCounter;
-    UI.showSkeletons();
+    if (!silent) UI.showSkeletons();
     try {
       this.folders = [];
       const res = await API.getFiles({ starred: true });
@@ -315,15 +317,16 @@ const App = {
         UI.showToast('Failed to load starred files', 'error');
       }
     } finally {
-      if (reqId === this._navReqCounter) {
+      if (reqId === this._navReqCounter && !silent) {
         UI.hideSkeletons();
       }
     }
   },
 
-  async loadRecentFiles() {
+  async loadRecentFiles(options = {}) {
+    const silent = options.silent || false;
     const reqId = ++this._navReqCounter;
-    UI.showSkeletons();
+    if (!silent) UI.showSkeletons();
     try {
       this.folders = [];
       const res = await API.getFiles();
@@ -337,15 +340,16 @@ const App = {
         UI.showToast('Failed to load recent files', 'error');
       }
     } finally {
-      if (reqId === this._navReqCounter) {
+      if (reqId === this._navReqCounter && !silent) {
         UI.hideSkeletons();
       }
     }
   },
 
-  async loadTrashedFiles() {
+  async loadTrashedFiles(options = {}) {
+    const silent = options.silent || false;
     const reqId = ++this._navReqCounter;
-    UI.showSkeletons();
+    if (!silent) UI.showSkeletons();
     try {
       this.folders = [];
       const res = await API.getFiles({ trashed: true });
@@ -359,7 +363,7 @@ const App = {
         UI.showToast('Failed to load trash', 'error');
       }
     } finally {
-      if (reqId === this._navReqCounter) {
+      if (reqId === this._navReqCounter && !silent) {
         UI.hideSkeletons();
       }
     }
@@ -476,6 +480,81 @@ const App = {
         viewToggle.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`;
       }
     }
+  },
+
+  /**
+   * Google Drive style Instant Incremental File Insertion
+   * Inserts only the newly uploaded file into UI with 0 full-page reload/flicker
+   */
+  addUploadedFileLocally(file) {
+    if (!file || !file.id) return;
+
+    // Check if the uploaded file belongs to current active view
+    const isDriveView = this.currentView === 'drive';
+    const isRecentView = this.currentView === 'recent';
+    
+    // In drive view, match current folder
+    const matchesFolder = isDriveView && (
+      (String(file.folder_id || '') === String(this.currentFolderId || '')) ||
+      (!file.folder_id && !this.currentFolderId)
+    );
+
+    if (!matchesFolder && !isRecentView) {
+      // Background update storage stats only
+      this.loadStorageStats();
+      return;
+    }
+
+    // Check if file is already in this.files
+    const existingIndex = this.files.findIndex(f => String(f.id) === String(file.id));
+    if (existingIndex !== -1) {
+      this.files[existingIndex] = file;
+    } else {
+      this.files.unshift(file);
+    }
+
+    // Hide empty state & show files container
+    const emptyState = document.getElementById('empty-state');
+    const fileContainer = document.getElementById('file-container');
+    const filesSection = document.getElementById('files-section');
+    const filesGrid = document.getElementById('files-grid');
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (fileContainer) fileContainer.style.display = 'block';
+    if (filesSection) filesSection.style.display = 'block';
+
+    if (filesGrid) {
+      const existingCard = filesGrid.querySelector(`[data-id="${file.id}"]`);
+      const cardHtml = UI.renderFileCard(file);
+
+      if (existingCard) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHtml;
+        const newCard = tempDiv.firstElementChild;
+        if (newCard) {
+          filesGrid.replaceChild(newCard, existingCard);
+          newCard.classList.add('card-just-added');
+        }
+      } else {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHtml;
+        const newCard = tempDiv.firstElementChild;
+        if (newCard) {
+          newCard.classList.add('card-just-added');
+          if (filesGrid.firstChild) {
+            filesGrid.insertBefore(newCard, filesGrid.firstChild);
+          } else {
+            filesGrid.appendChild(newCard);
+          }
+        }
+      }
+
+      // Load thumbnail for this specific file if video or image
+      UI.loadVideoThumbnails([file]);
+    }
+
+    // Update storage stats in background
+    this.loadStorageStats();
   },
 
   // ─── Virtual Scrolling & Batch Windowing ───────────────────────────
@@ -1155,15 +1234,15 @@ const App = {
     }
   },
 
-  async refreshCurrentView() {
+  async refreshCurrentView(options = {}) {
     if (this.currentView === 'drive') {
-      await this.loadFolderContents(this.currentFolderId);
+      await this.loadFolderContents(this.currentFolderId, options);
     } else if (this.currentView === 'starred') {
-      await this.loadStarredFiles();
+      await this.loadStarredFiles(options);
     } else if (this.currentView === 'recent') {
-      await this.loadRecentFiles();
+      await this.loadRecentFiles(options);
     } else if (this.currentView === 'trash') {
-      await this.loadTrashedFiles();
+      await this.loadTrashedFiles(options);
     }
     this.loadStorageStats();
   },
@@ -2401,6 +2480,22 @@ const App = {
       };
     }
 
+    // Keep Screen Awake Preference
+    const prefWakeLock = document.getElementById('pref-wake-lock');
+    if (prefWakeLock) {
+      prefWakeLock.checked = localStorage.getItem('teledrive_wake_lock') !== 'false';
+      prefWakeLock.onchange = () => {
+        const enabled = prefWakeLock.checked;
+        localStorage.setItem('teledrive_wake_lock', enabled ? 'true' : 'false');
+        if (!enabled && typeof Upload !== 'undefined' && Upload.releaseWakeLock) {
+          Upload.releaseWakeLock();
+        } else if (enabled && typeof Upload !== 'undefined' && Upload.isUploading) {
+          Upload.acquireWakeLock();
+        }
+        UI.showToast(enabled ? 'Keep Screen Awake enabled for uploads!' : 'Keep Screen Awake disabled', 'info');
+      };
+    }
+
     // Clear Cache Action
     const btnClearCache = document.getElementById('btn-clear-cache');
     if (btnClearCache) {
@@ -2513,8 +2608,84 @@ const App = {
         } catch (err) {
           UI.showToast('Database restore failed: ' + (err.message || 'Invalid SQLite file'), 'error', 6000);
           btnImportTrigger.disabled = false;
-          btnImportTrigger.innerHTML = '<span>Restore Database</span>';
+          btnImportTrigger.innerHTML = '<span>Restore Backup File</span>';
           inputImportDb.value = '';
+        }
+      };
+    }
+
+    // WebDAV Settings Save Button
+    const btnSaveWebdav = document.getElementById('btn-save-webdav');
+    if (btnSaveWebdav) {
+      btnSaveWebdav.onclick = async () => {
+        const enabled = document.getElementById('webdav-enabled')?.checked;
+        const permissionMode = document.getElementById('webdav-permission-mode')?.value || 'full';
+        const username = document.getElementById('webdav-username')?.value || 'admin';
+        const password = document.getElementById('webdav-password')?.value || '';
+
+        btnSaveWebdav.disabled = true;
+        btnSaveWebdav.innerHTML = '<span>Saving...</span>';
+
+        try {
+          const res = await API.updateWebDavSettings({
+            enabled,
+            permissionMode,
+            username,
+            password: password || undefined
+          });
+          UI.showToast(res.message || 'WebDAV settings updated successfully!', 'success');
+          if (password) {
+            const passInput = document.getElementById('webdav-password');
+            if (passInput) passInput.value = '';
+          }
+        } catch (err) {
+          UI.showToast('Failed to update WebDAV settings: ' + err.message, 'error');
+        } finally {
+          btnSaveWebdav.disabled = false;
+          btnSaveWebdav.innerHTML = '<span>Save WebDAV Settings</span>';
+        }
+      };
+    }
+
+    // WebDAV Copy URL Button
+    const btnCopyWebdavUrl = document.getElementById('btn-copy-webdav-url');
+    if (btnCopyWebdavUrl) {
+      btnCopyWebdavUrl.onclick = () => {
+        const urlInput = document.getElementById('webdav-url');
+        if (urlInput && urlInput.value) {
+          navigator.clipboard.writeText(urlInput.value).then(() => {
+            UI.showToast('WebDAV Server URL copied to clipboard!', 'success');
+          }).catch(() => {
+            urlInput.select();
+            document.execCommand('copy');
+            UI.showToast('WebDAV Server URL copied!', 'success');
+          });
+        }
+      };
+    }
+
+    // WebDAV Instant Enable/Disable Toggle
+    const toggleWebdavEnabled = document.getElementById('webdav-enabled');
+    if (toggleWebdavEnabled) {
+      toggleWebdavEnabled.onchange = async () => {
+        try {
+          await API.updateWebDavSettings({ enabled: toggleWebdavEnabled.checked });
+          UI.showToast(toggleWebdavEnabled.checked ? 'WebDAV Network Drive enabled!' : 'WebDAV Network Drive disabled', 'info');
+        } catch (err) {
+          UI.showToast('Error updating WebDAV state: ' + err.message, 'error');
+        }
+      };
+    }
+
+    // WebDAV Instant Permission Mode change
+    const selectWebdavMode = document.getElementById('webdav-permission-mode');
+    if (selectWebdavMode) {
+      selectWebdavMode.onchange = async () => {
+        try {
+          await API.updateWebDavSettings({ permissionMode: selectWebdavMode.value });
+          UI.showToast('WebDAV Permission Mode updated!', 'info');
+        } catch (err) {
+          UI.showToast('Error updating permission mode: ' + err.message, 'error');
         }
       };
     }
@@ -2546,11 +2717,15 @@ const App = {
     // Sync upload preferences
     const prefChunkSize = document.getElementById('pref-chunk-size');
     const prefConcurrent = document.getElementById('pref-concurrent-chunks');
+    const prefWakeLock = document.getElementById('pref-wake-lock');
     if (prefChunkSize) {
       prefChunkSize.value = localStorage.getItem('teledrive_chunk_size') || '314572800';
     }
     if (prefConcurrent) {
       prefConcurrent.value = localStorage.getItem('teledrive_concurrent_chunks') || '2';
+    }
+    if (prefWakeLock) {
+      prefWakeLock.checked = localStorage.getItem('teledrive_wake_lock') !== 'false';
     }
 
     // Fetch and populate live settings data
@@ -2599,25 +2774,107 @@ const App = {
       }
 
       await this.loadBackupStatus();
+      await this.loadWebDavSettings();
     } catch (e) {
       console.warn('Could not fetch settings details:', e);
+    }
+  },
+
+  async loadWebDavSettings() {
+    try {
+      const urlInput = document.getElementById('webdav-url');
+      if (urlInput) {
+        urlInput.value = `${window.location.origin}/webdav`;
+      }
+      const data = await API.getWebDavSettings();
+      if (!data) return;
+
+      const enabledToggle = document.getElementById('webdav-enabled');
+      const modeSelect = document.getElementById('webdav-permission-mode');
+      const usernameInput = document.getElementById('webdav-username');
+
+      if (enabledToggle) enabledToggle.checked = !!data.enabled;
+      if (modeSelect && data.permissionMode) modeSelect.value = data.permissionMode;
+      if (usernameInput && data.username) usernameInput.value = data.username;
+      if (urlInput && data.webdavUrl) urlInput.value = data.webdavUrl;
+    } catch (e) {
+      console.warn('Failed to load WebDAV settings:', e);
     }
   },
 
   async loadBackupStatus() {
     try {
       const statusEl = document.getElementById('backup-status-text');
+      const listContainer = document.getElementById('cloud-backups-container');
+      const listEl = document.getElementById('cloud-backups-list');
       if (!statusEl) return;
+
       const data = await API.getBackupStatus();
       if (data && data.latestBackup) {
-        const d = new Date(data.latestBackup.created_at);
         const timeAgo = UI.formatDate(data.latestBackup.created_at);
         statusEl.innerHTML = `Last backup created: <strong>${timeAgo}</strong> (${UI.formatFileSize(data.latestBackup.size)} encrypted snapshot · Msg #${data.latestBackup.telegram_message_id})`;
       } else {
         statusEl.innerHTML = 'Automatic schedule active. First automated cloud backup will run within 24h.';
       }
+
+      if (listContainer && listEl) {
+        if (data && data.history && data.history.length > 0) {
+          listContainer.style.display = 'block';
+          listEl.innerHTML = data.history.map(b => {
+            const timeStr = UI.formatDate(b.created_at);
+            const sizeStr = UI.formatFileSize(b.size);
+            return `
+              <div class="cache-action-box" style="padding: 10px 14px; background: var(--bg-hover);">
+                <div>
+                  <strong style="font-size: 13px;">${b.file_name}</strong>
+                  <p style="font-size: 12px; margin: 2px 0 0; color: var(--text-secondary);">
+                    ${timeStr} · ${sizeStr} · Telegram Msg #${b.telegram_message_id}
+                  </p>
+                </div>
+                <button type="button" class="btn-secondary btn-restore-cloud-backup" data-msg-id="${b.telegram_message_id}" style="padding: 6px 12px; font-size: 12px;">
+                  <span>⚡ Restore</span>
+                </button>
+              </div>
+            `;
+          }).join('');
+
+          // Attach restore handlers
+          listEl.querySelectorAll('.btn-restore-cloud-backup').forEach(btn => {
+            btn.onclick = async () => {
+              const msgId = btn.getAttribute('data-msg-id');
+              const confirmed = await UI.confirm({
+                title: 'Restore Database from Cloud?',
+                message: `Are you sure you want to restore database from Telegram Cloud Backup (Msg #${msgId})?`,
+                description: 'TeleDrive will download the encrypted backup from Telegram, decrypt it using your master encryption key, and replace the database.',
+                icon: 'warning',
+                confirmText: 'Restore & Reload',
+                confirmType: 'danger',
+                cancelText: 'Cancel'
+              });
+
+              if (!confirmed) return;
+
+              btn.disabled = true;
+              btn.innerHTML = '<span>⏳ Restoring...</span>';
+              UI.showToast('Downloading & decrypting cloud backup from Telegram...', 'info', 10000);
+
+              try {
+                const res = await API.restoreCloudBackup(msgId);
+                UI.showToast(res.message || 'Database restored successfully! Reloading...', 'success', 4000);
+                setTimeout(() => window.location.reload(), 1500);
+              } catch (err) {
+                UI.showToast('Cloud restore failed: ' + err.message, 'error', 6000);
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚡ Restore</span>';
+              }
+            };
+          });
+        } else {
+          listContainer.style.display = 'none';
+        }
+      }
     } catch (e) {
-      // Ignore
+      console.warn('Failed to load backup status:', e);
     }
   },
 

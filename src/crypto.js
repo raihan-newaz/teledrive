@@ -152,12 +152,126 @@ function decryptStream(readStream, passphrase, saltBase64, ivBase64, authTagBase
   return readStream.pipe(decipher);
 }
 
+const BACKUP_MAGIC = Buffer.from('TELEBACK'); // 8 bytes identifier
+
+/**
+ * Encrypts a database snapshot file with self-contained metadata header (Magic + Salt + IV + Ciphertext + AuthTag)
+ * @param {string} inputPath - Path to plain db file
+ * @param {string} outputPath - Path to write .enc.db file
+ * @param {string} passphrase - Encryption passphrase
+ * @returns {Promise<Object>}
+ */
+function encryptBackupFile(inputPath, outputPath, passphrase) {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(12);
+    const key = crypto.pbkdf2Sync(passphrase, salt, 310000, 32, 'sha512');
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+    const readStream = fs.createReadStream(inputPath);
+    const writeStream = fs.createWriteStream(outputPath);
+
+    // Write header: MAGIC (8B) + SALT (16B) + IV (12B) = 36 bytes header
+    writeStream.write(Buffer.concat([BACKUP_MAGIC, salt, iv]));
+
+    readStream.on('error', reject);
+    writeStream.on('error', reject);
+    cipher.on('error', reject);
+
+    readStream.pipe(cipher).pipe(writeStream, { end: false });
+
+    cipher.on('end', () => {
+      const authTag = cipher.getAuthTag();
+      writeStream.end(authTag, () => {
+        resolve({
+          salt: salt.toString('base64'),
+          iv: iv.toString('base64'),
+          authTag: authTag.toString('base64')
+        });
+      });
+    });
+  });
+}
+
+/**
+ * Decrypts a self-contained encrypted backup file
+ * @param {string} inputPath - Path to .enc.db file
+ * @param {string} outputPath - Path to write plain db file
+ * @param {string} passphrase - Encryption passphrase
+ * @returns {Promise<void>}
+ */
+function decryptBackupFile(inputPath, outputPath, passphrase) {
+  return new Promise((resolve, reject) => {
+    fs.stat(inputPath, (err, stats) => {
+      if (err) return reject(err);
+      const fileSize = stats.size;
+      const HEADER_SIZE = 8 + 16 + 12; // 36 bytes
+      const MIN_SIZE = HEADER_SIZE + 16; // 52 bytes
+
+      if (fileSize < MIN_SIZE) {
+        return reject(new Error('Invalid backup file: File is too small'));
+      }
+
+      let fd;
+      try {
+        fd = fs.openSync(inputPath, 'r');
+        const headerBuf = Buffer.alloc(HEADER_SIZE);
+        fs.readSync(fd, headerBuf, 0, HEADER_SIZE, 0);
+
+        const magic = headerBuf.subarray(0, 8);
+        if (!magic.equals(BACKUP_MAGIC)) {
+          fs.closeSync(fd);
+          return reject(new Error('Invalid backup format: Missing TELEBACK signature'));
+        }
+
+        const salt = headerBuf.subarray(8, 24); // 16 bytes
+        const iv = headerBuf.subarray(24, 36);   // 12 bytes
+
+        // Read authTag (last 16 bytes)
+        const authTag = Buffer.alloc(16);
+        fs.readSync(fd, authTag, 0, 16, fileSize - 16);
+        fs.closeSync(fd);
+
+        const encryptedDataSize = fileSize - HEADER_SIZE - 16;
+        if (encryptedDataSize < 0) {
+          return reject(new Error('Corrupt backup file: Invalid payload length'));
+        }
+
+        const key = crypto.pbkdf2Sync(passphrase, salt, 310000, 32, 'sha512');
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+
+        const readStream = fs.createReadStream(inputPath, {
+          start: HEADER_SIZE,
+          end: fileSize - 17
+        });
+        const writeStream = fs.createWriteStream(outputPath);
+
+        readStream.on('error', reject);
+        writeStream.on('error', reject);
+        decipher.on('error', () => {
+          reject(new Error('Decryption failed: Incorrect encryption key or corrupted backup file'));
+        });
+
+        readStream.pipe(decipher).pipe(writeStream);
+        writeStream.on('finish', resolve);
+      } catch (openErr) {
+        if (fd) try { fs.closeSync(fd); } catch (e) {}
+        reject(openErr);
+      }
+    });
+  });
+}
+
 module.exports = {
+  BACKUP_MAGIC,
   generateSalt,
   generateIV,
   deriveKey,
   encryptFile,
   decryptFile,
+  encryptBackupFile,
+  decryptBackupFile,
   encryptStream,
   decryptStream
 };

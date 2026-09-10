@@ -34,12 +34,16 @@ const foldersRouter = require('./src/routes/folders');
 const setupRouter = require('./src/routes/setup');
 const settingsRouter = require('./src/routes/settings');
 const shareRouter = require('./src/routes/share');
+const webdavRouter = require('./src/routes/webdav');
 
 const app = express();
 
 // Apply security middleware
 const securityMiddleware = getSecurityMiddleware();
 securityMiddleware.forEach(mw => app.use(mw));
+
+// WebDAV Network Storage Engine (mounted before body parsers to allow streaming PUT payloads)
+app.use('/webdav', webdavRouter);
 
 // Core middleware
 app.use(express.json({ limit: '10mb' }));

@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>TeleDrive — Unlimited Secure Cloud Storage</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg">
@@ -395,14 +395,7 @@
         </div>
 
         <!-- SKELETON LOADER -->
-        <div class="skeleton-container" id="skeleton-container" style="display:none;">
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-        </div>
+        <div class="skeleton-container grid-view" id="skeleton-container" style="display:none;"></div>
 
         <!-- FILE & FOLDER CONTAINER -->
         <div class="file-container" id="file-container">
@@ -785,6 +778,12 @@
         </svg>
         <span>Backup</span>
       </button>
+      <button class="settings-tab-btn" data-tab="webdav">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M4 6h16v10H4V6zm16 12H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2zm-7 2h2v2h-2v-2zm-6 0h4v2H7v-2zm10 0h4v2h-4v-2z"/>
+        </svg>
+        <span>Network Drive</span>
+      </button>
     </div>
 
     <!-- TAB 1: SECURITY & PASSWORD -->
@@ -961,6 +960,16 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+        <div class="pref-row">
+          <div class="pref-info">
+            <strong>Keep Screen Awake During Uploads</strong>
+            <span>Prevents iPhone, mobile, and desktop displays from sleeping while uploads are in progress</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="pref-wake-lock" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -1063,7 +1072,7 @@
       <div class="settings-section">
         <div class="settings-section-title">
           <h4>Telegram Cloud Automated Backups</h4>
-          <p>Automatic 24-hour AES-256 encrypted database snapshots uploaded directly to your private Telegram storage channel.</p>
+          <p>Automatic 24-hour AES-256-GCM encrypted database snapshots uploaded directly to your private Telegram storage channel.</p>
         </div>
         <div class="cache-action-box">
           <div>
@@ -1074,17 +1083,22 @@
             <span>⚡ Backup Now</span>
           </button>
         </div>
+        <!-- Recent Cloud Snapshots List -->
+        <div id="cloud-backups-container" style="margin-top: 14px; display: none;">
+          <h5 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Recent Cloud Snapshots (1-Click Restore)</h5>
+          <div id="cloud-backups-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
       </div>
 
       <div class="settings-section">
         <div class="settings-section-title">
           <h4>Export Database Backup (Local)</h4>
-          <p>Download a complete raw backup of your file indexes, folders hierarchy, and encryption metadata.</p>
+          <p>Download a complete backup of your file indexes, folders hierarchy, and encryption metadata.</p>
         </div>
         <div class="cache-action-box">
           <div>
             <strong>Download SQLite Database</strong>
-            <p>Save <code>teledrive.db</code> to your local machine as a safe backup or for migrating to another server.</p>
+            <p>Save <code>teledrive.db</code> to your local machine as a safe offline backup or for migrating to another server.</p>
           </div>
           <button type="button" class="btn-primary" id="btn-export-db">
             <span>Export Database</span>
@@ -1094,19 +1108,124 @@
 
       <div class="settings-section">
         <div class="settings-section-title">
-          <h4>Import / Restore Database</h4>
-          <p>Restore or migrate files metadata from another TeleDrive installation (e.g. from Localhost to VPS).</p>
+          <h4>Import / Restore Database File</h4>
+          <p>Restore from an encrypted backup (<code>.enc.db</code>) or a raw database (<code>.db</code>) with automatic AES-256 decryption & integrity validation.</p>
         </div>
         <div class="cache-action-box">
           <div>
-            <strong>Upload Database File</strong>
-            <p>Select a previously exported <code>.db</code> file. (Requires matching encryption passphrase).</p>
+            <strong>Upload Backup File (.enc.db / .db)</strong>
+            <p>Select any previous <code>.enc.db</code> or <code>.db</code> file to decrypt and restore immediately.</p>
           </div>
           <div style="display: flex; gap: 8px;">
-            <input type="file" id="import-db-file" accept=".db,.sqlite" style="display:none;">
+            <input type="file" id="import-db-file" accept=".enc.db,.db,.sqlite" style="display:none;">
             <button type="button" class="btn-secondary" id="btn-import-db-trigger">
-              <span>Restore Database</span>
+              <span>Restore Backup File</span>
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: NETWORK DRIVE (WEBDAV) -->
+    <div class="settings-tab-pane" id="pane-webdav" style="display:none;">
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <h4>Windows & Mobile Network Location (WebDAV)</h4>
+          <p>Mount TeleDrive directly as a local disk in Windows File Explorer, macOS Finder, or iOS Files app.</p>
+        </div>
+
+        <div class="pref-row" style="margin-bottom: 16px;">
+          <div class="pref-info">
+            <strong>Enable WebDAV Network Drive</strong>
+            <span>Allows native OS file managers to connect and sync with TeleDrive</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="webdav-enabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="pref-row" style="margin-bottom: 16px;">
+          <div class="pref-info">
+            <strong>Access Permission Mode</strong>
+            <span>Control read, write, edit, and deletion permissions for network clients</span>
+          </div>
+          <div class="pref-control">
+            <select id="webdav-permission-mode" class="settings-select">
+              <option value="full" selected>🔓 Full Access (Read, Write, Edit & Delete)</option>
+              <option value="readonly">👁️ Read-Only Mode (View & Download only)</option>
+              <option value="safemode">🛡️ Safe Mode (Read & Upload, Delete Disabled)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <h4>Network Drive Connection Details</h4>
+          <p>Use these credentials to connect from your computer or mobile device</p>
+        </div>
+
+        <div class="form-group">
+          <label>WebDAV Server URL</label>
+          <div class="input-with-action">
+            <input type="text" id="webdav-url" readonly style="font-family: monospace; background: var(--bg-hover);">
+            <button type="button" class="btn-secondary icon-btn-sm" id="btn-copy-webdav-url" title="Copy URL" style="padding: 0 12px; height: 38px; font-size: 12px;">
+              <span>📋 Copy</span>
+            </button>
+          </div>
+          <small class="hint">Use this address in Windows "Add a network location", macOS "Connect to Server", or iOS Files app.</small>
+        </div>
+
+        <form id="form-webdav-settings" onsubmit="return false;">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="webdav-username">WebDAV Username <span class="req">*</span></label>
+              <input type="text" id="webdav-username" placeholder="admin" required autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="webdav-password">WebDAV Password</label>
+              <div class="input-with-action">
+                <input type="password" id="webdav-password" placeholder="Leave empty to use Master Password" autocomplete="new-password">
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="webdav-password" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="btn-primary" id="btn-save-webdav">
+              <span>Save WebDAV Settings</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <h4>Connection Instructions</h4>
+          <p>Quick guides to map TeleDrive on your favorite operating system</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
+            <strong style="font-size: 13px; color: var(--accent-color);">🪟 Windows File Explorer</strong>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+              1. Open <strong>File Explorer</strong>, right-click <strong>This PC</strong> ➜ select <strong>Add a network location</strong>.<br>
+              2. Click Next ➜ select <em>"Choose a custom network location"</em>.<br>
+              3. Paste the WebDAV Server URL above and enter your Username & Password.
+            </p>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
+            <strong style="font-size: 13px; color: var(--accent-color);">🍏 Apple Mac (Finder)</strong>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+              1. Open <strong>Finder</strong>, press <kbd>Cmd</kbd> + <kbd>K</kbd> (or click <em>Go ➜ Connect to Server</em>).<br>
+              2. Paste the WebDAV URL and click <strong>Connect</strong> with your credentials.
+            </p>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
+            <strong style="font-size: 13px; color: var(--accent-color);">📱 iPhone / iPad (Files App)</strong>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+              1. Open the <strong>Files</strong> app ➜ tap the <strong>...</strong> (More) icon at the top right ➜ select <strong>Connect to Server</strong>.<br>
+              2. Enter the WebDAV URL, choose Registered User, and sign in.
+            </p>
           </div>
         </div>
       </div>

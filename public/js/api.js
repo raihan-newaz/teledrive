@@ -314,10 +314,23 @@ const API = {
     return this.request('POST', '/api/settings/backup-now');
   },
 
+  async restoreCloudBackup(telegramMessageId) {
+    return this.request('POST', '/api/settings/restore-cloud-backup', { telegramMessageId });
+  },
+
   async importDatabase(file) {
     const formData = new FormData();
     formData.append('database', file);
     return this.request('POST', '/api/settings/import-db', formData);
+  },
+
+  // ─── WebDAV Network Storage ────────────────────────────────────────
+  async getWebDavSettings() {
+    return this.request('GET', '/api/settings/webdav');
+  },
+
+  async updateWebDavSettings(data) {
+    return this.request('POST', '/api/settings/webdav', data);
   },
 
   // ─── File Sharing ──────────────────────────────────────────────────

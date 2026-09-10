@@ -4,6 +4,71 @@
 const Upload = {
   queue: [],
   isUploading: false,
+  wakeLock: null,
+  _wakeLockFallbackVideo: null,
+
+  get isWakeLockEnabled() {
+    return localStorage.getItem('teledrive_wake_lock') !== 'false';
+  },
+
+  async acquireWakeLock() {
+    if (!this.isWakeLockEnabled) return;
+    try {
+      if ('wakeLock' in navigator && navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
+        if (!this.wakeLock) {
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLock.addEventListener('release', () => {
+            this.wakeLock = null;
+          });
+          console.log('[Upload] Screen Wake Lock active (iPhone/Mobile display kept awake)');
+        }
+      } else {
+        this._acquireVideoWakeLockFallback();
+      }
+    } catch (err) {
+      console.warn('[Upload] Screen Wake Lock warning:', err.message);
+      this._acquireVideoWakeLockFallback();
+    }
+  },
+
+  _acquireVideoWakeLockFallback() {
+    if (this._wakeLockFallbackVideo) return;
+    try {
+      const vid = document.createElement('video');
+      vid.setAttribute('playsinline', '');
+      vid.setAttribute('muted', '');
+      vid.setAttribute('loop', '');
+      vid.muted = true;
+      vid.style.position = 'fixed';
+      vid.style.top = '-9999px';
+      vid.style.left = '-9999px';
+      vid.style.width = '1px';
+      vid.style.height = '1px';
+      vid.style.opacity = '0';
+      vid.style.pointerEvents = 'none';
+      vid.src = 'data:video/webm;base64,GkXfo0AgQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYUkoAk4EBq1ZfVlA4U2VnbWVudGF0aW9uTXZpZXcAU2VnbWVudERhdGUK';
+      document.body.appendChild(vid);
+      vid.play().catch(() => {});
+      this._wakeLockFallbackVideo = vid;
+    } catch (e) {}
+  },
+
+  releaseWakeLock() {
+    if (this.wakeLock) {
+      try {
+        this.wakeLock.release().catch(() => {});
+      } catch (e) {}
+      this.wakeLock = null;
+      console.log('[Upload] Screen Wake Lock released');
+    }
+    if (this._wakeLockFallbackVideo) {
+      try {
+        this._wakeLockFallbackVideo.pause();
+        this._wakeLockFallbackVideo.remove();
+      } catch (e) {}
+      this._wakeLockFallbackVideo = null;
+    }
+  },
 
   // Dynamic user-configurable chunk size (up to 1.9GB) & concurrency
   get CHUNK_SIZE() {
@@ -145,7 +210,7 @@ const Upload = {
     }
 
     if (hasRelativePaths && typeof App !== 'undefined' && App.refreshCurrentView) {
-      App.refreshCurrentView();
+      App.refreshCurrentView({ silent: true });
     }
 
     this.showUploadPanel();
@@ -160,17 +225,19 @@ const Upload = {
     const nextItem = this.queue.find(item => item.status === 'pending');
     if (!nextItem) {
       this.isUploading = false;
+      this.releaseWakeLock();
       this.renderQueue();
       return;
     }
 
     this.isUploading = true;
+    await this.acquireWakeLock();
     nextItem.status = 'uploading';
     nextItem.statusText = '';
     this.renderQueue();
 
     try {
-      await this.uploadFile(nextItem);
+      const uploadResult = await this.uploadFile(nextItem);
       if (nextItem.status === 'cancelled') {
         return;
       }
@@ -180,7 +247,13 @@ const Upload = {
       nextItem.etaText = '';
       nextItem.statusText = 'Completed';
       UI.showToast(`Uploaded "${nextItem.file.name}" to Telegram`, 'success');
-      App.refreshCurrentView();
+      
+      // Google Drive-style Instant Incremental Insertion (Zero full-page reload)
+      if (uploadResult && uploadResult.file && typeof App !== 'undefined' && App.addUploadedFileLocally) {
+        App.addUploadedFileLocally(uploadResult.file);
+      } else if (typeof App !== 'undefined' && App.refreshCurrentView) {
+        App.refreshCurrentView({ silent: true });
+      }
     } catch (error) {
       if (nextItem.status === 'cancelled') {
         nextItem.speedText = '';
@@ -844,7 +917,7 @@ const Upload = {
         if (files && files.length > 0) {
           await this.addFiles(files, App.currentFolderId);
           if (typeof App !== 'undefined' && App.refreshCurrentView) {
-            App.refreshCurrentView();
+            App.refreshCurrentView({ silent: true });
           }
         }
       }
@@ -867,6 +940,17 @@ const Upload = {
         panel.style.display = 'none';
       };
     }
+
+    this.initWakeLockListeners();
+  },
+
+  initWakeLockListeners() {
+    if (typeof document === 'undefined') return;
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && this.isUploading && this.isWakeLockEnabled) {
+        await this.acquireWakeLock();
+      }
+    });
   }
 };
 
