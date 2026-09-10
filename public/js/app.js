@@ -374,12 +374,25 @@ const App = {
     }
   },
 
-  async loadStorageStats() {
+  _storageStatsTimer: null,
+  loadStorageStats(immediate = false) {
+    if (immediate) {
+      if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
+      this._doLoadStorageStats();
+      return;
+    }
+    if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
+    this._storageStatsTimer = setTimeout(() => {
+      this._doLoadStorageStats();
+    }, 1200);
+  },
+
+  async _doLoadStorageStats() {
     try {
       const stats = await API.getStorageStats();
       const storageText = document.getElementById('storage-text');
-      if (storageText) {
-        storageText.textContent = `${stats.totalFiles} files · ${UI.formatFileSize(stats.totalSize)} used`;
+      if (storageText && stats) {
+        storageText.textContent = `${stats.totalFiles || 0} files · ${UI.formatFileSize(stats.totalSize || 0)} used`;
       }
     } catch (e) {
       // Ignore
@@ -498,19 +511,28 @@ const App = {
     const isDriveView = this.currentView === 'drive';
     const isRecentView = this.currentView === 'recent';
     
-    // In drive view, match current folder
-    const matchesFolder = isDriveView && (
-      (String(file.folder_id || '') === String(this.currentFolderId || '')) ||
-      (!file.folder_id && !this.currentFolderId)
-    );
+    // In drive view, match current folder (both null for root, or exact ID match)
+    const targetFolderId = (file.folder_id && file.folder_id !== 'null') ? String(file.folder_id) : null;
+    const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
+    const matchesFolder = isDriveView && (targetFolderId === currentFolderId);
 
     if (!matchesFolder && !isRecentView) {
-      // Background update storage stats only
+      // Not currently viewing the folder this file was uploaded to: do not touch DOM!
       this.loadStorageStats();
       return;
     }
 
-    // Check if file is already in this.files
+    // Check active file filter
+    if (this.activeFilter && this.activeFilter !== 'all') {
+      const cat = UI.getFileTypeCategory(file.mime_type);
+      if (cat !== this.activeFilter) {
+        this.loadStorageStats();
+        return;
+      }
+    }
+
+    // 1. Update State Maps & Array
+    this.filesMap.set(String(file.id), { ...file, type: 'file' });
     const existingIndex = this.files.findIndex(f => String(f.id) === String(file.id));
     if (existingIndex !== -1) {
       this.files[existingIndex] = file;
@@ -518,7 +540,7 @@ const App = {
       this.files.unshift(file);
     }
 
-    // Hide empty state & show files container
+    // 2. Ensure container visibility
     const emptyState = document.getElementById('empty-state');
     const fileContainer = document.getElementById('file-container');
     const filesSection = document.getElementById('files-section');
@@ -528,38 +550,187 @@ const App = {
     if (fileContainer) fileContainer.style.display = 'block';
     if (filesSection) filesSection.style.display = 'block';
 
+    // 3. In-place DOM Insertion / Update
     if (filesGrid) {
       const existingCard = filesGrid.querySelector(`[data-id="${file.id}"]`);
       const cardHtml = UI.renderFileCard(file);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cardHtml;
+      const newCard = tempDiv.firstElementChild;
 
-      if (existingCard) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = cardHtml;
-        const newCard = tempDiv.firstElementChild;
-        if (newCard) {
+      if (newCard) {
+        if (existingCard) {
           filesGrid.replaceChild(newCard, existingCard);
-          newCard.classList.add('card-just-added');
-        }
-      } else {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = cardHtml;
-        const newCard = tempDiv.firstElementChild;
-        if (newCard) {
-          newCard.classList.add('card-just-added');
+        } else {
           if (filesGrid.firstChild) {
             filesGrid.insertBefore(newCard, filesGrid.firstChild);
           } else {
             filesGrid.appendChild(newCard);
           }
         }
+        newCard.classList.add('card-just-added');
+        setTimeout(() => newCard.classList.remove('card-just-added'), 1500);
       }
 
-      // Load thumbnail for this specific file if video or image
+      // Load thumbnail only for this newly added file
       UI.loadVideoThumbnails([file]);
     }
 
-    // Update storage stats in background
+    // 4. Update storage stats in background (debounced)
     this.loadStorageStats();
+  },
+
+  addUploadedFolderLocally(folder) {
+    if (!folder || !folder.id) return;
+
+    const isDriveView = this.currentView === 'drive';
+    const targetParentId = (folder.parent_id && folder.parent_id !== 'null') ? String(folder.parent_id) : null;
+    const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
+    const matchesFolder = isDriveView && (targetParentId === currentFolderId);
+
+    if (!matchesFolder) return;
+
+    this.foldersMap.set(String(folder.id), { ...folder, type: 'folder' });
+    const existingIndex = this.folders.findIndex(f => String(f.id) === String(folder.id));
+    if (existingIndex !== -1) {
+      this.folders[existingIndex] = folder;
+    } else {
+      this.folders.unshift(folder);
+    }
+
+    const emptyState = document.getElementById('empty-state');
+    const fileContainer = document.getElementById('file-container');
+    const foldersSection = document.getElementById('folders-section');
+    const foldersGrid = document.getElementById('folders-grid');
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (fileContainer) fileContainer.style.display = 'block';
+    if (foldersSection) foldersSection.style.display = 'block';
+
+    if (foldersGrid) {
+      const existingCard = foldersGrid.querySelector(`[data-id="${folder.id}"]`);
+      const cardHtml = UI.renderFolderCard(folder);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cardHtml;
+      const newCard = tempDiv.firstElementChild;
+
+      if (newCard) {
+        if (existingCard) {
+          filesGrid.replaceChild(newCard, existingCard);
+        } else {
+          if (foldersGrid.firstChild) {
+            foldersGrid.insertBefore(newCard, foldersGrid.firstChild);
+          } else {
+            foldersGrid.appendChild(newCard);
+          }
+        }
+        newCard.classList.add('card-just-added');
+        setTimeout(() => newCard.classList.remove('card-just-added'), 1500);
+      }
+    }
+  },
+
+  removeFileLocally(fileId) {
+    if (!fileId) return;
+    this.files = this.files.filter(f => String(f.id) !== String(fileId));
+    this.filesMap.delete(String(fileId));
+
+    const filesGrid = document.getElementById('files-grid');
+    if (filesGrid) {
+      const card = filesGrid.querySelector(`[data-id="${fileId}"]`);
+      if (card) {
+        card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.9)';
+        setTimeout(() => card.remove(), 200);
+      }
+    }
+
+    if (this.files.length === 0) {
+      const filesSection = document.getElementById('files-section');
+      if (filesSection) filesSection.style.display = 'none';
+      if (this.folders.length === 0) {
+        const fileContainer = document.getElementById('file-container');
+        const emptyState = document.getElementById('empty-state');
+        if (fileContainer) fileContainer.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'flex';
+      }
+    }
+    this.loadStorageStats();
+  },
+
+  removeFolderLocally(folderId) {
+    if (!folderId) return;
+    this.folders = this.folders.filter(f => String(f.id) !== String(folderId));
+    this.foldersMap.delete(String(folderId));
+
+    const foldersGrid = document.getElementById('folders-grid');
+    if (foldersGrid) {
+      const card = foldersGrid.querySelector(`[data-id="${folderId}"]`);
+      if (card) {
+        card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.9)';
+        setTimeout(() => card.remove(), 200);
+      }
+    }
+
+    if (this.folders.length === 0) {
+      const foldersSection = document.getElementById('folders-section');
+      if (foldersSection) foldersSection.style.display = 'none';
+      if (this.files.length === 0) {
+        const fileContainer = document.getElementById('file-container');
+        const emptyState = document.getElementById('empty-state');
+        if (fileContainer) fileContainer.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'flex';
+      }
+    }
+  },
+
+  updateFileLocally(file) {
+    if (!file || !file.id) return;
+    this.filesMap.set(String(file.id), { ...file, type: 'file' });
+    const idx = this.files.findIndex(f => String(f.id) === String(file.id));
+    if (idx !== -1) {
+      this.files[idx] = file;
+    }
+
+    const filesGrid = document.getElementById('files-grid');
+    if (filesGrid) {
+      const existingCard = filesGrid.querySelector(`[data-id="${file.id}"]`);
+      if (existingCard) {
+        const cardHtml = UI.renderFileCard(file);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHtml;
+        const newCard = tempDiv.firstElementChild;
+        if (newCard) {
+          filesGrid.replaceChild(newCard, existingCard);
+        }
+      }
+    }
+  },
+
+  updateFolderLocally(folder) {
+    if (!folder || !folder.id) return;
+    this.foldersMap.set(String(folder.id), { ...folder, type: 'folder' });
+    const idx = this.folders.findIndex(f => String(f.id) === String(folder.id));
+    if (idx !== -1) {
+      this.folders[idx] = folder;
+    }
+
+    const foldersGrid = document.getElementById('folders-grid');
+    if (foldersGrid) {
+      const existingCard = foldersGrid.querySelector(`[data-id="${folder.id}"]`);
+      if (existingCard) {
+        const cardHtml = UI.renderFolderCard(folder);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cardHtml;
+        const newCard = tempDiv.firstElementChild;
+        if (newCard) {
+          foldersGrid.replaceChild(newCard, existingCard);
+        }
+      }
+    }
   },
 
   // ─── Virtual Scrolling & Batch Windowing ───────────────────────────
@@ -1723,10 +1894,12 @@ const App = {
         const name = folderNameInput.value.trim();
         if (!name) return;
         try {
-          await API.createFolder(name, this.currentFolderId);
+          const res = await API.createFolder(name, this.currentFolderId);
           UI.showToast(`Folder "${name}" created`, 'success');
           UI.hideAllModals();
-          this.refreshCurrentView();
+          if (res) {
+            this.addUploadedFolderLocally(res);
+          }
         } catch (e) {
           UI.showToast('Could not create folder: ' + e.message, 'error');
         }
@@ -3097,21 +3270,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.file) return;
-
-          const file = data.file;
-          const targetFolderId = (data.folderId && data.folderId !== 'null') ? String(data.folderId) : null;
-          const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
-
-          if (this.currentView === 'recent' || (this.currentView === 'drive' && targetFolderId === currentFolderId)) {
-            const exists = this.files.some(f => f.id === file.id);
-            if (!exists) {
-              this.files.push(file);
-              this.filesMap.set(file.id, file);
-              this.sortItems();
-              this.renderContents();
-            }
-          }
-          this.loadStorageStats();
+          this.addUploadedFileLocally(data.file);
         } catch (err) {
           console.warn('[Realtime] file_uploaded error:', err);
         }
@@ -3121,15 +3280,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.fileId) return;
-
-          const initialLen = this.files.length;
-          this.files = this.files.filter(f => f.id !== data.fileId);
-          this.filesMap.delete(data.fileId);
-          if (this.files.length !== initialLen) {
-            this.sortItems();
-            this.renderContents();
-          }
-          this.loadStorageStats();
+          this.removeFileLocally(data.fileId);
         } catch (err) {
           console.warn('[Realtime] file_deleted error:', err);
         }
@@ -3139,14 +3290,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.file) return;
-
-          const idx = this.files.findIndex(f => f.id === data.file.id);
-          if (idx !== -1) {
-            this.files[idx] = data.file;
-            this.filesMap.set(data.file.id, data.file);
-            this.sortItems();
-            this.renderContents();
-          }
+          this.updateFileLocally(data.file);
         } catch (err) {
           console.warn('[Realtime] file_updated error:', err);
         }
@@ -3156,20 +3300,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folder) return;
-
-          const folder = data.folder;
-          const targetParentId = (data.parentId && data.parentId !== 'null') ? String(data.parentId) : null;
-          const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
-
-          if (this.currentView === 'drive' && targetParentId === currentFolderId) {
-            const exists = this.folders.some(f => f.id === folder.id);
-            if (!exists) {
-              this.folders.push(folder);
-              this.foldersMap.set(folder.id, folder);
-              this.sortItems();
-              this.renderContents();
-            }
-          }
+          this.addUploadedFolderLocally(data.folder);
         } catch (err) {
           console.warn('[Realtime] folder_created error:', err);
         }
@@ -3179,14 +3310,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folderId) return;
-
-          const initialLen = this.folders.length;
-          this.folders = this.folders.filter(f => f.id !== data.folderId);
-          this.foldersMap.delete(data.folderId);
-          if (this.folders.length !== initialLen) {
-            this.sortItems();
-            this.renderContents();
-          }
+          this.removeFolderLocally(data.folderId);
         } catch (err) {
           console.warn('[Realtime] folder_deleted error:', err);
         }
@@ -3196,14 +3320,7 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folder) return;
-
-          const idx = this.folders.findIndex(f => f.id === data.folder.id);
-          if (idx !== -1) {
-            this.folders[idx] = data.folder;
-            this.foldersMap.set(data.folder.id, data.folder);
-            this.sortItems();
-            this.renderContents();
-          }
+          this.updateFolderLocally(data.folder);
         } catch (err) {
           console.warn('[Realtime] folder_updated error:', err);
         }

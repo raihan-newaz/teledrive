@@ -209,10 +209,6 @@ const Upload = {
       addedCount++;
     }
 
-    if (hasRelativePaths && typeof App !== 'undefined' && App.refreshCurrentView) {
-      App.refreshCurrentView({ silent: true });
-    }
-
     this.showUploadPanel();
     this.renderQueue();
 
@@ -251,8 +247,6 @@ const Upload = {
       // Google Drive-style Instant Incremental Insertion (Zero full-page reload)
       if (uploadResult && uploadResult.file && typeof App !== 'undefined' && App.addUploadedFileLocally) {
         App.addUploadedFileLocally(uploadResult.file);
-      } else if (typeof App !== 'undefined' && App.refreshCurrentView) {
-        App.refreshCurrentView({ silent: true });
       }
     } catch (error) {
       if (nextItem.status === 'cancelled') {
@@ -923,9 +917,6 @@ const Upload = {
         const files = await this.extractFilesFromDataTransfer(e.dataTransfer);
         if (files && files.length > 0) {
           await this.addFiles(files, App.currentFolderId);
-          if (typeof App !== 'undefined' && App.refreshCurrentView) {
-            App.refreshCurrentView({ silent: true });
-          }
         }
       }
     });
