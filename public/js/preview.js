@@ -143,8 +143,7 @@ const Preview = {
     if (cat === 'video') {
       contentEl.innerHTML = `
         <div class="yt-player-wrap" id="yt-player">
-          <video class="yt-video-element" id="main-video" preload="metadata" playsinline>
-            <source src="${streamUrl}" type="${mime}">
+          <video class="yt-video-element" id="main-video" preload="metadata" playsinline src="${streamUrl}">
             Your browser does not support HTML5 video streaming.
           </video>
 

@@ -109,15 +109,20 @@ setInterval(cleanupCacheLRU, 60 * 60 * 1000).unref();
 setTimeout(cleanupCacheLRU, 2 * 60 * 1000).unref();
 
 function getMimeType(filename) {
-  const ext = path.extname(filename).toLowerCase();
+  const ext = path.extname(filename || '').toLowerCase();
   const map = {
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
     '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
     '.avif': 'image/avif', '.tiff': 'image/tiff', '.tif': 'image/tiff', '.heic': 'image/heic', '.heif': 'image/heif',
-    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo',
-    '.mov': 'video/quicktime', '.wmv': 'video/x-ms-wmv', '.flv': 'video/x-flv',
+    '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime', '.wmv': 'video/x-ms-wmv', '.flv': 'video/x-flv', '.f4v': 'video/mp4',
+    '.ts': 'video/mp2t', '.mts': 'video/mp2t', '.m2ts': 'video/mp2t', '.vob': 'video/x-ms-vob', '.ogv': 'video/ogg',
+    '.divx': 'video/divx', '.xvid': 'video/x-msvideo', '.rm': 'video/vnd.rn-realvideo', '.rmvb': 'video/vnd.rn-realvideo',
+    '.asf': 'video/x-ms-asf', '.mpg': 'video/mpeg', '.mpeg': 'video/mpeg', '.m2v': 'video/mpeg',
+    '.3gp': 'video/3gpp', '.3g2': 'video/3gpp2', '.h264': 'video/mp4', '.h265': 'video/mp4', '.hevc': 'video/mp4',
     '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
-    '.aac': 'audio/aac', '.wma': 'audio/x-ms-wma', '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac', '.wma': 'audio/x-ms-wma', '.m4a': 'audio/mp4', '.opus': 'audio/opus',
+    '.aiff': 'audio/x-aiff', '.alac': 'audio/mp4', '.mid': 'audio/midi', '.midi': 'audio/midi',
     '.pdf': 'application/pdf',
     '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -166,6 +171,7 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
   }
 
   const chunkSize = (end - start) + 1;
+  const effectiveMimeType = (file.mime_type && file.mime_type !== 'application/octet-stream') ? file.mime_type : getMimeType(file.name);
 
   const commonHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -173,7 +179,7 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     'Access-Control-Allow-Headers': 'Range, Authorization, x-folder-token',
     'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type',
     'Accept-Ranges': 'bytes',
-    'Content-Type': file.mime_type || 'application/octet-stream',
+    'Content-Type': effectiveMimeType,
     'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
   };
 

@@ -370,10 +370,10 @@ const UI = {
     const mime = (mimeType || '').toLowerCase();
     const ext = (fileName || '').split('.').pop().toLowerCase();
 
-    if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'].includes(ext)) return 'image';
-    if (mime.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv', 'wmv', 'm4v', '3gp'].includes(ext)) return 'video';
-    if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'wma'].includes(ext)) return 'audio';
-    if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z') || mime.includes('tar') || mime.includes('gzip') || ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return 'archive';
+    if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif', 'tiff', 'tif', 'avif', 'raw', 'cr2', 'nef', 'arw'].includes(ext)) return 'image';
+    if (mime.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv', 'wmv', 'm4v', '3gp', '3g2', 'ts', 'mts', 'm2ts', 'vob', 'ogv', 'divx', 'xvid', 'rm', 'rmvb', 'asf', 'f4v', 'mpg', 'mpeg', 'm2v', 'h264', 'h265', 'hevc'].includes(ext)) return 'video';
+    if (mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'wma', 'aiff', 'alac', 'mid', 'midi', 'amr'].includes(ext)) return 'audio';
+    if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z') || mime.includes('tar') || mime.includes('gzip') || ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso'].includes(ext)) return 'archive';
     if (mime.includes('pdf') || ext === 'pdf') return 'document';
     return 'document';
   },
