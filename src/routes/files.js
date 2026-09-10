@@ -24,32 +24,33 @@ if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
 
-// Serialized worker queue for background thumbnail generation (keeps Telegram stream 100% smooth)
-let isThumbnailJobRunning = false;
+// Worker pool for thumbnail generation (balanced concurrency for smooth playback & fast thumbnails)
+let activeThumbnailJobs = 0;
+const MAX_CONCURRENT_THUMBNAIL_JOBS = 3;
 const thumbnailJobQueue = [];
 
 function runThumbnailTask(taskFn) {
   return new Promise((resolve, reject) => {
-    if (thumbnailJobQueue.length > 30) {
-      thumbnailJobQueue.shift();
-    }
     thumbnailJobQueue.push({ taskFn, resolve, reject });
     processThumbnailJobQueue();
   });
 }
 
-async function processThumbnailJobQueue() {
-  if (isThumbnailJobRunning || thumbnailJobQueue.length === 0) return;
-  isThumbnailJobRunning = true;
-  const { taskFn, resolve, reject } = thumbnailJobQueue.shift();
-  try {
-    const res = await taskFn();
-    resolve(res);
-  } catch (err) {
-    reject(err);
-  } finally {
-    isThumbnailJobRunning = false;
-    setTimeout(processThumbnailJobQueue, 30);
+function processThumbnailJobQueue() {
+  while (activeThumbnailJobs < MAX_CONCURRENT_THUMBNAIL_JOBS && thumbnailJobQueue.length > 0) {
+    const { taskFn, resolve, reject } = thumbnailJobQueue.shift();
+    activeThumbnailJobs++;
+    (async () => {
+      try {
+        const res = await taskFn();
+        resolve(res);
+      } catch (err) {
+        reject(err);
+      } finally {
+        activeThumbnailJobs--;
+        processThumbnailJobQueue();
+      }
+    })();
   }
 }
 
