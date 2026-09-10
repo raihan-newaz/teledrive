@@ -2821,11 +2821,25 @@ const App = {
       const enabledToggle = document.getElementById('webdav-enabled');
       const modeSelect = document.getElementById('webdav-permission-mode');
       const usernameInput = document.getElementById('webdav-username');
+      const passwordInput = document.getElementById('webdav-password');
+      const passwordHint = document.getElementById('webdav-pw-hint');
 
       if (enabledToggle) enabledToggle.checked = !!data.enabled;
       if (modeSelect && data.permissionMode) modeSelect.value = data.permissionMode;
       if (usernameInput && data.username) usernameInput.value = data.username;
       if (urlInput && data.webdavUrl) urlInput.value = data.webdavUrl;
+
+      if (passwordInput && passwordHint) {
+        if (data.hasCustomPassword) {
+          passwordInput.placeholder = '•••••••• (Custom password saved)';
+          passwordHint.textContent = 'Custom WebDAV password is saved. Leave blank to keep current password, or enter a new one to change.';
+          passwordHint.style.color = 'var(--accent-color)';
+        } else {
+          passwordInput.placeholder = 'Leave empty to use Master Password';
+          passwordHint.textContent = 'No separate password set — currently using your Master Password.';
+          passwordHint.style.color = 'var(--text-secondary)';
+        }
+      }
 
       await this.loadWebDavSessions();
     } catch (e) {
