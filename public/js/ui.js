@@ -461,10 +461,14 @@ const UI = {
         </div>
       `;
     } else if (cat === 'video') {
+      const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
+      const hasCached = (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500);
+      const imgStyle = hasCached ? 'display:block;' : 'display:none;';
+      const imgSrc = hasCached ? `src="${cached}"` : '';
       previewHtml = `
         <div class="file-card-preview has-thumbnail video-preview">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img id="vthumb-${file.id}" class="file-thumb-media" loading="lazy" alt="${safeName}" style="display:none;" onerror="this.style.display='none'">
+          <img id="vthumb-${file.id}" class="file-thumb-media" ${imgSrc} loading="lazy" alt="${safeName}" style="${imgStyle}" onerror="this.style.display='none'">
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
@@ -672,10 +676,15 @@ const UI = {
       }
 
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
       video.muted = true;
-      video.preload = 'auto';
+      video.defaultMuted = true;
       video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.setAttribute('muted', '');
+      video.preload = 'metadata';
+      video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
+      document.body.appendChild(video);
 
       let finished = false;
       const done = () => {
@@ -684,21 +693,25 @@ const UI = {
         try {
           video.removeAttribute('src');
           video.load();
-          video.remove();
+          if (video.parentNode) {
+            video.parentNode.removeChild(video);
+          }
         } catch (e) {}
         this._activeThumbnailWorkers--;
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 9000); // 9s timeout for remote video chunk load
+      const timeoutId = setTimeout(done, 10000); // 10s timeout for remote video chunk load
 
       const captureFrame = () => {
         if (finished) return false;
         try {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             const canvas = document.createElement('canvas');
-            canvas.width = Math.min(240, video.videoWidth || 240);
-            canvas.height = Math.min(135, video.videoHeight || 135);
+            const targetWidth = Math.min(320, video.videoWidth);
+            const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             let dataUrl;
@@ -748,6 +761,10 @@ const UI = {
         }
       };
 
+      video.oncanplay = () => {
+        captureFrame();
+      };
+
       video.onseeked = () => {
         captureFrame();
         done();
@@ -770,13 +787,19 @@ const UI = {
   },
 
   generateVideoThumbnailFromBlob(blob, fileId, imgEl) {
-    if (!blob || !imgEl) return;
+    if (!blob || !fileId) return;
     try {
       const blobUrl = URL.createObjectURL(blob);
       const video = document.createElement('video');
       video.muted = true;
+      video.defaultMuted = true;
       video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.setAttribute('muted', '');
       video.preload = 'auto';
+      video.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:160px;height:90px;opacity:0;pointer-events:none;z-index:-9999;';
+      document.body.appendChild(video);
 
       let cleaned = false;
       const cleanup = () => {
@@ -786,7 +809,9 @@ const UI = {
           URL.revokeObjectURL(blobUrl);
           video.removeAttribute('src');
           video.load();
-          video.remove();
+          if (video.parentNode) {
+            video.parentNode.removeChild(video);
+          }
         } catch (e) {}
       };
 
@@ -795,11 +820,16 @@ const UI = {
         try {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             const canvas = document.createElement('canvas');
-            canvas.width = Math.min(240, video.videoWidth || 240);
-            canvas.height = Math.min(135, video.videoHeight || 135);
+            const targetWidth = Math.min(320, video.videoWidth);
+            const targetHeight = Math.round((targetWidth / video.videoWidth) * video.videoHeight);
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            let dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            let dataUrl = null;
+            try {
+              dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            } catch (e) {}
             if (dataUrl && dataUrl.length > 500) {
               if (imgEl && document.body.contains(imgEl)) {
                 imgEl.src = dataUrl;
@@ -839,6 +869,10 @@ const UI = {
         }
       };
 
+      video.oncanplay = () => {
+        capture();
+      };
+
       video.onseeked = () => {
         capture();
         cleanup();
@@ -851,7 +885,7 @@ const UI = {
       };
 
       video.onerror = () => cleanup();
-      setTimeout(cleanup, 6000);
+      setTimeout(cleanup, 8000);
 
       video.src = blobUrl;
       video.load();
