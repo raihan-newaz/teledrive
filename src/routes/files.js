@@ -398,6 +398,10 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     );
 
     const fileRecord = db.getFile(fileId);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
+    } catch (e) {}
     res.json({ success: true, file: fileRecord });
   } catch (error) {
     console.error('Upload error:', error);
@@ -459,6 +463,10 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
     db.deleteUploadSession(uploadId);
 
     const fileRecord = db.getFile(fileId);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
+    } catch (e) {}
     return res.json({ success: true, done: true, file: fileRecord });
   } finally {
     assemblyLocks.delete(uploadId);
@@ -811,6 +819,10 @@ router.patch('/:id', (req, res) => {
     }
 
     const updatedFile = db.getFile(req.params.id);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_updated', { file: updatedFile, folderId: updatedFile.folder_id });
+    } catch (e) {}
     res.json(updatedFile);
   } catch (error) {
     console.error('Update file error:', error);
@@ -931,6 +943,11 @@ router.delete('/trash/empty', async (req, res) => {
       return res.status(500).json({ error: 'Failed to delete from Telegram: ' + errors.join('; ') });
     }
 
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('trash_emptied', {});
+    } catch (e) {}
+
     res.json({
       success: true,
       count: deletedCount,
@@ -947,7 +964,12 @@ router.delete('/trash/empty', async (req, res) => {
  */
 router.delete('/:id', (req, res) => {
   try {
+    const file = db.getFile(req.params.id);
     db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ?', [new Date().toISOString(), req.params.id]);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId: file ? file.folder_id : null });
+    } catch (e) {}
     res.json({ success: true });
   } catch (error) {
     console.error('Soft delete error:', error);
@@ -962,8 +984,13 @@ router.delete('/:id/permanent', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
+    const folderId = file.folder_id;
 
     await permanentlyDeleteFile(file, { throwOnError: true });
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId });
+    } catch (e) {}
     res.json({ success: true });
   } catch (error) {
     console.error('Permanent delete error:', error);
@@ -977,6 +1004,11 @@ router.delete('/:id/permanent', async (req, res) => {
 router.post('/:id/restore', (req, res) => {
   try {
     db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ?', [req.params.id]);
+    const restoredFile = db.getFile(req.params.id);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_uploaded', { file: restoredFile, folderId: restoredFile ? restoredFile.folder_id : null });
+    } catch (e) {}
     res.json({ success: true });
   } catch (error) {
     console.error('Restore error:', error);

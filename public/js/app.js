@@ -175,9 +175,14 @@ const App = {
         appEl.removeAttribute('inert');
         appEl.removeAttribute('aria-hidden');
         appEl.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = false);
+        this.initRealtimeEvents();
       } else {
         appEl.setAttribute('inert', '');
         appEl.setAttribute('aria-hidden', 'true');
+        if (this._eventSource) {
+          try { this._eventSource.close(); } catch (e) {}
+          this._eventSource = null;
+        }
       }
     }
   },
@@ -2995,6 +3000,170 @@ const App = {
       }
     } catch (e) {
       console.warn('Failed to load backup status:', e);
+    }
+  },
+
+  sortItems() {
+    const isAsc = this.sortOrder === 'asc';
+    const mult = isAsc ? 1 : -1;
+
+    this.folders.sort((a, b) => {
+      if (this.sortBy === 'name') return mult * (a.name || '').localeCompare(b.name || '');
+      if (this.sortBy === 'date') return mult * (new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0));
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    this.files.sort((a, b) => {
+      if (this.sortBy === 'name') return mult * (a.name || '').localeCompare(b.name || '');
+      if (this.sortBy === 'date') return mult * (new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0));
+      if (this.sortBy === 'size') return mult * ((a.size || 0) - (b.size || 0));
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  },
+
+  initRealtimeEvents() {
+    if (this._eventSource) {
+      try { this._eventSource.close(); } catch (e) {}
+      this._eventSource = null;
+    }
+
+    if (!API.token) return;
+
+    try {
+      const url = `/api/realtime/events?token=${encodeURIComponent(API.token)}`;
+      const es = new EventSource(url);
+      this._eventSource = es;
+
+      es.addEventListener('file_uploaded', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.file) return;
+
+          const file = data.file;
+          const targetFolderId = (data.folderId && data.folderId !== 'null') ? String(data.folderId) : null;
+          const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
+
+          if (this.currentView === 'recent' || (this.currentView === 'drive' && targetFolderId === currentFolderId)) {
+            const exists = this.files.some(f => f.id === file.id);
+            if (!exists) {
+              this.files.push(file);
+              this.filesMap.set(file.id, file);
+              this.sortItems();
+              this.renderContents();
+            }
+          }
+          this.loadStorageStats();
+        } catch (err) {
+          console.warn('[Realtime] file_uploaded error:', err);
+        }
+      });
+
+      es.addEventListener('file_deleted', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.fileId) return;
+
+          const initialLen = this.files.length;
+          this.files = this.files.filter(f => f.id !== data.fileId);
+          this.filesMap.delete(data.fileId);
+          if (this.files.length !== initialLen) {
+            this.sortItems();
+            this.renderContents();
+          }
+          this.loadStorageStats();
+        } catch (err) {
+          console.warn('[Realtime] file_deleted error:', err);
+        }
+      });
+
+      es.addEventListener('file_updated', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.file) return;
+
+          const idx = this.files.findIndex(f => f.id === data.file.id);
+          if (idx !== -1) {
+            this.files[idx] = data.file;
+            this.filesMap.set(data.file.id, data.file);
+            this.sortItems();
+            this.renderContents();
+          }
+        } catch (err) {
+          console.warn('[Realtime] file_updated error:', err);
+        }
+      });
+
+      es.addEventListener('folder_created', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.folder) return;
+
+          const folder = data.folder;
+          const targetParentId = (data.parentId && data.parentId !== 'null') ? String(data.parentId) : null;
+          const currentFolderId = (this.currentFolderId && this.currentFolderId !== 'null') ? String(this.currentFolderId) : null;
+
+          if (this.currentView === 'drive' && targetParentId === currentFolderId) {
+            const exists = this.folders.some(f => f.id === folder.id);
+            if (!exists) {
+              this.folders.push(folder);
+              this.foldersMap.set(folder.id, folder);
+              this.sortItems();
+              this.renderContents();
+            }
+          }
+        } catch (err) {
+          console.warn('[Realtime] folder_created error:', err);
+        }
+      });
+
+      es.addEventListener('folder_deleted', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.folderId) return;
+
+          const initialLen = this.folders.length;
+          this.folders = this.folders.filter(f => f.id !== data.folderId);
+          this.foldersMap.delete(data.folderId);
+          if (this.folders.length !== initialLen) {
+            this.sortItems();
+            this.renderContents();
+          }
+        } catch (err) {
+          console.warn('[Realtime] folder_deleted error:', err);
+        }
+      });
+
+      es.addEventListener('folder_updated', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (!data || !data.folder) return;
+
+          const idx = this.folders.findIndex(f => f.id === data.folder.id);
+          if (idx !== -1) {
+            this.folders[idx] = data.folder;
+            this.foldersMap.set(data.folder.id, data.folder);
+            this.sortItems();
+            this.renderContents();
+          }
+        } catch (err) {
+          console.warn('[Realtime] folder_updated error:', err);
+        }
+      });
+
+      es.addEventListener('trash_emptied', () => {
+        if (this.currentView === 'trash') {
+          this.files = [];
+          this.folders = [];
+          this.renderContents();
+        }
+        this.loadStorageStats();
+      });
+
+      es.onerror = () => {
+        // EventSource automatically retries
+      };
+    } catch (e) {
+      console.warn('[Realtime] Failed to initialize SSE:', e);
     }
   },
 

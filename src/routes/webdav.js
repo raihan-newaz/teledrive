@@ -454,6 +454,12 @@ router.put('*', async (req, res) => {
     const cachedPath = path.join(cacheDir, `${fileId}.dec`);
     try { fs.copyFileSync(tempUploadPath, cachedPath); } catch (e) {}
 
+    const fileRecord = db.getFile(fileId);
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId: parentFolderId });
+    } catch (e) {}
+
     console.log(`[WebDAV PUT] "${filename}" (${fileSize} bytes) saved to folder: ${parentFolderId || 'root'}`);
     res.status(isCreated ? 201 : 204).set('ETag', `"${fileId}"`).end();
   } catch (err) {
@@ -505,6 +511,12 @@ router.all('*', async (req, res, next) => {
   const now = new Date().toISOString();
   db.run('INSERT INTO folders (id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [newId, folderName, parentFolderId, now, now]);
 
+  const createdFolder = { id: newId, name: folderName, parent_id: parentFolderId, created_at: now, updated_at: now };
+  try {
+    const eventBroadcaster = require('../services/eventBroadcaster');
+    eventBroadcaster.broadcast('folder_created', { folder: createdFolder, parentId: parentFolderId });
+  } catch (e) {}
+
   console.log(`[WebDAV MKCOL] Created folder "${folderName}" under parent ${parentFolderId || 'root'}`);
   res.status(201).end();
 });
@@ -533,30 +545,46 @@ router.delete('*', async (req, res) => {
       try { if (fs.existsSync(cached)) fs.unlinkSync(cached); } catch (e) {}
       // Delete from DB
       db.run('DELETE FROM files WHERE id = ?', [file.id]);
+
+      try {
+        const eventBroadcaster = require('../services/eventBroadcaster');
+        eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id });
+      } catch (e) {}
+
       console.log(`[WebDAV DELETE] Deleted file "${file.name}" (ID: ${file.id})`);
     } else if (resolved.type === 'folder') {
       const folder = resolved.item;
       // Recursively gather all descendant folder IDs
       const folderIdsToDelete = [folder.id];
-      let pointer = 0;
-      while (pointer < folderIdsToDelete.length) {
-        const currentId = folderIdsToDelete[pointer++];
-        const children = db.all('SELECT id FROM folders WHERE parent_id = ?', [currentId]);
-        for (const ch of children) folderIdsToDelete.push(ch.id);
-      }
+      const gatherDescendantFolders = (fId) => {
+        const children = db.all('SELECT id FROM folders WHERE parent_id = ?', [fId]);
+        for (const ch of children) {
+          folderIdsToDelete.push(ch.id);
+          gatherDescendantFolders(ch.id);
+        }
+      };
+      gatherDescendantFolders(folder.id);
 
-      // Find all files in these folders and delete them from Telegram
+      // Gather all files in these folders and clean them up
       for (const fId of folderIdsToDelete) {
-        const files = db.all('SELECT * FROM files WHERE folder_id = ?', [fId]);
-        for (const file of files) {
-          if (file.telegram_message_id) telegram.deleteFile(file.telegram_message_id).catch(() => {});
+        const filesInFolder = db.all('SELECT * FROM files WHERE folder_id = ?', [fId]);
+        for (const file of filesInFolder) {
+          if (file.telegram_message_id) {
+            telegram.deleteFile(file.telegram_message_id).catch(() => {});
+          }
           const cached = path.join(cacheDir, `${file.id}.dec`);
           try { if (fs.existsSync(cached)) fs.unlinkSync(cached); } catch (e) {}
+          db.run('DELETE FROM files WHERE id = ?', [file.id]);
         }
-        db.run('DELETE FROM files WHERE folder_id = ?', [fId]);
         db.run('DELETE FROM folders WHERE id = ?', [fId]);
       }
-      console.log(`[WebDAV DELETE] Deleted folder tree "${folder.name}" (${folderIdsToDelete.length} folders)`);
+
+      try {
+        const eventBroadcaster = require('../services/eventBroadcaster');
+        eventBroadcaster.broadcast('folder_deleted', { folderId: folder.id });
+      } catch (e) {}
+
+      console.log(`[WebDAV DELETE] Deleted folder "${folder.name}" and ${folderIdsToDelete.length} subfolders`);
     }
 
     res.status(204).end();
