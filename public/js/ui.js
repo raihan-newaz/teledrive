@@ -744,6 +744,66 @@ const UI = {
     }
   },
 
+  generateVideoThumbnailFromBlob(blob, fileId, imgEl) {
+    if (!blob || !imgEl) return;
+    try {
+      const blobUrl = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.src = blobUrl;
+
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        try {
+          URL.revokeObjectURL(blobUrl);
+          video.removeAttribute('src');
+          video.load();
+          video.remove();
+        } catch (e) {}
+      };
+
+      const capture = () => {
+        if (cleaned) return false;
+        try {
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.min(240, video.videoWidth || 240);
+            canvas.height = Math.min(135, video.videoHeight || 135);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            let dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            if (imgEl && document.body.contains(imgEl)) {
+              imgEl.src = dataUrl;
+              imgEl.classList.add('loaded');
+            }
+            try { sessionStorage.setItem(`vthumb_${fileId}`, dataUrl); } catch(e) {}
+            cleanup();
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      };
+
+      video.onloadeddata = () => {
+        if (!capture()) {
+          try { video.currentTime = 0.05; } catch (e) { cleanup(); }
+        }
+      };
+
+      video.onseeked = () => {
+        capture();
+        cleanup();
+      };
+
+      video.onerror = () => cleanup();
+      setTimeout(cleanup, 5000);
+    } catch (e) {}
+  },
+
   loadVideoThumbnails(files) {
     if (!files || files.length === 0) return;
     const videoFiles = files.filter(f => this.getFileTypeCategory(f.mime_type) === 'video');
@@ -756,7 +816,7 @@ const UI = {
             const el = entry.target;
             this._videoObserver.unobserve(el);
             const fileId = el.getAttribute('data-vid');
-            const file = App && App.filesMap ? App.filesMap.get(fileId) : null;
+            const file = (App && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
             if (file) {
               this._thumbnailQueue.push({ file, imgEl: el });
               this._processThumbnailQueue();
@@ -777,7 +837,14 @@ const UI = {
         return;
       }
 
-      imgEl.setAttribute('data-vid', file.id);
+      // Check if local Blob exists for instant client-side thumbnail creation
+      const localBlob = file.localBlob || (typeof App !== 'undefined' && App.filesMap && App.filesMap.get(String(file.id)) && App.filesMap.get(String(file.id)).localBlob);
+      if (localBlob) {
+        this.generateVideoThumbnailFromBlob(localBlob, file.id, imgEl);
+        return;
+      }
+
+      imgEl.setAttribute('data-vid', String(file.id));
       if (this._videoObserver) {
         this._videoObserver.observe(imgEl);
       } else {

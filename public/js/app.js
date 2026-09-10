@@ -504,8 +504,9 @@ const App = {
    * Google Drive style Instant Incremental File Insertion
    * Inserts only the newly uploaded file into UI with 0 full-page reload/flicker
    */
-  addUploadedFileLocally(file) {
+  addUploadedFileLocally(file, localFileBlob = null) {
     if (!file || !file.id) return;
+    if (localFileBlob) file.localBlob = localFileBlob;
 
     // Check if the uploaded file belongs to current active view
     const isDriveView = this.currentView === 'drive';
@@ -559,6 +560,18 @@ const App = {
       const newCard = tempDiv.firstElementChild;
 
       if (newCard) {
+        // Instant preview for local image files
+        const cat = UI.getFileTypeCategory(file.mime_type);
+        if (cat === 'image' && (localFileBlob || file.localBlob)) {
+          const imgEl = newCard.querySelector('.file-thumb-media');
+          if (imgEl) {
+            try {
+              imgEl.src = URL.createObjectURL(localFileBlob || file.localBlob);
+              imgEl.classList.add('loaded');
+            } catch (e) {}
+          }
+        }
+
         if (existingCard) {
           filesGrid.replaceChild(newCard, existingCard);
         } else {
@@ -572,7 +585,7 @@ const App = {
         setTimeout(() => newCard.classList.remove('card-just-added'), 1500);
       }
 
-      // Load thumbnail only for this newly added file
+      // Load/generate thumbnail for this specific file (video / image)
       UI.loadVideoThumbnails([file]);
     }
 

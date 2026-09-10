@@ -246,7 +246,7 @@ const Upload = {
       
       // Google Drive-style Instant Incremental Insertion (Zero full-page reload)
       if (uploadResult && uploadResult.file && typeof App !== 'undefined' && App.addUploadedFileLocally) {
-        App.addUploadedFileLocally(uploadResult.file);
+        App.addUploadedFileLocally(uploadResult.file, nextItem.file);
       }
     } catch (error) {
       if (nextItem.status === 'cancelled') {
