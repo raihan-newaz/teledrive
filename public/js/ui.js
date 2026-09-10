@@ -659,7 +659,7 @@ const UI = {
   _videoObserver: null,
   _thumbnailQueue: [],
   _activeThumbnailWorkers: 0,
-  _MAX_THUMBNAIL_WORKERS: 4,
+  _MAX_THUMBNAIL_WORKERS: 6,
 
   isCanvasBlankOrBlack(canvas) {
     try {
@@ -695,7 +695,7 @@ const UI = {
     imgEl.style.display = 'none';
     imgEl.removeAttribute('src');
     const file = (typeof App !== 'undefined' && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
-    if (file) {
+    if (file && !this._thumbnailQueue.some(t => t.file && t.file.id === file.id)) {
       this._thumbnailQueue.push({ file, imgEl });
       this._processThumbnailQueue();
     }
@@ -777,7 +777,7 @@ const UI = {
         };
 
         video.onerror = () => cleanup(null);
-        setTimeout(() => cleanup(null), 10000);
+        setTimeout(() => cleanup(null), 6000);
 
         video.src = blobUrl;
         video.load();
@@ -843,7 +843,7 @@ const UI = {
         this._processThumbnailQueue();
       };
 
-      const timeoutId = setTimeout(done, 15000); // 15s timeout for remote video chunk load
+      const timeoutId = setTimeout(done, 6000); // 6s fast failover for remote video chunk load
 
       const tryCapture = () => {
         if (finished) return false;
@@ -953,8 +953,8 @@ const UI = {
             const el = entry.target;
             this._videoObserver.unobserve(el);
             const fileId = el.getAttribute('data-vid');
-            const file = (App && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
-            if (file) {
+            const file = (typeof App !== 'undefined' && App.filesMap) ? App.filesMap.get(String(fileId)) : null;
+            if (file && !this._thumbnailQueue.some(t => t.file && t.file.id === file.id)) {
               this._thumbnailQueue.push({ file, imgEl: el });
               this._processThumbnailQueue();
             }
@@ -985,8 +985,10 @@ const UI = {
       if (this._videoObserver) {
         this._videoObserver.observe(imgEl);
       } else {
-        this._thumbnailQueue.push({ file, imgEl });
-        this._processThumbnailQueue();
+        if (!this._thumbnailQueue.some(t => t.file && t.file.id === file.id)) {
+          this._thumbnailQueue.push({ file, imgEl });
+          this._processThumbnailQueue();
+        }
       }
     });
   },

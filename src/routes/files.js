@@ -26,7 +26,9 @@ if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
 
 function generateVideoThumbnailServer(videoPath, outputPath) {
   return new Promise((resolve) => {
-    if (!existsSync(videoPath)) return resolve(false);
+    const isUrl = typeof videoPath === 'string' && (videoPath.startsWith('http://') || videoPath.startsWith('https://'));
+    if (!isUrl && !existsSync(videoPath)) return resolve(false);
+
     execFile('ffmpeg', [
       '-ss', '00:00:02',
       '-i', videoPath,
@@ -35,7 +37,7 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
       '-q:v', '4',
       '-y',
       outputPath
-    ], { timeout: 10000 }, (err) => {
+    ], { timeout: 12000 }, (err) => {
       if (err || !existsSync(outputPath)) {
         execFile('ffmpeg', [
           '-ss', '00:00:00.5',
@@ -45,8 +47,21 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
           '-q:v', '4',
           '-y',
           outputPath
-        ], { timeout: 10000 }, (err2) => {
-          resolve(!err2 && existsSync(outputPath));
+        ], { timeout: 12000 }, (err2) => {
+          if (err2 || !existsSync(outputPath)) {
+            execFile('ffmpeg', [
+              '-i', videoPath,
+              '-vframes', '1',
+              '-vf', 'scale=240:-1',
+              '-q:v', '4',
+              '-y',
+              outputPath
+            ], { timeout: 12000 }, (err3) => {
+              resolve(!err3 && existsSync(outputPath));
+            });
+          } else {
+            resolve(existsSync(outputPath));
+          }
         });
       } else {
         resolve(existsSync(outputPath));
@@ -70,6 +85,75 @@ function generateImageThumbnailServer(imagePath, outputPath) {
   });
 }
 
+async function generateServerImageThumbnailForFile(file, outputPath) {
+  try {
+    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+    if (existsSync(cachedPath)) {
+      const ok = await generateImageThumbnailServer(cachedPath, outputPath);
+      if (ok && existsSync(outputPath)) return true;
+    }
+
+    let parts = [];
+    if (file.is_chunked === 1) {
+      parts = db.getFileChunks(file.id);
+      if (parts && parts.length > 0) {
+        parts.sort((a, b) => a.chunk_index - b.chunk_index);
+      }
+    } else {
+      parts = [{
+        chunk_index: 0,
+        telegram_message_id: file.telegram_message_id,
+        size: file.size,
+        iv: file.iv,
+        salt: file.salt
+      }];
+    }
+
+    if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
+
+    const tempImgPath = path.join(tmpDir, `img_${file.id}${path.extname(file.name || '') || '.jpg'}`);
+    const writeStream = createWriteStream(tempImgPath);
+
+    for (const part of parts) {
+      const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
+      const iv = Buffer.from(part.iv, 'base64');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+
+      let totalPartReceived = 0;
+      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
+        totalPartReceived += chunk.length;
+        let cipherChunk = chunk;
+        if (totalPartReceived > part.size) {
+          const overflow = totalPartReceived - part.size;
+          cipherChunk = chunk.subarray(0, chunk.length - overflow);
+        }
+        if (cipherChunk.length > 0) {
+          writeStream.write(decipher.update(cipherChunk));
+        }
+      }
+    }
+
+    await new Promise((resolve) => writeStream.end(resolve));
+
+    const ok = await generateImageThumbnailServer(tempImgPath, outputPath);
+
+    // Keep in data/cache if file size <= 40MB so subsequent full photo views open with 0ms delay
+    if (file.size <= 40 * 1024 * 1024 && !existsSync(cachedPath)) {
+      try {
+        await fsPromises.copyFile(tempImgPath, cachedPath);
+        const cacheManager = require('../services/cacheManager');
+        cacheManager.touchCacheFile(cachedPath);
+      } catch (e) {}
+    }
+
+    await fsPromises.unlink(tempImgPath).catch(() => {});
+    return ok && existsSync(outputPath);
+  } catch (err) {
+    console.warn(`[Thumbnail] Error generating server image thumbnail for ${file.id}:`, err.message);
+    return false;
+  }
+}
+
 async function generateServerThumbnailForFile(file, outputPath) {
   try {
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
@@ -77,49 +161,72 @@ async function generateServerThumbnailForFile(file, outputPath) {
       return await generateVideoThumbnailServer(cachedPath, outputPath);
     }
 
-    // Download first 4MB sample from Telegram
-    let firstPart = null;
+    // Fast-path: try FFmpeg HTTP stream seeking first (requests only minimal header/index bytes)
+    const port = process.env.PORT || 3000;
+    const streamUrl = `http://127.0.0.1:${port}/api/files/${file.id}/stream`;
+    try {
+      const ok = await generateVideoThumbnailServer(streamUrl, outputPath);
+      if (ok && existsSync(outputPath)) return true;
+    } catch (e) {}
+
+    // Fallback: Download sample or full video if small
+    let parts = [];
     if (file.is_chunked === 1) {
-      const chunks = db.getFileChunks(file.id);
-      if (chunks && chunks.length > 0) {
-        chunks.sort((a, b) => a.chunk_index - b.chunk_index);
-        firstPart = chunks[0];
+      parts = db.getFileChunks(file.id);
+      if (parts && parts.length > 0) {
+        parts.sort((a, b) => a.chunk_index - b.chunk_index);
       }
     } else {
-      firstPart = {
+      parts = [{
+        chunk_index: 0,
         telegram_message_id: file.telegram_message_id,
         size: file.size,
         iv: file.iv,
         salt: file.salt
-      };
+      }];
     }
 
-    if (!firstPart || !firstPart.telegram_message_id) return false;
+    if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
-    const sampleTempPath = path.join(tmpDir, `sample_${file.id}.mp4`);
-    const writeStream = createWriteStream(sampleTempPath);
-
-    const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, firstPart.salt);
-    const iv = Buffer.from(firstPart.iv, 'base64');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    const isSmallVideo = (file.size <= 50 * 1024 * 1024);
+    const targetFilePath = isSmallVideo ? cachedPath : path.join(tmpDir, `sample_${file.id}.mp4`);
+    const writeStream = createWriteStream(targetFilePath);
 
     let totalRead = 0;
-    const maxSampleBytes = 6 * 1024 * 1024; // 6MB sample
+    const maxSampleBytes = isSmallVideo ? file.size : 12 * 1024 * 1024; // 12MB sample
 
-    try {
-      for await (const chunk of telegram.iterDownloadFile(firstPart.telegram_message_id, 512 * 1024)) {
+    for (const part of parts) {
+      if (totalRead >= maxSampleBytes) break;
+      const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
+      const iv = Buffer.from(part.iv, 'base64');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+
+      let partRead = 0;
+      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
+        partRead += chunk.length;
         totalRead += chunk.length;
-        const decrypted = decipher.update(chunk);
-        writeStream.write(decrypted);
+        let cipherChunk = chunk;
+        if (partRead > part.size) {
+          const overflow = partRead - part.size;
+          cipherChunk = chunk.subarray(0, chunk.length - overflow);
+        }
+        if (cipherChunk.length > 0) {
+          writeStream.write(decipher.update(cipherChunk));
+        }
         if (totalRead >= maxSampleBytes) break;
       }
-    } catch (iterErr) {}
+    }
 
     await new Promise((resolve) => writeStream.end(resolve));
 
-    const ok = await generateVideoThumbnailServer(sampleTempPath, outputPath);
-    await fsPromises.unlink(sampleTempPath).catch(() => {});
-    return ok;
+    const ok = await generateVideoThumbnailServer(targetFilePath, outputPath);
+    if (!isSmallVideo) {
+      await fsPromises.unlink(targetFilePath).catch(() => {});
+    } else if (existsSync(targetFilePath)) {
+      const cacheManager = require('../services/cacheManager');
+      cacheManager.touchCacheFile(targetFilePath);
+    }
+    return ok && existsSync(outputPath);
   } catch (err) {
     console.warn(`[Thumbnail] Error generating server thumbnail for ${file.id}:`, err.message);
     return false;
@@ -766,12 +873,12 @@ router.get('/:id/thumbnail', async (req, res) => {
       return res.status(403).json({ error: 'Folder is locked.' });
     }
 
-    // 1. If static generated thumbnail exists (JPEG), serve immediately with 24h cache headers
+    // 1. If static generated thumbnail exists (JPEG), serve immediately with long-lived immutable cache headers
     const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
     if (existsSync(thumbPath)) {
       res.writeHead(200, {
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'Cache-Control': 'public, max-age=31536000, immutable',
         'Access-Control-Allow-Origin': '*',
       });
       const stream = createReadStream(thumbPath);
@@ -782,34 +889,32 @@ router.get('/:id/thumbnail', async (req, res) => {
 
     const mime = (file.mime_type || '').toLowerCase();
     
-    // 2. If image, check if local cache exists to generate lightweight 240px thumbnail, else stream
+    // 2. If image, generate lightweight 240px thumbnail, save permanently to data/thumbnails, and serve
     if (mime.startsWith('image/')) {
-      const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-      if (existsSync(cachedPath)) {
-        await generateImageThumbnailServer(cachedPath, thumbPath);
-        if (existsSync(thumbPath)) {
-          res.writeHead(200, {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-            'Access-Control-Allow-Origin': '*',
-          });
-          const stream = createReadStream(thumbPath);
-          stream.pipe(res);
-          req.on('close', () => stream.destroy());
-          return;
-        }
+      const ok = await generateServerImageThumbnailForFile(file, thumbPath);
+      if (ok && existsSync(thumbPath)) {
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*',
+        });
+        const stream = createReadStream(thumbPath);
+        stream.pipe(res);
+        req.on('close', () => stream.destroy());
+        return;
       }
+      // Fallback: stream original image
       await streamFileToResponse(file, req, res, false);
       return;
     }
 
-    // 3. If video, generate thumbnail with FFmpeg on demand (from cache or sample from Telegram)
+    // 3. If video, generate thumbnail with FFmpeg on demand, save permanently to data/thumbnails, and serve
     if (mime.startsWith('video/')) {
       const ok = await generateServerThumbnailForFile(file, thumbPath);
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+          'Cache-Control': 'public, max-age=31536000, immutable',
           'Access-Control-Allow-Origin': '*',
         });
         const stream = createReadStream(thumbPath);
