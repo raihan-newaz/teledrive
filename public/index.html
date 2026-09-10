@@ -154,8 +154,14 @@
             <div id="setup-test-status" class="test-status-box" style="display:none;"></div>
             <div class="wizard-actions">
               <button type="button" class="btn-secondary" id="btn-step-5-prev">← Back</button>
-              <button type="button" class="btn-secondary" id="btn-test-connection">🔍 Test Connection</button>
-              <button type="button" class="btn-primary" id="btn-complete-setup">🚀 Complete & Launch</button>
+              <button type="button" class="btn-secondary" id="btn-test-connection">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <span>Test Connection</span>
+              </button>
+              <button type="button" class="btn-primary" id="btn-complete-setup">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                <span>Complete & Launch</span>
+              </button>
             </div>
           </div>
         </form>
@@ -185,7 +191,9 @@
           <div class="form-group">
             <div class="input-with-action">
               <input type="password" id="login-password" name="teledrive_sec_field" placeholder="Master Password" required autocomplete="new-password" data-lpignore="true" data-1password-ignore="true">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password">👁️</button>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
             </div>
           </div>
           <button type="submit" class="btn-primary btn-block" id="login-btn">
@@ -312,7 +320,7 @@
           </div>
           <div class="storage-bar"><div class="storage-fill" id="storage-fill" style="width: 15%;"></div></div>
           <div class="storage-text" id="storage-text">0 files · 0 B used</div>
-          <small class="storage-subtext">✨ Unlimited Free Storage (Any file size)</small>
+          <small class="storage-subtext">Unlimited Free Cloud Storage</small>
         </div>
       </aside>
 
@@ -333,7 +341,7 @@
             <span>Items in Trash are automatically deleted forever from Telegram after 30 days.</span>
           </div>
           <button class="btn-danger-sm" id="btn-empty-trash" title="Empty Trash">
-            <span>🗑️ Empty Trash</span>
+            <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Empty Trash</span>
           </button>
         </div>
 
@@ -379,11 +387,11 @@
         <!-- QUICK FILTERS -->
         <div class="filters" id="filters">
           <button class="filter-chip active" data-type="all">All</button>
-          <button class="filter-chip" data-type="image">🖼️ Images</button>
-          <button class="filter-chip" data-type="video">🎬 Videos</button>
-          <button class="filter-chip" data-type="audio">🎵 Audio</button>
-          <button class="filter-chip" data-type="document">📄 Documents</button>
-          <button class="filter-chip" data-type="archive">📦 Archives</button>
+          <button class="filter-chip" data-type="image"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg><span>Images</span></button>
+          <button class="filter-chip" data-type="video"><svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg><span>Videos</span></button>
+          <button class="filter-chip" data-type="audio"><svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg><span>Audio</span></button>
+          <button class="filter-chip" data-type="document"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg><span>Documents</span></button>
+          <button class="filter-chip" data-type="archive"><svg viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/></svg><span>Archives</span></button>
         </div>
 
         <!-- SORT BAR -->
@@ -517,14 +525,18 @@
         <label for="lock-folder-pass">Folder Password <span class="req">*</span></label>
         <div class="input-with-action">
           <input type="password" id="lock-folder-pass" placeholder="Enter folder password" required autocomplete="new-password">
-          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-pass" title="Show/Hide">👁️</button>
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-pass" title="Show/Hide">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
       </div>
       <div class="form-group">
         <label for="lock-folder-confirm-pass">Confirm Password <span class="req">*</span></label>
         <div class="input-with-action">
           <input type="password" id="lock-folder-confirm-pass" placeholder="Confirm folder password" required autocomplete="new-password">
-          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-confirm-pass" title="Show/Hide">👁️</button>
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="lock-folder-confirm-pass" title="Show/Hide">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
       </div>
       <div class="modal-actions" style="margin-top: 20px;">
@@ -548,7 +560,9 @@
         <label for="unlock-folder-pass">Folder Password <span class="req">*</span></label>
         <div class="input-with-action">
           <input type="password" id="unlock-folder-pass" placeholder="Enter folder password" required autocomplete="current-password">
-          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="unlock-folder-pass" title="Show/Hide">👁️</button>
+          <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="unlock-folder-pass" title="Show/Hide">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
       </div>
       <div class="modal-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
@@ -564,7 +578,9 @@
   <!-- SHARE FILE MODAL (Google Drive Style) -->
   <div class="modal share-modal" id="share-modal" style="display:none;" role="dialog" aria-modal="true">
     <div class="share-modal-header">
-      <div class="share-modal-file-icon" id="share-modal-file-icon">📄</div>
+      <div class="share-modal-file-icon" id="share-modal-file-icon">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+      </div>
       <div class="share-modal-title-wrap">
         <h3 id="share-modal-title">Share File</h3>
         <span class="share-modal-subtitle" id="share-modal-subtitle">Configure link and access settings</span>
@@ -576,7 +592,9 @@
     <div class="share-section">
       <label class="share-section-title">General access</label>
       <div class="share-access-card">
-        <div class="share-access-icon-wrap" id="share-access-icon-wrap">🔒</div>
+        <div class="share-access-icon-wrap" id="share-access-icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        </div>
         <div class="share-access-info">
           <select id="share-access-select" class="share-access-select">
             <option value="restricted">Restricted — Only you have access</option>
@@ -604,12 +622,14 @@
         <!-- Optional Password -->
         <div class="share-field-group">
           <label class="share-field-label">
-            <span>🔑 Password Protection</span>
+            <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>Password Protection</span>
             <span class="share-field-optional">(Optional)</span>
           </label>
           <div class="share-pw-wrap">
             <input type="password" id="share-password-input" placeholder="Set a password or leave blank">
-            <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">👁️</button>
+            <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
           <small class="share-field-help" id="share-pw-status"></small>
         </div>
@@ -617,7 +637,7 @@
         <!-- Expiration -->
         <div class="share-field-group">
           <label class="share-field-label">
-            <span>⏳ Link Expiration</span>
+            <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>Link Expiration</span>
           </label>
           <select id="share-expiration-select" class="share-select">
             <option value="never">Never expires</option>
@@ -631,8 +651,8 @@
 
       <!-- Stats Badge -->
       <div class="share-stats-badge" id="share-stats-badge">
-        <span>👁️ <strong id="share-stats-views">0</strong> views</span>
-        <span>⬇️ <strong id="share-stats-downloads">0</strong> downloads</span>
+        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><strong id="share-stats-views">0</strong> views</span>
+        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><strong id="share-stats-downloads">0</strong> downloads</span>
       </div>
     </div>
 
@@ -700,19 +720,19 @@
         <span class="info-value" id="info-file-location">-</span>
       </div>
       <div class="info-row highlight-row">
-        <span class="info-label">📅 Upload Date & Time</span>
+        <span class="info-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>Upload Date & Time</span>
         <span class="info-value info-date" id="info-file-created">-</span>
       </div>
       <div class="info-row">
-        <span class="info-label">🕒 Last Modified</span>
+        <span class="info-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>Last Modified</span>
         <span class="info-value info-date" id="info-file-updated">-</span>
       </div>
       <div class="info-row">
-        <span class="info-label">🔐 Encryption</span>
+        <span class="info-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>Encryption</span>
         <span class="info-value"><span class="badge-secure">AES-256-GCM Zero-Knowledge</span></span>
       </div>
       <div class="info-row">
-        <span class="info-label">💬 Telegram Ref</span>
+        <span class="info-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>Telegram Ref</span>
         <span class="info-value" id="info-file-tg">-</span>
       </div>
       <div class="info-row">
@@ -722,7 +742,10 @@
     </div>
 
     <div class="modal-actions file-info-actions">
-      <button class="btn-secondary" id="info-copy-link">📋 Copy Stream Link</button>
+      <button class="btn-secondary" id="info-copy-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        <span>Copy Stream Link</span>
+      </button>
       <button class="btn-primary" data-modal-cancel>Close</button>
     </div>
   </div>
@@ -780,7 +803,7 @@
       </button>
       <button class="settings-tab-btn" data-tab="webdav">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M4 6h16v10H4V6zm16 12H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2zm-7 2h2v2h-2v-2zm-6 0h4v2H7v-2zm10 0h4v2h-4v-2z"/>
+          <path d="M4 1h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V3c0-1.1.9-2 2-2zm0 8h16c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2zm9 8v4h3v2H8v-2h3v-4H4c-1.1 0-2-.9-2-2v-1h20v1c0 1.1-.9 2-2 2h-7zM6 5h2v2H6V5zm0 8h2v2H6v-2z"/>
         </svg>
         <span>Network Drive</span>
       </button>
@@ -798,7 +821,9 @@
             <label for="settings-current-pass">Current Password <span class="req">*</span></label>
             <div class="input-with-action">
               <input type="password" id="settings-current-pass" placeholder="Enter current master password" required autocomplete="current-password">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-current-pass" title="Show/Hide">👁️</button>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-current-pass" title="Show/Hide Password">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              </button>
             </div>
           </div>
           <div class="form-row-2">
@@ -806,14 +831,18 @@
               <label for="settings-new-pass">New Password <span class="req">*</span></label>
               <div class="input-with-action">
                 <input type="password" id="settings-new-pass" placeholder="Enter new master password" required autocomplete="new-password">
-                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-new-pass" title="Show/Hide">👁️</button>
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-new-pass" title="Show/Hide Password">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
               </div>
             </div>
             <div class="form-group">
               <label for="settings-confirm-pass">Confirm New Password <span class="req">*</span></label>
               <div class="input-with-action">
                 <input type="password" id="settings-confirm-pass" placeholder="Confirm new password" required autocomplete="new-password">
-                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-confirm-pass" title="Show/Hide">👁️</button>
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-confirm-pass" title="Show/Hide Password">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -894,7 +923,9 @@
             <label for="settings-tg-bot-token">Telegram Bot Token <span class="req">*</span></label>
             <div class="input-with-action">
               <input type="password" id="settings-tg-bot-token" placeholder="e.g. 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ" required autocomplete="off">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-tg-bot-token" title="Show/Hide Token">👁️</button>
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="settings-tg-bot-token" title="Show/Hide Token">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              </button>
             </div>
           </div>
 
@@ -1020,28 +1051,36 @@
         </div>
         <div class="storage-stats-grid">
           <div class="storage-card">
-            <div class="storage-card-icon">📁</div>
+            <div class="storage-card-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+            </div>
             <div class="storage-card-content">
               <span class="storage-card-label">Total Cloud Files</span>
               <strong id="settings-storage-files" class="storage-card-val">0</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">☁️</div>
+            <div class="storage-card-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+            </div>
             <div class="storage-card-content">
               <span class="storage-card-label">Encrypted Cloud Used</span>
               <strong id="settings-storage-bytes" class="storage-card-val">0 B</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">⚡</div>
+            <div class="storage-card-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+            </div>
             <div class="storage-card-content">
               <span class="storage-card-label">Storage Capacity</span>
               <strong class="storage-card-val text-success">Unlimited ∞</strong>
             </div>
           </div>
           <div class="storage-card">
-            <div class="storage-card-icon">💾</div>
+            <div class="storage-card-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></svg>
+            </div>
             <div class="storage-card-content">
               <span class="storage-card-label">Local Cache (3 GB Limit)</span>
               <strong id="settings-cache-size" class="storage-card-val">0 B</strong>
@@ -1079,8 +1118,9 @@
             <strong>Automated Daily Cloud Backup <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-left: 6px;">Active (24h)</span></strong>
             <p id="backup-status-text">Checking latest cloud backup status...</p>
           </div>
-          <button type="button" class="btn-primary" id="btn-cloud-backup-now">
-            <span>⚡ Backup Now</span>
+          <button type="button" class="btn-primary" id="btn-cloud-backup-now" style="display: inline-flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+            <span>Backup Now</span>
           </button>
         </div>
         <!-- Recent Cloud Snapshots List -->
@@ -1152,9 +1192,9 @@
           </div>
           <div class="pref-control">
             <select id="webdav-permission-mode" class="settings-select">
-              <option value="full" selected>🔓 Full Access (Read, Write, Edit & Delete)</option>
-              <option value="readonly">👁️ Read-Only Mode (View & Download only)</option>
-              <option value="safemode">🛡️ Safe Mode (Read & Upload, Delete Disabled)</option>
+              <option value="full" selected>Full Access (Read, Write, Edit & Delete)</option>
+              <option value="readonly">Read-Only Mode (View & Download only)</option>
+              <option value="safemode">Safe Mode (Read & Upload, Delete Disabled)</option>
             </select>
           </div>
         </div>
@@ -1170,8 +1210,9 @@
           <label>WebDAV Server URL</label>
           <div class="input-with-action">
             <input type="text" id="webdav-url" readonly style="font-family: monospace; background: var(--bg-hover);">
-            <button type="button" class="btn-secondary icon-btn-sm" id="btn-copy-webdav-url" title="Copy URL" style="padding: 0 12px; height: 38px; font-size: 12px;">
-              <span>📋 Copy</span>
+            <button type="button" class="btn-secondary icon-btn-sm" id="btn-copy-webdav-url" title="Copy URL" style="padding: 0 12px; height: 38px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
             </button>
           </div>
           <small class="hint">Use this address in Windows "Add a network location", macOS "Connect to Server", or iOS Files app.</small>
@@ -1187,7 +1228,9 @@
               <label for="webdav-password">WebDAV Password</label>
               <div class="input-with-action">
                 <input type="password" id="webdav-password" placeholder="Leave empty to use Master Password" autocomplete="new-password">
-                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="webdav-password" title="Show/Hide">👁️</button>
+                <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="webdav-password" title="Show/Hide Password">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -1202,13 +1245,14 @@
       <div class="settings-section">
         <div class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <h4>⚡ Real-Time Connected Devices</h4>
+            <h4>Real-Time Connected Devices</h4>
             <p>Active devices and OS clients currently connected via Network Drive</p>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
             <span id="webdav-sessions-count" class="badge-count" style="font-size: 11px; padding: 3px 8px; border-radius: 10px; background: rgba(52, 199, 89, 0.15); color: #34c759; font-weight: 600;">0 Active</span>
-            <button type="button" class="btn-secondary icon-btn-sm" id="btn-refresh-webdav-sessions" title="Refresh Connected Devices" style="padding: 0 10px; height: 32px; font-size: 12px;">
-              <span>🔄 Refresh</span>
+            <button type="button" class="btn-secondary icon-btn-sm" id="btn-refresh-webdav-sessions" title="Refresh Connected Devices" style="padding: 0 10px; height: 32px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              <span>Refresh</span>
             </button>
           </div>
         </div>
@@ -1226,24 +1270,33 @@
           <p>Quick guides to map TeleDrive on your favorite operating system</p>
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
-            <strong style="font-size: 13px; color: var(--accent-color);">🪟 Windows File Explorer</strong>
-            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="#0078d4"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.551H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.751"/></svg>
+              <strong style="font-size: 13px; color: var(--text-primary);">Windows File Explorer</strong>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.6;">
               1. Open <strong>File Explorer</strong>, right-click <strong>This PC</strong> ➜ select <strong>Add a network location</strong>.<br>
               2. Click Next ➜ select <em>"Choose a custom network location"</em>.<br>
               3. Paste the WebDAV Server URL above and enter your Username & Password.
             </p>
           </div>
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
-            <strong style="font-size: 13px; color: var(--accent-color);">🍏 Apple Mac (Finder)</strong>
-            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 1.01-2.87-.96.04-2.13.65-2.79 1.43-.57.67-.99 1.74-.92 2.78 1.07.08 2.15-.57 2.7-1.34z"/></svg>
+              <strong style="font-size: 13px; color: var(--text-primary);">macOS Finder</strong>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.6;">
               1. Open <strong>Finder</strong>, press <kbd>Cmd</kbd> + <kbd>K</kbd> (or click <em>Go ➜ Connect to Server</em>).<br>
               2. Paste the WebDAV URL and click <strong>Connect</strong> with your credentials.
             </p>
           </div>
-          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px;">
-            <strong style="font-size: 13px; color: var(--accent-color);">📱 iPhone / iPad (Files App)</strong>
-            <p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; line-height: 1.5;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+              <strong style="font-size: 13px; color: var(--text-primary);">iPhone / iPad (Files App)</strong>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.6;">
               1. Open the <strong>Files</strong> app ➜ tap the <strong>...</strong> (More) icon at the top right ➜ select <strong>Connect to Server</strong>.<br>
               2. Enter the WebDAV URL, choose Registered User, and sign in.
             </p>

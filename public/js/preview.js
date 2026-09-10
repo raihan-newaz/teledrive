@@ -238,7 +238,9 @@ const Preview = {
         <div class="modern-audio-card">
           <div class="audio-vinyl-wrap">
             <div class="audio-vinyl" id="audio-vinyl">
-              <div class="audio-vinyl-inner">🎵</div>
+              <div class="audio-vinyl-inner">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+              </div>
             </div>
           </div>
 
@@ -278,10 +280,15 @@ const Preview = {
           <!-- Speed & Volume -->
           <div class="audio-footer-row">
             <div class="audio-volume-box">
-              <span class="audio-vol-icon">🔊</span>
+              <span class="audio-vol-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              </span>
               <input type="range" class="audio-vol-slider" id="audio-vol-slider" min="0" max="1" step="0.05" value="1">
             </div>
-            <a href="${downloadUrl}" class="audio-dl-link" download="${file.name}">⬇ Download</a>
+            <a href="${downloadUrl}" class="audio-dl-link" download="${file.name}">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              <span>Download</span>
+            </a>
           </div>
         </div>
       `;
@@ -340,8 +347,14 @@ const Preview = {
       contentEl.innerHTML = `
         <div class="code-viewer-wrap">
           <div class="code-toolbar">
-            <span>💻 ${file.name}</span>
-            <button class="btn-secondary" id="btn-copy-code">📋 Copy All</button>
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+              <span>${file.name}</span>
+            </span>
+            <button class="btn-secondary" id="btn-copy-code" style="display:inline-flex; align-items:center; gap:5px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy All</span>
+            </button>
           </div>
           <div class="code-content" id="code-content">Loading text content...</div>
         </div>
@@ -377,8 +390,9 @@ const Preview = {
           <h2>${file.name}</h2>
           <p class="unsupported-size">${UI.formatFileSize(file.size)} · ${mime || 'Binary file'}</p>
           <p class="unsupported-hint">This file format can be downloaded and opened with your computer's native app.</p>
-          <a href="${downloadUrl}" class="btn-primary btn-lg" download="${file.name}">
-            <span>⬇ Download Decrypted File</span>
+          <a href="${downloadUrl}" class="btn-primary btn-lg" download="${file.name}" style="display:inline-flex; align-items:center; gap:8px;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span>Download Decrypted File</span>
           </a>
         </div>
       `;

@@ -840,6 +840,9 @@ input:focus, select:focus, textarea:focus {
   padding-bottom: 4px;
 }
 .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 14px;
   border-radius: 16px;
   background: var(--bg-secondary);
@@ -849,6 +852,13 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
   white-space: nowrap;
   transition: all 0.2s;
+  cursor: pointer;
+}
+.filter-chip svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  fill: currentColor;
 }
 .filter-chip:hover {
   background: var(--bg-hover);
@@ -2798,13 +2808,24 @@ input:focus, select:focus, textarea:focus {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
-  font-size: 14px;
-  opacity: 0.7;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
 .btn-toggle-pass:hover {
-  opacity: 1;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn-toggle-pass svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 .settings-actions {
@@ -3024,7 +3045,21 @@ input:focus, select:focus, textarea:focus {
 }
 
 .storage-card-icon {
-  font-size: 24px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(26, 115, 232, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.storage-card-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .storage-card-content {

@@ -123,7 +123,7 @@ const Setup = {
     if (statusBox) {
       statusBox.style.display = 'block';
       statusBox.className = 'test-status-box loading';
-      statusBox.innerHTML = '⏳ Connecting to Telegram MTProto... Please wait...';
+      statusBox.innerHTML = '<span class="status-spinner-sm" style="display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:-2px; margin-right:6px;"></span> Connecting to Telegram MTProto... Please wait...';
     }
 
     try {
@@ -137,7 +137,7 @@ const Setup = {
       if (res && res.valid) {
         if (statusBox) {
           statusBox.className = 'test-status-box success';
-          statusBox.innerHTML = '✅ <strong>Connection Successful!</strong> Bot can connect to Telegram and send encrypted files to your channel.';
+          statusBox.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: -2px; margin-right: 6px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><strong>Connection Successful!</strong> Bot can connect to Telegram and send encrypted files to your channel.';
         }
         UI.showToast('Telegram connection verified!', 'success');
       } else {
@@ -146,7 +146,7 @@ const Setup = {
     } catch (e) {
       if (statusBox) {
         statusBox.className = 'test-status-box error';
-        statusBox.innerHTML = `❌ <strong>Connection Failed:</strong> ${e.message || 'Check your credentials and ensure bot is channel Admin'}`;
+        statusBox.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: -2px; margin-right: 6px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><strong>Connection Failed:</strong> ${e.message || 'Check your credentials and ensure bot is channel Admin'}`;
       }
       UI.showToast('Connection failed: ' + (e.message || 'Error'), 'error');
     }

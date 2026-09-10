@@ -28,63 +28,49 @@ class SessionTracker {
 
     let clientName = 'WebDAV Client';
     let osType = 'generic';
-    let icon = '🌐';
 
     if (ua.includes('microsoft-webdav-miniredir') || ua.includes('davclnt')) {
       clientName = 'Windows File Explorer';
       osType = 'windows';
-      icon = '🪟';
     } else if (ua.includes('webdavfs') || ua.includes('finder')) {
       clientName = 'macOS Finder';
       osType = 'apple';
-      icon = '🍎';
     } else if (ua.includes('cfnetwork') || ua.includes('files/') || ua.includes('mobilefileviewer')) {
       clientName = 'iOS Files App';
       osType = 'apple';
-      icon = '📱';
     } else if (ua.includes('solidexplorer')) {
       clientName = 'Solid Explorer';
       osType = 'android';
-      icon = '🤖';
     } else if (ua.includes('cxfileexplorer')) {
       clientName = 'Cx File Explorer';
       osType = 'android';
-      icon = '🤖';
     } else if (ua.includes('rclone')) {
       clientName = 'Rclone Sync';
       osType = 'linux';
-      icon = '🐧';
     } else if (ua.includes('cyberduck') || ua.includes('mountainduck')) {
       clientName = 'Cyberduck';
       osType = 'apple';
-      icon = '🦆';
     } else if (ua.includes('winscp')) {
       clientName = 'WinSCP';
       osType = 'windows';
-      icon = '🪟';
     } else if (ua.includes('windows')) {
       clientName = 'Windows Device';
       osType = 'windows';
-      icon = '🪟';
     } else if (ua.includes('macintosh') || ua.includes('mac os')) {
       clientName = 'Mac Device';
       osType = 'apple';
-      icon = '🍎';
     } else if (ua.includes('iphone') || ua.includes('ipad')) {
       clientName = 'iPhone / iPad';
       osType = 'apple';
-      icon = '📱';
     } else if (ua.includes('android')) {
       clientName = 'Android Device';
       osType = 'android';
-      icon = '🤖';
     } else if (ua.includes('linux')) {
       clientName = 'Linux Client';
       osType = 'linux';
-      icon = '🐧';
     }
 
-    return { clientName, osType, icon };
+    return { clientName, osType };
   }
 
   /**
@@ -130,7 +116,6 @@ class SessionTracker {
         userAgent,
         clientName: parsed.clientName,
         osType: parsed.osType,
-        icon: parsed.icon,
         username,
         connectedAt: new Date(now).toISOString(),
         lastActive: now,

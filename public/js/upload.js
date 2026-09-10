@@ -521,7 +521,7 @@ const Upload = {
           item.overallLoaded = e.loaded;
           this.updateSpeedAndETA(item, e.loaded, e.total);
           if (e.loaded >= e.total) {
-            this.updateItemProgressUI(item, 100, '🔒 Encrypting & saving to Telegram...');
+            this.updateItemProgressUI(item, 100, 'Encrypting & saving to Telegram...');
           } else {
             this.updateItemProgressUI(item);
           }
@@ -618,7 +618,7 @@ const Upload = {
 
           const activeCount = item.activeXHRs ? item.activeXHRs.size : 1;
           const completedCount = item.uploadedIndices ? item.uploadedIndices.length : 0;
-          this.updateItemProgressUI(item, item.progress, `🚀 Uploading Part ${completedCount + 1}/${totalChunks} (${activeCount}x parallel)...`);
+          this.updateItemProgressUI(item, item.progress, `Uploading Part ${completedCount + 1}/${totalChunks} (${activeCount}x parallel)...`);
         }
       };
 
@@ -707,11 +707,16 @@ const Upload = {
 
     body.innerHTML = this.queue.map(item => {
       const safeName = item.file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      let statusIcon = '⏳';
-      if (item.status === 'uploading') statusIcon = '⬆️';
-      if (item.status === 'done') statusIcon = '✅';
-      if (item.status === 'error') statusIcon = '❌';
-      if (item.status === 'cancelled') statusIcon = '🚫';
+      let statusIcon = '<span class="status-spinner-sm" style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent-color); border-right-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></span>';
+      if (item.status === 'uploading') {
+        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="var(--accent-color)"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>';
+      } else if (item.status === 'done') {
+        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#34a853"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+      } else if (item.status === 'error') {
+        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#ea4335"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+      } else if (item.status === 'cancelled') {
+        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#5f6368"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
+      }
 
       const partText = item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '';
 
@@ -721,7 +726,9 @@ const Upload = {
         actionBtn = `<button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">✕</button>`;
       } else if (item.status === 'cancelled' || item.status === 'error') {
         actionBtn = `
-          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume/Retry">🔄</button>
+          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume/Retry">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
           <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">✕</button>
         `;
       } else {

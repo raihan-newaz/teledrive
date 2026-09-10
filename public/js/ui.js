@@ -24,13 +24,17 @@ const UI = {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     
-    let icon = 'ℹ️';
-    if (type === 'success') icon = '✅';
-    if (type === 'error') icon = '❌';
-    if (type === 'warning') icon = '⚠️';
+    let icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="#1a73e8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+    if (type === 'success') {
+      icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="#34a853"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+    } else if (type === 'error') {
+      icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="#ea4335"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+    } else if (type === 'warning') {
+      icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="#fbbc05"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
+    }
 
     toast.innerHTML = `
-      <span class="toast-icon">${icon}</span>
+      <span class="toast-icon" style="display:inline-flex; align-items:center;">${icon}</span>
       <span class="toast-msg">${message}</span>
     `;
 
@@ -407,10 +411,10 @@ const UI = {
     let iconFill = '#5f6368';
     if (hasLock) {
       if (isUnlocked) {
-        lockBadge = `<span class="folder-lock-badge unlocked" title="Unlocked Folder (Protected by Password)">🔓</span>`;
+        lockBadge = `<span class="folder-lock-badge unlocked" title="Unlocked Folder (Protected by Password)"><svg viewBox="0 0 24 24" width="12" height="12" fill="#34a853"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z"/></svg></span>`;
         iconFill = '#34a853';
       } else {
-        lockBadge = `<span class="folder-lock-badge" title="Password Protected Folder (Locked)">🔒</span>`;
+        lockBadge = `<span class="folder-lock-badge" title="Password Protected Folder (Locked)"><svg viewBox="0 0 24 24" width="12" height="12" fill="#ea4335"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></span>`;
         iconFill = '#ea4335';
       }
     }
@@ -443,7 +447,7 @@ const UI = {
     const icon = this.getFileIconSvg(file.mime_type);
     const size = this.formatFileSize(file.size);
     const date = this.formatDate(file.created_at);
-    const starIcon = file.is_starred ? '⭐' : '';
+    const starIcon = file.is_starred ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fbbc04" style="vertical-align: -2px;"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' : '';
     const downloadUrl = API.getDownloadUrl(file.id);
     const streamUrl = API.getStreamUrl(file.id);
 
@@ -504,7 +508,7 @@ const UI = {
 
     let relockBtnHtml = '';
     if (currentFolder && Boolean(currentFolder.is_locked)) {
-      relockBtnHtml = ` <button type="button" class="btn-relock-folder" id="btn-header-relock" data-folder-id="${currentFolder.id}" title="Lock and exit this folder">🔒 Lock Folder</button>`;
+      relockBtnHtml = ` <button type="button" class="btn-relock-folder" id="btn-header-relock" data-folder-id="${currentFolder.id}" title="Lock and exit this folder" style="display:inline-flex; align-items:center; gap:5px;"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg><span>Lock Folder</span></button>`;
     }
 
     container.innerHTML = breadcrumbs.map((b, idx) => {
@@ -544,7 +548,7 @@ const UI = {
   renderFolderTree(container, tree, onSelect) {
     let html = `
       <div class="tree-item active" data-folder-id="null">
-        <span class="tree-icon">📁</span>
+        <span class="tree-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="var(--accent-color)" style="vertical-align:-2px; margin-right:6px;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>
         <span class="tree-label">My Drive (Root)</span>
       </div>
     `;
@@ -555,7 +559,7 @@ const UI = {
         const safeName = (node.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         html += `
           <div class="tree-item" data-folder-id="${node.id}" style="padding-left: ${padding}px">
-            <span class="tree-icon">📁</span>
+            <span class="tree-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="var(--accent-color)" style="vertical-align:-2px; margin-right:6px;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>
             <span class="tree-label">${safeName}</span>
           </div>
         `;

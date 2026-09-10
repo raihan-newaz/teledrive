@@ -1188,8 +1188,11 @@ const App = {
       const data = await API.getShareStatus(file.id);
       const isShared = !!data.is_shared;
 
+      const ICON_LOCK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+      const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
+
       if (accessSelect) accessSelect.value = isShared ? 'public' : 'restricted';
-      if (accessIcon) accessIcon.textContent = isShared ? '🌐' : '🔒';
+      if (accessIcon) accessIcon.innerHTML = isShared ? ICON_GLOBE : ICON_LOCK;
       if (accessHint) {
         accessHint.textContent = isShared
           ? 'Anyone on the internet with this link can view and download'
@@ -1212,7 +1215,7 @@ const App = {
 
       if (pwStatus) {
         if (data.has_password) {
-          pwStatus.textContent = '🔒 Password protection is active. Enter a new password to change, or leave blank to keep current password.';
+          pwStatus.textContent = 'Password protection is active. Enter a new password to change, or leave blank to keep current password.';
           pwStatus.style.color = 'var(--primary-color)';
         } else {
           pwStatus.textContent = 'Direct access enabled without password.';
@@ -1223,7 +1226,7 @@ const App = {
       if (expStatus) {
         if (data.share_expires_at) {
           const expDate = new Date(data.share_expires_at);
-          expStatus.textContent = `⏳ Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
+          expStatus.textContent = `Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
           expStatus.style.color = expDate < new Date() ? '#ea4335' : 'var(--primary-color)';
         } else {
           expStatus.textContent = 'Link never expires.';
@@ -1937,7 +1940,9 @@ const App = {
     if (accessSelect) {
       accessSelect.onchange = () => {
         const isPublic = accessSelect.value === 'public';
-        if (accessIcon) accessIcon.textContent = isPublic ? '🌐' : '🔒';
+        const ICON_LOCK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+        const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
+        if (accessIcon) accessIcon.innerHTML = isPublic ? ICON_GLOBE : ICON_LOCK;
         if (accessHint) {
           accessHint.textContent = isPublic
             ? 'Anyone on the internet with this link can view and download'
@@ -1975,13 +1980,16 @@ const App = {
     }
 
     if (pwToggleBtn && pwInput) {
+      const ICON_EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+      const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
       pwToggleBtn.onclick = () => {
         if (pwInput.type === 'password') {
           pwInput.type = 'text';
-          pwToggleBtn.textContent = '🙈';
+          pwToggleBtn.innerHTML = ICON_EYE_OFF;
         } else {
           pwInput.type = 'password';
-          pwToggleBtn.textContent = '👁️';
+          pwToggleBtn.innerHTML = ICON_EYE;
         }
       };
     }
@@ -2199,7 +2207,7 @@ const App = {
       sessionStorage.removeItem('teledrive_ftok_' + fid);
     } catch (e) {}
 
-    UI.showToast('Folder locked 🔒', 'info');
+    UI.showToast('Folder locked', 'info');
 
     if (this.currentFolderId === fid) {
       let parentId = null;
@@ -2306,10 +2314,12 @@ const App = {
         if (input) {
           if (input.type === 'password') {
             input.type = 'text';
-            btn.textContent = '🙈';
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`;
+            btn.title = 'Hide Password';
           } else {
             input.type = 'password';
-            btn.textContent = '👁️';
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
+            btn.title = 'Show Password';
           }
         }
       };
@@ -2377,17 +2387,17 @@ const App = {
         try {
           const res = await API.testTelegramSettings({ apiId, apiHash, botToken, channelId });
           if (bannerDot) bannerDot.className = 'tg-status-dot connected';
-          if (bannerTitle) bannerTitle.textContent = `🟢 Valid Connection (@${res.bot?.username || 'Bot'})`;
+          if (bannerTitle) bannerTitle.textContent = `Connected (@${res.bot?.username || 'Bot'})`;
           if (bannerSub) bannerSub.textContent = 'Telegram MTProto handshake & channel access verified!';
           UI.showToast('Telegram connection test passed successfully!', 'success');
         } catch (err) {
           if (bannerDot) bannerDot.className = 'tg-status-dot disconnected';
-          if (bannerTitle) bannerTitle.textContent = '🔴 Connection Test Failed';
+          if (bannerTitle) bannerTitle.textContent = 'Connection Test Failed';
           if (bannerSub) bannerSub.textContent = err.message || 'Could not verify credentials';
           UI.showToast('Telegram test failed: ' + err.message, 'error');
         } finally {
           btnTestTg.disabled = false;
-          btnTestTg.innerHTML = '<span>⚡ Test Connection</span>';
+          btnTestTg.innerHTML = '<span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Test Connection</span>';
         }
       };
     }
@@ -2416,7 +2426,7 @@ const App = {
           const bannerSub = document.getElementById('tg-status-sub');
 
           if (bannerDot) bannerDot.className = 'tg-status-dot connected';
-          if (bannerTitle) bannerTitle.textContent = `🟢 Connected as @${res.bot?.username || 'Bot'}`;
+          if (bannerTitle) bannerTitle.textContent = `Connected as @${res.bot?.username || 'Bot'}`;
           if (bannerSub) bannerSub.textContent = 'Settings saved to .env and client connected!';
 
           UI.showToast('Telegram settings updated & saved!', 'success');
@@ -2424,7 +2434,7 @@ const App = {
           UI.showToast('Save failed: ' + err.message, 'error');
         } finally {
           btnSaveTg.disabled = false;
-          btnSaveTg.innerHTML = '<span>💾 Save & Reconnect</span>';
+          btnSaveTg.innerHTML = '<span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>Save & Reconnect</span>';
         }
       };
     }
@@ -2522,7 +2532,7 @@ const App = {
           UI.showToast('Failed to clear cache: ' + err.message, 'error');
         } finally {
           btnClearCache.disabled = false;
-          btnClearCache.innerHTML = '<span>🗑️ Clear Local Cache</span>';
+          btnClearCache.innerHTML = '<span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Clear Local Cache</span>';
         }
       };
     }
@@ -2542,7 +2552,7 @@ const App = {
           UI.showToast('Cloud backup failed: ' + err.message, 'error');
         } finally {
           btnCloudBackup.disabled = false;
-          btnCloudBackup.innerHTML = '<span>⚡ Backup Now</span>';
+          btnCloudBackup.innerHTML = '<span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>Backup Now</span>';
         }
       };
     }
@@ -2609,7 +2619,7 @@ const App = {
         }
 
         btnImportTrigger.disabled = true;
-        btnImportTrigger.innerHTML = '<span>⏳ Restoring...</span>';
+        btnImportTrigger.innerHTML = '<span>Restoring...</span>';
         UI.showToast('Restoring database backup and verifying tables... Please wait.', 'info', 10000);
 
         try {
@@ -2772,11 +2782,11 @@ const App = {
         if (data.telegram.connected) {
           if (bannerDot) bannerDot.className = 'tg-status-dot connected';
           const uName = data.telegram.botInfo?.username ? `@${data.telegram.botInfo.username}` : 'Bot';
-          if (bannerTitle) bannerTitle.textContent = `🟢 Connected to Telegram (${uName})`;
+          if (bannerTitle) bannerTitle.textContent = `Connected to Telegram (${uName})`;
           if (bannerSub) bannerSub.textContent = `Channel ID: ${data.telegram.channelId || 'N/A'}`;
         } else {
           if (bannerDot) bannerDot.className = 'tg-status-dot disconnected';
-          if (bannerTitle) bannerTitle.textContent = '🟡 Telegram Connecting / Standby';
+          if (bannerTitle) bannerTitle.textContent = 'Telegram Connecting / Standby';
           if (bannerSub) bannerSub.textContent = 'Ready to sync encrypted files with Telegram MTProto.';
         }
       }
@@ -2839,6 +2849,21 @@ const App = {
         countBadge.style.background = onlineCount > 0 ? 'rgba(52, 199, 89, 0.15)' : 'var(--bg-hover)';
       }
 
+      const getDeviceSvg = (osType) => {
+        switch (osType) {
+          case 'windows':
+            return '<svg viewBox="0 0 88 88" width="22" height="22" fill="#0078d4"><path d="M0 12.402l35.689-4.86.016 34.423-35.67.202L0 12.402zm35.67 33.529l.028 34.453L.028 75.48.016 46.133l35.654-.202zm4.33-39.043L87.945 0v41.527l-47.945.31V6.888zm47.973 38.64L88 88l-48.027-6.746V45.73l48.027-.202z"/></svg>';
+          case 'apple':
+            return '<svg viewBox="0 0 170 170" width="22" height="22" fill="var(--text-primary)"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.69-7.83-11.98-14.35-5.99-9.13-10.74-19.66-14.25-31.6-3.51-11.93-5.27-23.08-5.27-33.43 0-14.56 3.7-26.68 11.09-36.37 7.39-9.69 16.74-14.65 28.05-14.88 4.78 0 10.23 1.25 16.34 3.75 6.11 2.5 10.15 3.81 12.11 3.93 1.74-.24 5.92-1.61 12.53-4.11 6.61-2.5 12.31-3.63 17.1-3.39 12.82.76 22.84 5.68 30.08 14.77-11.3 6.85-16.84 16.3-16.62 28.36.22 9.57 3.86 17.5 10.93 23.8 7.07 6.3 15.65 9.89 25.75 10.76-2.18 6.53-4.89 13.06-8.15 19.59zM119.22 31.84c0-7.39 2.67-14.25 8.01-20.57 5.34-6.32 11.9-10.45 19.68-12.38.33 1.52.49 2.94.49 4.24 0 7.39-2.83 14.47-8.49 21.23-5.66 6.76-12.41 10.66-20.25 11.7-.22-1.42-.44-2.82-.44-4.22z"/></svg>';
+          case 'android':
+            return '<svg viewBox="0 0 24 24" width="22" height="22" fill="#3ddc84"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-4.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48C13.85 2.23 12.95 2 12 2c-.96 0-1.86.23-2.66.63L7.85.99c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31C6.97 4.26 6 6.01 6 8h12c0-1.99-.97-3.75-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>';
+          case 'linux':
+            return '<svg viewBox="0 0 24 24" width="22" height="22" fill="#f39c12"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
+          default:
+            return '<svg viewBox="0 0 24 24" width="22" height="22" fill="var(--accent-color)"><path d="M4 6h16v12H4z M2 4c-1.11 0-2 .89-2 2v12c0 1.1.89 2 2 2h20c1.1 0 2-.9 2-2V6c0-1.11-.9-2-2-2H2zm0 14V6h20v12H2z"/></svg>';
+        }
+      };
+
       if (sessions.length === 0) {
         listEl.innerHTML = `
           <div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
@@ -2849,11 +2874,11 @@ const App = {
         listEl.innerHTML = sessions.map(s => {
           let statusBadge = '';
           if (s.status === 'revoked') {
-            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(255, 69, 58, 0.15); color: #ff453a; font-weight: 600;">🔴 Disconnected</span>';
+            statusBadge = '<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(255, 69, 58, 0.15); color: #ff453a; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><span style="width:6px; height:6px; border-radius:50%; background:#ff453a;"></span>Disconnected</span>';
           } else if (s.isOnline) {
-            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(52, 199, 89, 0.15); color: #34c759; font-weight: 600;">🟢 Online</span>';
+            statusBadge = '<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(52, 199, 89, 0.15); color: #34c759; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><span style="width:6px; height:6px; border-radius:50%; background:#34c759;"></span>Online</span>';
           } else {
-            statusBadge = '<span style="font-size: 11px; padding: 2px 7px; border-radius: 4px; background: rgba(255, 179, 0, 0.15); color: #ffb300; font-weight: 600;">🟡 Idle</span>';
+            statusBadge = '<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(255, 179, 0, 0.15); color: #ffb300; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><span style="width:6px; height:6px; border-radius:50%; background:#ffb300;"></span>Idle</span>';
           }
 
           const actionBtn = s.status === 'revoked'
@@ -2869,7 +2894,9 @@ const App = {
           return `
             <div class="cache-action-box" style="padding: 10px 14px; background: var(--bg-hover); display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: var(--radius-sm);">
               <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                <span style="font-size: 22px; line-height: 1;">${s.icon || '🌐'}</span>
+                <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);">
+                  ${getDeviceSvg(s.osType)}
+                </div>
                 <div style="min-width: 0;">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.clientName}</strong>
@@ -2956,8 +2983,9 @@ const App = {
                     ${timeStr} · ${sizeStr} · Telegram Msg #${b.telegram_message_id}
                   </p>
                 </div>
-                <button type="button" class="btn-secondary btn-restore-cloud-backup" data-msg-id="${b.telegram_message_id}" style="padding: 6px 12px; font-size: 12px;">
-                  <span>⚡ Restore</span>
+                <button type="button" class="btn-secondary btn-restore-cloud-backup" data-msg-id="${b.telegram_message_id}" style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                  <span>Restore</span>
                 </button>
               </div>
             `;
@@ -2980,7 +3008,7 @@ const App = {
               if (!confirmed) return;
 
               btn.disabled = true;
-              btn.innerHTML = '<span>⏳ Restoring...</span>';
+              btn.innerHTML = '<span>Restoring...</span>';
               UI.showToast('Downloading & decrypting cloud backup from Telegram...', 'info', 10000);
 
               try {
@@ -2990,7 +3018,7 @@ const App = {
               } catch (err) {
                 UI.showToast('Cloud restore failed: ' + err.message, 'error', 6000);
                 btn.disabled = false;
-                btn.innerHTML = '<span>⚡ Restore</span>';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg><span>Restore</span>';
               }
             };
           });
