@@ -190,15 +190,16 @@ async function generateServerThumbnailForFile(file, outputPath) {
       return await generateVideoThumbnailServer(cachedPath, outputPath);
     }
 
-    // Fast-path: try FFmpeg HTTP stream seeking first (requests only minimal header/index bytes)
+    // 1. Fast-path: FFmpeg HTTP stream seeking with internal loopback authentication
     const port = process.env.PORT || 3000;
-    const streamUrl = `http://127.0.0.1:${port}/api/files/${file.id}/stream`;
+    const internalKey = encodeURIComponent(process.env.ENCRYPTION_KEY || '');
+    const streamUrl = `http://127.0.0.1:${port}/api/files/${file.id}/stream?internalKey=${internalKey}`;
     try {
       const ok = await generateVideoThumbnailServer(streamUrl, outputPath);
       if (ok && existsSync(outputPath)) return true;
     } catch (e) {}
 
-    // Fallback: Download sample or full video if small
+    // 2. Fallback: Download full video directly to local cache
     let parts = [];
     if (file.is_chunked === 1) {
       parts = db.getFileChunks(file.id);
@@ -217,23 +218,17 @@ async function generateServerThumbnailForFile(file, outputPath) {
 
     if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
-    const isSmallVideo = (file.size <= 50 * 1024 * 1024);
-    const targetFilePath = isSmallVideo ? cachedPath : path.join(tmpDir, `sample_${file.id}.mp4`);
+    const targetFilePath = cachedPath;
     const writeStream = createWriteStream(targetFilePath);
 
-    let totalRead = 0;
-    const maxSampleBytes = isSmallVideo ? file.size : 12 * 1024 * 1024; // 12MB sample
-
     for (const part of parts) {
-      if (totalRead >= maxSampleBytes) break;
       const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
       const iv = Buffer.from(part.iv, 'base64');
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
 
       let partRead = 0;
-      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
+      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 1024 * 1024)) {
         partRead += chunk.length;
-        totalRead += chunk.length;
         let cipherChunk = chunk;
         if (partRead > part.size) {
           const overflow = partRead - part.size;
@@ -242,16 +237,13 @@ async function generateServerThumbnailForFile(file, outputPath) {
         if (cipherChunk.length > 0) {
           writeStream.write(decipher.update(cipherChunk));
         }
-        if (totalRead >= maxSampleBytes) break;
       }
     }
 
     await new Promise((resolve) => writeStream.end(resolve));
 
     const ok = await generateVideoThumbnailServer(targetFilePath, outputPath);
-    if (!isSmallVideo) {
-      await fsPromises.unlink(targetFilePath).catch(() => {});
-    } else if (existsSync(targetFilePath)) {
+    if (existsSync(targetFilePath)) {
       const cacheManager = require('../services/cacheManager');
       cacheManager.touchCacheFile(targetFilePath);
     }

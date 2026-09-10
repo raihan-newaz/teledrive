@@ -9,6 +9,12 @@ const jwt = require('jsonwebtoken');
  */
 const authMiddleware = (req, res, next) => {
   try {
+    // 0. Internal loopback authentication for FFmpeg thumbnail generator & server background tasks
+    if (req.query && req.query.internalKey && process.env.ENCRYPTION_KEY && req.query.internalKey === process.env.ENCRYPTION_KEY) {
+      req.user = { id: 'internal', username: 'server' };
+      return next();
+    }
+
     let token = null;
 
     // 1. Check Authorization header

@@ -462,7 +462,7 @@ const UI = {
       previewHtml = `
         <div class="file-card-preview has-thumbnail">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="${safeName}" onerror="this.style.display='none'">
+          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="" onload="this.classList.add('loaded')" onerror="this.style.display='none'">
         </div>
       `;
     } else if (cat === 'video') {
@@ -470,10 +470,11 @@ const UI = {
       const cached = localStorage.getItem(`vthumb_${file.id}`) || sessionStorage.getItem(`vthumb_${file.id}`);
       const hasCached = (cached && typeof cached === 'string' && cached.startsWith('data:image') && cached.length > 500);
       const imgSrc = hasCached ? cached : thumbUrl;
+      const loadedClass = hasCached ? ' loaded' : '';
       previewHtml = `
         <div class="file-card-preview has-thumbnail video-preview">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img id="vthumb-${file.id}" class="file-thumb-media" src="${imgSrc}" loading="lazy" alt="${safeName}" onerror="UI.onVideoThumbError(this, '${file.id}')">
+          <img id="vthumb-${file.id}" class="file-thumb-media${loadedClass}" src="${imgSrc}" loading="lazy" alt="" onload="this.classList.add('loaded')" onerror="UI.onVideoThumbError(this, '${file.id}')">
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
