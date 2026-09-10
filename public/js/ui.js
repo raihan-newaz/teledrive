@@ -457,14 +457,14 @@ const UI = {
       previewHtml = `
         <div class="file-card-preview has-thumbnail">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="${safeName}">
+          <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="${safeName}" onload="this.classList.add('loaded')" onerror="this.style.display='none'">
         </div>
       `;
     } else if (cat === 'video') {
       previewHtml = `
         <div class="file-card-preview has-thumbnail video-preview">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
-          <img id="vthumb-${file.id}" class="file-thumb-media" loading="lazy" alt="${safeName}">
+          <img id="vthumb-${file.id}" class="file-thumb-media" loading="lazy" alt="${safeName}" onerror="this.style.display='none'">
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
@@ -694,13 +694,14 @@ const UI = {
       const timeoutId = setTimeout(done, 6000); // 6s fast fallback timeout
 
       const captureFrame = () => {
-        if (finished) return;
+        if (finished) return false;
         try {
           if (video.videoWidth > 0 && video.videoHeight > 0) {
             const canvas = document.createElement('canvas');
             canvas.width = Math.min(240, video.videoWidth || 240);
             canvas.height = Math.min(135, video.videoHeight || 135);
             const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             let dataUrl;
             try {
               dataUrl = canvas.toDataURL('image/webp', 0.7);
@@ -726,9 +727,15 @@ const UI = {
         return false;
       };
 
+      video.onloadedmetadata = () => {
+        try {
+          video.currentTime = Math.min(0.2, (video.duration || 1) / 2);
+        } catch (e) {}
+      };
+
       video.onloadeddata = () => {
         if (!captureFrame()) {
-          try { video.currentTime = 0.05; } catch (e) { done(); }
+          try { video.currentTime = 0.1; } catch (e) { done(); }
         }
       };
 

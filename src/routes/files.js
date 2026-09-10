@@ -167,6 +167,16 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
 
   const chunkSize = (end - start) + 1;
 
+  const commonHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Range, Authorization, x-folder-token',
+    'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type',
+    'Accept-Ranges': 'bytes',
+    'Content-Type': file.mime_type || 'application/octet-stream',
+    'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
+  };
+
   // 1. If cached locally, serve directly from cache with byte-accurate slice
   if (existsSync(cachedPath)) {
     try {
@@ -174,11 +184,9 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       if (stats.size === fileSize) {
         if (isRangeRequest) {
           res.writeHead(206, {
+            ...commonHeaders,
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
             'Content-Length': chunkSize,
-            'Content-Type': file.mime_type || 'application/octet-stream',
-            'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
           });
           const fileStream = createReadStream(cachedPath, { start, end });
           fileStream.pipe(res);
@@ -186,10 +194,8 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
           return;
         } else {
           res.writeHead(200, {
+            ...commonHeaders,
             'Content-Length': fileSize,
-            'Content-Type': file.mime_type || 'application/octet-stream',
-            'Accept-Ranges': 'bytes',
-            'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
           });
           const fileStream = createReadStream(cachedPath);
           fileStream.pipe(res);
@@ -225,21 +231,27 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
   // Sort chunks by index ascending
   partsToStream.sort((a, b) => a.chunk_index - b.chunk_index);
 
+  const commonHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Range, Authorization, x-folder-token',
+    'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type',
+    'Accept-Ranges': 'bytes',
+    'Content-Type': file.mime_type || 'application/octet-stream',
+    'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
+  };
+
   // Send proper HTTP 206 Partial Content or HTTP 200 OK headers
   if (isRangeRequest) {
     res.writeHead(206, {
+      ...commonHeaders,
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
       'Content-Length': chunkSize,
-      'Content-Type': file.mime_type || 'application/octet-stream',
-      'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
     });
   } else {
     res.writeHead(200, {
+      ...commonHeaders,
       'Content-Length': fileSize,
-      'Content-Type': file.mime_type || 'application/octet-stream',
-      'Accept-Ranges': 'bytes',
-      'Content-Disposition': isDownload ? `attachment; filename="${encodeURIComponent(file.name)}"` : 'inline',
     });
   }
 
@@ -644,75 +656,7 @@ router.get('/:id/thumbnail', async (req, res) => {
     if (!checkFileFolderAccess(file, req)) {
       return res.status(403).json({ error: 'Folder is locked.' });
     }
-
-    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-
-    const etag = `"${file.id}_${file.size}"`;
-    res.setHeader('ETag', etag);
-    res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
-    }
-
-    if (existsSync(cachedPath) && statSync(cachedPath).size === file.size) {
-      res.setHeader('Content-Length', file.size);
-      const stream = createReadStream(cachedPath);
-      stream.pipe(res);
-      req.on('close', () => stream.destroy());
-      return;
-    }
-
-    // Stream on-the-fly (for thumbnail of single/chunk 0)
-    const targetMsgId = file.telegram_message_id;
-    const targetSalt = file.salt;
-    const targetIv = file.iv;
-    const targetSize = file.size;
-    const isSingleFile = file.is_chunked === 0 || file.total_chunks <= 1;
-
-    const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, targetSalt);
-    const iv = Buffer.from(targetIv, 'base64');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-
-    const tempCachedPath = `${cachedPath}.tmp`;
-    const cacheWriteStream = isSingleFile ? createWriteStream(tempCachedPath) : null;
-    let totalEnc = 0;
-    let isClientClosed = false;
-
-    req.on('close', () => {
-      isClientClosed = true;
-      if (cacheWriteStream) cacheWriteStream.destroy();
-      try { if (existsSync(tempCachedPath)) unlinkSync(tempCachedPath); } catch (e) {}
-    });
-
-    for await (const chunk of telegram.iterDownloadFile(targetMsgId, 256 * 1024)) {
-      if (isClientClosed) break;
-      totalEnc += chunk.length;
-      let cipherChunk = chunk;
-      if (totalEnc > targetSize) {
-        const overflow = totalEnc - targetSize;
-        cipherChunk = chunk.subarray(0, chunk.length - overflow);
-      }
-      if (cipherChunk.length > 0) {
-        const dec = decipher.update(cipherChunk);
-        if (!isClientClosed) res.write(dec);
-        if (cacheWriteStream) cacheWriteStream.write(dec);
-      }
-    }
-
-    if (cacheWriteStream) {
-      cacheWriteStream.end(() => {
-        if (!isClientClosed && existsSync(tempCachedPath)) {
-          try {
-            const fs = require('fs');
-            fs.renameSync(tempCachedPath, cachedPath);
-          } catch (e) {}
-        }
-      });
-    }
-    if (!isClientClosed) res.end();
+    await streamFileToResponse(file, req, res, false);
   } catch (error) {
     console.error('Thumbnail error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to load thumbnail' });
