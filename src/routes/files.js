@@ -28,7 +28,7 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
   return new Promise((resolve) => {
     if (!existsSync(videoPath)) return resolve(false);
     execFile('ffmpeg', [
-      '-ss', '00:00:01',
+      '-ss', '00:00:02',
       '-i', videoPath,
       '-vframes', '1',
       '-vf', 'scale=320:-1',
@@ -36,9 +36,9 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
       '-y',
       outputPath
     ], { timeout: 10000 }, (err) => {
-      if (err) {
+      if (err || !existsSync(outputPath)) {
         execFile('ffmpeg', [
-          '-ss', '00:00:00.1',
+          '-ss', '00:00:00.5',
           '-i', videoPath,
           '-vframes', '1',
           '-vf', 'scale=320:-1',
@@ -53,6 +53,62 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
       }
     });
   });
+}
+
+async function generateServerThumbnailForFile(file, outputPath) {
+  try {
+    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+    if (existsSync(cachedPath)) {
+      return await generateVideoThumbnailServer(cachedPath, outputPath);
+    }
+
+    // Download first 4MB sample from Telegram
+    let firstPart = null;
+    if (file.is_chunked === 1) {
+      const chunks = db.getFileChunks(file.id);
+      if (chunks && chunks.length > 0) {
+        chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+        firstPart = chunks[0];
+      }
+    } else {
+      firstPart = {
+        telegram_message_id: file.telegram_message_id,
+        size: file.size,
+        iv: file.iv,
+        salt: file.salt
+      };
+    }
+
+    if (!firstPart || !firstPart.telegram_message_id) return false;
+
+    const sampleTempPath = path.join(tmpDir, `sample_${file.id}.mp4`);
+    const writeStream = createWriteStream(sampleTempPath);
+
+    const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, firstPart.salt);
+    const iv = Buffer.from(firstPart.iv, 'base64');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+
+    let totalRead = 0;
+    const maxSampleBytes = 6 * 1024 * 1024; // 6MB sample
+
+    try {
+      for await (const chunk of telegram.iterDownloadFile(firstPart.telegram_message_id, 512 * 1024)) {
+        totalRead += chunk.length;
+        const decrypted = decipher.update(chunk);
+        writeStream.write(decrypted);
+        if (totalRead >= maxSampleBytes) break;
+      }
+    } catch (iterErr) {}
+
+    await new Promise((resolve) => writeStream.end(resolve));
+
+    const ok = await generateVideoThumbnailServer(sampleTempPath, outputPath);
+    await fsPromises.unlink(sampleTempPath).catch(() => {});
+    return ok;
+  } catch (err) {
+    console.warn(`[Thumbnail] Error generating server thumbnail for ${file.id}:`, err.message);
+    return false;
+  }
 }
 
 const upload = multer({ dest: tmpDir, limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2GB max
@@ -717,22 +773,19 @@ router.get('/:id/thumbnail', async (req, res) => {
       return;
     }
 
-    // 3. If video and decrypted cache exists, generate thumbnail on demand
+    // 3. If video, generate thumbnail with FFmpeg on demand (from cache or sample from Telegram)
     if (mime.startsWith('video/')) {
-      const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-      if (existsSync(cachedPath)) {
-        const ok = await generateVideoThumbnailServer(cachedPath, thumbPath);
-        if (ok && existsSync(thumbPath)) {
-          res.writeHead(200, {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=86400',
-            'Access-Control-Allow-Origin': '*',
-          });
-          const stream = createReadStream(thumbPath);
-          stream.pipe(res);
-          req.on('close', () => stream.destroy());
-          return;
-        }
+      const ok = await generateServerThumbnailForFile(file, thumbPath);
+      if (ok && existsSync(thumbPath)) {
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+          'Access-Control-Allow-Origin': '*',
+        });
+        const stream = createReadStream(thumbPath);
+        stream.pipe(res);
+        req.on('close', () => stream.destroy());
+        return;
       }
     }
 
