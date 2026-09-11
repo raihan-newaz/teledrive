@@ -200,6 +200,27 @@ async function downloadToStream(messageId) {
   return Readable.from(iterDownloadFile(messageId));
 }
 
+const _mediaCache = new Map();
+
+async function getTelegramMedia(messageId) {
+  const mId = parseInt(messageId, 10);
+  if (_mediaCache.has(mId)) {
+    return _mediaCache.get(mId);
+  }
+  const tClient = getClient();
+  const channelEntity = await getChannelInputEntity();
+  const messages = await withTelegramRetry(() => tClient.getMessages(channelEntity, { ids: [mId] }));
+  if (!messages || messages.length === 0 || !messages[0] || !messages[0].media) {
+    throw new Error('Media not found in Telegram message ' + messageId);
+  }
+  if (_mediaCache.size > 500) {
+    const firstKey = _mediaCache.keys().next().value;
+    _mediaCache.delete(firstKey);
+  }
+  _mediaCache.set(mId, messages[0].media);
+  return messages[0].media;
+}
+
 /**
  * Streams media in chunks from Telegram
  * @param {number} messageId - Telegram message ID
@@ -208,17 +229,12 @@ async function downloadToStream(messageId) {
  */
 async function* iterDownloadFile(messageId, requestSize = 512 * 1024) {
   const tClient = getClient();
-  const channelEntity = await getChannelInputEntity();
-
-  const messages = await withTelegramRetry(() => tClient.getMessages(channelEntity, { ids: [parseInt(messageId, 10)] }));
-  if (!messages || messages.length === 0 || !messages[0] || !messages[0].media) {
-    throw new Error('Media not found in Telegram message ' + messageId);
-  }
+  const media = await getTelegramMedia(messageId);
 
   for await (const chunk of tClient.iterDownload({
-    file: messages[0].media,
+    file: media,
     requestSize: requestSize,
-    workers: 4,
+    workers: 2,
   })) {
     yield chunk;
   }

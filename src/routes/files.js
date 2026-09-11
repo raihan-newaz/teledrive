@@ -485,10 +485,10 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     });
   }
 
-  const isFullDownload = (start === 0 && end === fileSize - 1);
+  const shouldCache = (start === 0);
   const tempCachedPath = `${cachedPath}.tmp`;
   let cacheWriteStream = null;
-  if (isFullDownload) {
+  if (shouldCache) {
     try {
       cacheWriteStream = createWriteStream(tempCachedPath);
     } catch (e) {}
@@ -574,8 +574,15 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       cacheWriteStream.end(() => {
         if (!isClientClosed && existsSync(tempCachedPath)) {
           try {
-            const fs = require('fs');
-            fs.renameSync(tempCachedPath, cachedPath);
+            const stats = statSync(tempCachedPath);
+            if (stats.size === fileSize) {
+              const fs = require('fs');
+              fs.renameSync(tempCachedPath, cachedPath);
+              const cacheManager = require('../services/cacheManager');
+              cacheManager.touchCacheFile(cachedPath);
+            } else {
+              unlinkSync(tempCachedPath);
+            }
           } catch (e) {}
         }
       });
