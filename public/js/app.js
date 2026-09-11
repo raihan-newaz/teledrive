@@ -2302,6 +2302,12 @@ const App = {
           if (this.currentShareFile) {
             this.currentShareFile.is_shared = isShared ? 1 : 0;
             this.currentShareFile.share_token = shareToken;
+            const mapped = this.filesMap.get(String(this.currentShareFile.id));
+            if (mapped) {
+              mapped.is_shared = isShared ? 1 : 0;
+              mapped.share_token = shareToken;
+            }
+            this.renderContents();
           }
 
           const btnRemovePw = document.getElementById('btn-remove-share-pw');
@@ -2370,7 +2376,12 @@ const App = {
           if (publicSettings) publicSettings.style.display = 'none';
           if (revokeBtn) revokeBtn.style.display = 'none';
           if (linkInput) linkInput.value = '';
-          if (this.currentShareFile) this.currentShareFile.is_shared = 0;
+          if (this.currentShareFile) {
+            this.currentShareFile.is_shared = 0;
+            const mapped = this.filesMap.get(String(this.currentShareFile.id));
+            if (mapped) mapped.is_shared = 0;
+            this.renderContents();
+          }
           this.currentShareStatus = { is_shared: false };
 
           UI.showToast('Public link revoked successfully', 'info');

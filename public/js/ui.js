@@ -450,6 +450,8 @@ const UI = {
     const icon = this.getFileIconSvg(file.mime_type, file.name);
     const size = this.formatFileSize(file.size);
     const date = this.formatDate(file.created_at);
+    const isShared = Boolean(file.is_shared && Number(file.is_shared) !== 0);
+    const shareIcon = isShared ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="vertical-align: -1px; margin-right: 3px; color: var(--accent-color, #1a73e8); display: inline-block;" title="Shared link active"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>' : '';
     const starIcon = file.is_starred ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fbbc04" style="vertical-align: -2px;"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' : '';
     const downloadUrl = API.getDownloadUrl(file.id);
     const streamUrl = API.getStreamUrl(file.id);
@@ -499,7 +501,7 @@ const UI = {
           </div>
           <div class="file-meta-row">
             <span class="file-size">${size}</span>
-            <span class="file-date">${date}</span>
+            <span class="file-date">${shareIcon}${date}</span>
           </div>
         </div>
         <button class="item-more-btn icon-btn" title="More options" data-id="${fileIdStr}" data-type="file">
