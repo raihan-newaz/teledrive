@@ -1342,8 +1342,8 @@ const App = {
 
   async openShareModal(file) {
     if (!file) return;
-    if (typeof file === 'string') {
-      file = this.filesMap.get(file) || { id: file, type: 'file', name: 'File' };
+    if (typeof file === 'string' || typeof file === 'number') {
+      file = this.filesMap.get(String(file)) || { id: String(file), type: 'file', name: 'File' };
     } else if (file.item) {
       file = file.item;
     }
@@ -1409,14 +1409,14 @@ const App = {
       this.currentShareStatus = data;
       const isShared = !!data.is_shared;
 
-      if (isShared && data.share_url) {
-        if (linkInput) linkInput.value = data.share_url;
+      if (isShared && (data.share_token || data.share_url)) {
+        const shareToken = data.share_token || data.shareToken;
+        const finalUrl = shareToken ? `${window.location.origin}/share/${shareToken}` : (data.share_url || '');
+        if (linkInput) linkInput.value = finalUrl;
+        if (revokeBtn) revokeBtn.style.display = 'inline-flex';
       } else {
         if (linkInput) linkInput.value = 'Click "Save Changes" to generate public link';
-      }
-
-      if (revokeBtn) {
-        revokeBtn.style.display = isShared ? 'inline-flex' : 'none';
+        if (revokeBtn) revokeBtn.style.display = 'none';
       }
 
       if (pwStatus && pwInput) {
@@ -2251,8 +2251,11 @@ const App = {
 
     if (saveBtn) {
       saveBtn.onclick = async () => {
-        if (!this.currentShareFile) return;
-        const isShared = accessSelect && accessSelect.value === 'public';
+        if (!this.currentShareFile || !this.currentShareFile.id) {
+          UI.showToast('No active file selected to share. Please re-open the share dialog.', 'warning');
+          return;
+        }
+        const isShared = accessSelect ? accessSelect.value === 'public' : true;
         const password = pwInput ? pwInput.value.trim() : '';
         const expVal = expSelect ? expSelect.value : 'never';
         const expiresInDays = expVal === 'never' ? null : parseInt(expVal, 10);
@@ -2279,14 +2282,19 @@ const App = {
           this.currentShareStatus = data;
           this.clearPasswordRequested = false;
 
-          // Update UI directly
+          // Update UI directly with accurate window.location.origin URL
+          const shareToken = data.share_token || data.shareToken;
+          const finalUrl = shareToken
+            ? `${window.location.origin}/share/${shareToken}`
+            : (data.share_url || data.shareUrl || '');
+
           if (linkInput) {
-            linkInput.value = data.share_url || data.shareUrl || '';
+            linkInput.value = isShared ? finalUrl : '';
           }
 
           if (this.currentShareFile) {
-            this.currentShareFile.is_shared = data.is_shared ? 1 : 0;
-            this.currentShareFile.share_token = data.share_token || data.shareToken;
+            this.currentShareFile.is_shared = isShared ? 1 : 0;
+            this.currentShareFile.share_token = shareToken;
           }
 
           const btnRemovePw = document.getElementById('btn-remove-share-pw');
@@ -2308,15 +2316,19 @@ const App = {
             revokeBtn.style.display = isShared ? 'inline-flex' : 'none';
           }
 
+          if (publicSettings) {
+            publicSettings.style.display = isShared ? 'flex' : 'none';
+          }
+
           const viewsEl = document.getElementById('share-stats-views');
           const dlsEl = document.getElementById('share-stats-downloads');
           if (viewsEl) viewsEl.textContent = data.share_views || data.views || 0;
           if (dlsEl) dlsEl.textContent = data.share_downloads || data.downloads || 0;
 
-          UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
+          UI.showToast(isShared ? 'Public share link generated & saved!' : 'File is now restricted', 'success');
         } catch (err) {
           console.error('[Share] Save share error:', err);
-          UI.showToast('Failed to save share settings: ' + err.message, 'error');
+          UI.showToast('Failed to save share settings: ' + (err.message || 'Error'), 'error');
         } finally {
           saveBtn.disabled = false;
           saveBtn.textContent = 'Save Changes';

@@ -38,6 +38,7 @@ const webdavRouter = require('./src/routes/webdav');
 const realtimeRouter = require('./src/routes/realtime');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Apply security middleware
 const securityMiddleware = getSecurityMiddleware();
