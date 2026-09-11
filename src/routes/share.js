@@ -356,7 +356,7 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
       token,
       password: hashedPassword,
       expiresAt
-    });
+    }) || db.getFile(fileId) || file;
 
     const host = req.get('host') || 'localhost';
     const protocol = req.protocol || 'http';
@@ -364,18 +364,18 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      fileId: updated.id,
-      id: updated.id,
+      fileId: updated.id || fileId,
+      id: updated.id || fileId,
       isShared: Boolean(updated.is_shared),
       is_shared: Boolean(updated.is_shared),
-      shareToken: updated.share_token,
-      share_token: updated.share_token,
+      shareToken: updated.share_token || token,
+      share_token: updated.share_token || token,
       shareUrl,
       share_url: shareUrl,
       hasPassword: hasPassword(updated),
       has_password: hasPassword(updated),
-      expiresAt: updated.share_expires_at,
-      share_expires_at: updated.share_expires_at,
+      expiresAt: updated.share_expires_at || null,
+      share_expires_at: updated.share_expires_at || null,
       views: updated.share_views || 0,
       share_views: updated.share_views || 0,
       downloads: updated.share_downloads || 0,
