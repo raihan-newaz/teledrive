@@ -1340,6 +1340,7 @@ const App = {
       return;
     }
     this.currentShareFile = file;
+    this.initShareModal();
 
     const modalIcon = document.getElementById('share-modal-file-icon');
     const modalTitle = document.getElementById('share-modal-title');
@@ -2263,7 +2264,6 @@ const App = {
         } else if (password) {
           payload.password = password;
         } else if (!this.currentShareStatus || !this.currentShareStatus.has_password) {
-          // If the file currently had no password and input is left blank, ensure it stays cleared
           payload.clear_password = true;
           payload.password = null;
         }
@@ -2271,11 +2271,44 @@ const App = {
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
-          await API.updateShareStatus(this.currentShareFile.id, payload);
+          const data = await API.updateShareStatus(this.currentShareFile.id, payload);
+          this.currentShareStatus = data;
+          this.clearPasswordRequested = false;
+
+          // Update UI directly
+          if (linkInput) {
+            linkInput.value = data.share_url || data.shareUrl || '';
+          }
+
+          if (this.currentShareFile) {
+            this.currentShareFile.is_shared = data.is_shared ? 1 : 0;
+            this.currentShareFile.share_token = data.share_token || data.shareToken;
+          }
+
+          if (pwStatus && pwInput) {
+            if (data.has_password) {
+              pwStatus.innerHTML = '<span style="color:#34a853;">🔒 Password protection is ACTIVE</span>';
+              pwInput.value = '';
+              pwInput.placeholder = 'Type new password to change (or leave blank)';
+              if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
+            } else {
+              pwStatus.innerHTML = '<span style="color:var(--text-muted);">🔓 No password protection</span>';
+              pwInput.value = '';
+              pwInput.placeholder = 'Set a password or leave blank';
+              if (btnRemovePw) btnRemovePw.style.display = 'none';
+            }
+          }
+
+          if (revokeBtn) {
+            revokeBtn.style.display = isShared ? 'inline-flex' : 'none';
+          }
+
+          if (viewsEl) viewsEl.textContent = data.share_views || data.views || 0;
+          if (dlsEl) dlsEl.textContent = data.share_downloads || data.downloads || 0;
 
           UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
-          await this.openShareModal(this.currentShareFile);
         } catch (err) {
+          console.error('[Share] Save share error:', err);
           UI.showToast('Failed to save share settings: ' + err.message, 'error');
         } finally {
           saveBtn.disabled = false;
@@ -2301,8 +2334,14 @@ const App = {
         try {
           revokeBtn.disabled = true;
           await API.revokeShare(this.currentShareFile.id);
+          
+          if (accessSelect) accessSelect.value = 'restricted';
+          if (publicSettings) publicSettings.style.display = 'none';
+          if (revokeBtn) revokeBtn.style.display = 'none';
+          if (linkInput) linkInput.value = '';
+          if (this.currentShareFile) this.currentShareFile.is_shared = 0;
+
           UI.showToast('Public link revoked successfully', 'info');
-          await this.openShareModal(this.currentShareFile);
         } catch (err) {
           UI.showToast('Failed to revoke link: ' + err.message, 'error');
         } finally {

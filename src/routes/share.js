@@ -28,6 +28,17 @@ function verifyShareAccessToken(token, accessKey) {
 }
 
 /**
+ * Helper to determine base URL for public share links
+ */
+function getShareBaseUrl(req) {
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = forwardedProto || req.protocol || 'http';
+  const forwardedHost = req.get('x-forwarded-host');
+  const host = forwardedHost || req.get('host') || 'localhost';
+  return `${protocol}://${host}`;
+}
+
+/**
  * Helper to determine if a file actually has an active password
  */
 function hasPassword(file) {
@@ -278,9 +289,8 @@ router.get('/file/:fileId', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const host = req.get('host') || 'localhost';
-    const protocol = req.protocol || 'http';
-    const shareUrl = file.share_token ? `${protocol}://${host}/share/${file.share_token}` : null;
+    const baseUrl = getShareBaseUrl(req);
+    const shareUrl = file.share_token ? `${baseUrl}/share/${file.share_token}` : null;
 
     res.json({
       fileId: file.id,
@@ -356,26 +366,25 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
       token,
       password: hashedPassword,
       expiresAt
-    });
+    }) || db.getFile(fileId) || file;
 
-    const host = req.get('host') || 'localhost';
-    const protocol = req.protocol || 'http';
-    const shareUrl = token ? `${protocol}://${host}/share/${token}` : null;
+    const baseUrl = getShareBaseUrl(req);
+    const shareUrl = token ? `${baseUrl}/share/${token}` : null;
 
     res.json({
       success: true,
-      fileId: updated.id,
-      id: updated.id,
+      fileId: updated.id || fileId,
+      id: updated.id || fileId,
       isShared: Boolean(updated.is_shared),
       is_shared: Boolean(updated.is_shared),
-      shareToken: updated.share_token,
-      share_token: updated.share_token,
+      shareToken: updated.share_token || token,
+      share_token: updated.share_token || token,
       shareUrl,
       share_url: shareUrl,
       hasPassword: hasPassword(updated),
       has_password: hasPassword(updated),
-      expiresAt: updated.share_expires_at,
-      share_expires_at: updated.share_expires_at,
+      expiresAt: updated.share_expires_at || null,
+      share_expires_at: updated.share_expires_at || null,
       views: updated.share_views || 0,
       share_views: updated.share_views || 0,
       downloads: updated.share_downloads || 0,
