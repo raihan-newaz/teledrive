@@ -1341,12 +1341,17 @@ const App = {
   currentShareFile: null,
 
   async openShareModal(file) {
-    if (!file || file.type === 'folder') {
+    if (!file) return;
+    if (typeof file === 'string') {
+      file = this.filesMap.get(file) || { id: file, type: 'file', name: 'File' };
+    } else if (file.item) {
+      file = file.item;
+    }
+    if (file.type === 'folder') {
       UI.showToast('Only individual files can be shared publicly', 'info');
       return;
     }
     this.currentShareFile = file;
-    this.initShareModal();
 
     const modalIcon = document.getElementById('share-modal-file-icon');
     const modalTitle = document.getElementById('share-modal-title');
@@ -1370,8 +1375,8 @@ const App = {
     const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
 
     if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type);
-    if (modalTitle) modalTitle.textContent = `Share "${file.name}"`;
-    if (modalSubtitle) modalSubtitle.textContent = `${UI.formatFileSize(file.size)} • ${file.mime_type || 'File'}`;
+    if (modalTitle) modalTitle.textContent = `Share "${file.name || 'File'}"`;
+    if (modalSubtitle) modalSubtitle.textContent = `${UI.formatFileSize(file.size || 0)} • ${file.mime_type || 'File'}`;
 
     // Reset default UI state & IMMEDIATELY make public options visible
     this.clearPasswordRequested = false;
@@ -1379,7 +1384,7 @@ const App = {
     if (accessSelect) accessSelect.value = 'public';
     if (accessIcon) accessIcon.innerHTML = ICON_GLOBE;
     if (accessHint) accessHint.textContent = 'Anyone on the internet with this link can view and download';
-    if (publicSettings) publicSettings.style.display = 'block';
+    if (publicSettings) publicSettings.style.display = 'flex';
     if (linkInput) linkInput.value = 'Click "Save Changes" to generate public link';
     if (copyBtnText) copyBtnText.textContent = 'Copy link';
     if (pwInput) {
