@@ -1340,6 +1340,7 @@ const App = {
       return;
     }
     this.currentShareFile = file;
+    this.initShareModal();
 
     const modalIcon = document.getElementById('share-modal-file-icon');
     const modalTitle = document.getElementById('share-modal-title');
