@@ -618,6 +618,8 @@ const UI = {
     if (permDeleteBtn) permDeleteBtn.style.display = isTrashed ? 'flex' : 'none';
     if (downloadBtn) downloadBtn.style.display = item.type === 'file' ? 'flex' : 'none';
     if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
+    if (shareBtn) shareBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
+    if (infoBtn) infoBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
     const lockFolderBtn = menu.querySelector('[data-action="lock-folder"]');
     const lockFolderText = document.getElementById('ctx-lock-folder-text');
     const relockFolderBtn = menu.querySelector('[data-action="relock-folder"]');
