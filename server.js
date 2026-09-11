@@ -52,8 +52,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(globalLimiter);
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files with no-cache headers for scripts, styles, and HTML
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Mount routes
 app.use('/api/setup', setupRouter);

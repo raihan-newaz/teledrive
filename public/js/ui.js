@@ -54,14 +54,15 @@ const UI = {
     const modal = document.getElementById(modalId);
     if (overlay && modal) {
       overlay.style.display = 'block';
+      overlay.classList.add('visible');
       modal.style.display = (modal.classList.contains('settings-modal') || modal.classList.contains('share-modal')) ? 'flex' : 'block';
+      modal.classList.add('visible');
       modal.removeAttribute('inert');
       modal.removeAttribute('aria-hidden');
-      modal.querySelectorAll('input, button, select, textarea').forEach(el => el.disabled = false);
-      setTimeout(() => {
-        overlay.classList.add('visible');
-        modal.classList.add('visible');
-      }, 10);
+      modal.querySelectorAll('input, button, select, textarea').forEach(el => {
+        el.disabled = false;
+        el.removeAttribute('inert');
+      });
     }
   },
 
@@ -70,33 +71,30 @@ const UI = {
     const modal = document.getElementById(modalId);
     if (modal) {
       modal.classList.remove('visible');
+      modal.style.display = 'none';
       modal.setAttribute('inert', '');
       modal.setAttribute('aria-hidden', 'true');
-      modal.querySelectorAll('input, button, select, textarea').forEach(el => {
-        el.blur();
-      });
-      setTimeout(() => { 
-        modal.style.display = 'none'; 
-      }, 200);
+      modal.querySelectorAll('input, button, select, textarea').forEach(el => el.blur());
     }
-    if (overlay) {
+    const anyVisible = document.querySelector('.modal.visible');
+    if (!anyVisible && overlay) {
       overlay.classList.remove('visible');
-      setTimeout(() => { overlay.style.display = 'none'; }, 200);
+      overlay.style.display = 'none';
     }
   },
 
   hideAllModals() {
     document.querySelectorAll('.modal').forEach(m => {
       m.classList.remove('visible');
+      m.style.display = 'none';
       m.setAttribute('inert', '');
       m.setAttribute('aria-hidden', 'true');
       m.querySelectorAll('input, button, select, textarea').forEach(el => el.blur());
-      setTimeout(() => { m.style.display = 'none'; }, 200);
     });
     const overlay = document.getElementById('modal-overlay');
     if (overlay) {
       overlay.classList.remove('visible');
-      setTimeout(() => { overlay.style.display = 'none'; }, 200);
+      overlay.style.display = 'none';
     }
   },
 

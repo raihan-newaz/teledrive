@@ -63,23 +63,29 @@ const App = {
         return;
       }
 
-      // Initialize app listeners & UI components
-      try {
-        this.initEventListeners();
-        this.updateSortButtonsUI();
-        this.initSidebar();
-        this.initBottomNav();
-        this.initSearch();
-        this.initFileContainerEvents();
-        this.initDragAndDropMove();
-        this.initContextMenu();
-        this.initModals();
-        this.initShareModal();
-        this.initUpload();
-        this.initSettings();
-        this.initKeyboardShortcuts();
-      } catch (uiErr) {
-        console.error('Error initializing UI components:', uiErr);
+      // Initialize app listeners & UI components with isolated error handling
+      const initializers = [
+        ['EventListeners', () => this.initEventListeners()],
+        ['SortButtons', () => this.updateSortButtonsUI()],
+        ['Sidebar', () => this.initSidebar()],
+        ['BottomNav', () => this.initBottomNav()],
+        ['Search', () => this.initSearch()],
+        ['FileContainerEvents', () => this.initFileContainerEvents()],
+        ['DragAndDropMove', () => this.initDragAndDropMove()],
+        ['ContextMenu', () => this.initContextMenu()],
+        ['Modals', () => this.initModals()],
+        ['ShareModal', () => this.initShareModal()],
+        ['Upload', () => this.initUpload()],
+        ['Settings', () => this.initSettings()],
+        ['KeyboardShortcuts', () => this.initKeyboardShortcuts()]
+      ];
+
+      for (const [name, fn] of initializers) {
+        try {
+          fn();
+        } catch (initErr) {
+          console.error(`Error initializing ${name}:`, initErr);
+        }
       }
 
       // Check auth
@@ -1340,6 +1346,7 @@ const App = {
       return;
     }
     this.currentShareFile = file;
+    this.initShareModal();
 
     const modalIcon = document.getElementById('share-modal-file-icon');
     const modalTitle = document.getElementById('share-modal-title');
@@ -1357,7 +1364,6 @@ const App = {
     const revokeBtn = document.getElementById('btn-revoke-share');
     const accessIcon = document.getElementById('share-access-icon-wrap');
     const accessHint = document.getElementById('share-access-hint');
-
     const btnRemovePw = document.getElementById('btn-remove-share-pw');
 
     if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type);
@@ -1381,6 +1387,7 @@ const App = {
     if (viewsEl) viewsEl.textContent = '0';
     if (dlsEl) dlsEl.textContent = '0';
 
+    // Show modal immediately
     UI.showModal('share-modal');
 
     try {
@@ -1391,16 +1398,15 @@ const App = {
       const ICON_LOCK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
       const ICON_GLOBE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
 
-      if (accessSelect) accessSelect.value = isShared ? 'public' : 'restricted';
-      if (accessIcon) accessIcon.innerHTML = isShared ? ICON_GLOBE : ICON_LOCK;
+      // By default when opening Share modal, show public controls so user can configure link/password/expiry immediately
+      if (accessSelect) accessSelect.value = 'public';
+      if (accessIcon) accessIcon.innerHTML = ICON_GLOBE;
       if (accessHint) {
-        accessHint.textContent = isShared
-          ? 'Anyone on the internet with this link can view and download'
-          : 'Only people logged into TeleDrive can access this file';
+        accessHint.textContent = 'Anyone on the internet with this link can view and download';
       }
 
       if (publicSettings) {
-        publicSettings.style.display = isShared ? 'block' : 'none';
+        publicSettings.style.display = 'block';
       }
 
       if (revokeBtn) {
@@ -1410,7 +1416,7 @@ const App = {
       if (isShared && data.share_url) {
         if (linkInput) linkInput.value = data.share_url;
       } else {
-        if (linkInput) linkInput.value = '';
+        if (linkInput) linkInput.value = 'Click "Save Changes" to generate public link';
       }
 
       if (pwStatus && pwInput) {
@@ -2263,7 +2269,6 @@ const App = {
         } else if (password) {
           payload.password = password;
         } else if (!this.currentShareStatus || !this.currentShareStatus.has_password) {
-          // If the file currently had no password and input is left blank, ensure it stays cleared
           payload.clear_password = true;
           payload.password = null;
         }
@@ -2271,11 +2276,47 @@ const App = {
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
-          await API.updateShareStatus(this.currentShareFile.id, payload);
+          const data = await API.updateShareStatus(this.currentShareFile.id, payload);
+          this.currentShareStatus = data;
+          this.clearPasswordRequested = false;
+
+          // Update UI directly
+          if (linkInput) {
+            linkInput.value = data.share_url || data.shareUrl || '';
+          }
+
+          if (this.currentShareFile) {
+            this.currentShareFile.is_shared = data.is_shared ? 1 : 0;
+            this.currentShareFile.share_token = data.share_token || data.shareToken;
+          }
+
+          const btnRemovePw = document.getElementById('btn-remove-share-pw');
+          if (pwStatus && pwInput) {
+            if (data.has_password) {
+              pwStatus.innerHTML = '<span style="color:#34a853;">🔒 Password protection is ACTIVE</span>';
+              pwInput.value = '';
+              pwInput.placeholder = 'Type new password to change (or leave blank)';
+              if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
+            } else {
+              pwStatus.innerHTML = '<span style="color:var(--text-muted);">🔓 No password protection</span>';
+              pwInput.value = '';
+              pwInput.placeholder = 'Set a password or leave blank';
+              if (btnRemovePw) btnRemovePw.style.display = 'none';
+            }
+          }
+
+          if (revokeBtn) {
+            revokeBtn.style.display = isShared ? 'inline-flex' : 'none';
+          }
+
+          const viewsEl = document.getElementById('share-stats-views');
+          const dlsEl = document.getElementById('share-stats-downloads');
+          if (viewsEl) viewsEl.textContent = data.share_views || data.views || 0;
+          if (dlsEl) dlsEl.textContent = data.share_downloads || data.downloads || 0;
 
           UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
-          await this.openShareModal(this.currentShareFile);
         } catch (err) {
+          console.error('[Share] Save share error:', err);
           UI.showToast('Failed to save share settings: ' + err.message, 'error');
         } finally {
           saveBtn.disabled = false;
@@ -2301,8 +2342,18 @@ const App = {
         try {
           revokeBtn.disabled = true;
           await API.revokeShare(this.currentShareFile.id);
+          
+          const ICON_LOCK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+          if (accessSelect) accessSelect.value = 'restricted';
+          if (accessIcon) accessIcon.innerHTML = ICON_LOCK;
+          if (accessHint) accessHint.textContent = 'Only people logged into TeleDrive can access this file';
+          if (publicSettings) publicSettings.style.display = 'none';
+          if (revokeBtn) revokeBtn.style.display = 'none';
+          if (linkInput) linkInput.value = '';
+          if (this.currentShareFile) this.currentShareFile.is_shared = 0;
+          this.currentShareStatus = { is_shared: false };
+
           UI.showToast('Public link revoked successfully', 'info');
-          await this.openShareModal(this.currentShareFile);
         } catch (err) {
           UI.showToast('Failed to revoke link: ' + err.message, 'error');
         } finally {
@@ -2998,6 +3049,7 @@ const App = {
   },
 
   async openSettings() {
+    this.initSettings();
     UI.showModal('settings-modal');
 
     // Default to security tab or keep selected
