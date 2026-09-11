@@ -621,10 +621,13 @@
       <div class="share-advanced-grid">
         <!-- Optional Password -->
         <div class="share-field-group">
-          <label class="share-field-label">
-            <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>Password Protection</span>
-            <span class="share-field-optional">(Optional)</span>
-          </label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <label class="share-field-label" style="margin-bottom: 0;">
+              <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>Password Protection</span>
+              <span class="share-field-optional">(Optional)</span>
+            </label>
+            <button type="button" id="btn-remove-share-pw" style="display: none; background: none; border: none; color: #ea4335; font-size: 12px; font-weight: 500; cursor: pointer; padding: 2px 6px; border-radius: 4px;">Remove Password</button>
+          </div>
           <div class="share-pw-wrap">
             <input type="password" id="share-password-input" placeholder="Set a password or leave blank">
             <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">

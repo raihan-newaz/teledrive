@@ -1358,11 +1358,15 @@ const App = {
     const accessIcon = document.getElementById('share-access-icon-wrap');
     const accessHint = document.getElementById('share-access-hint');
 
+    const btnRemovePw = document.getElementById('btn-remove-share-pw');
+
     if (modalIcon) modalIcon.innerHTML = UI.getFileIconSvg(file.mime_type);
     if (modalTitle) modalTitle.textContent = `Share "${file.name}"`;
     if (modalSubtitle) modalSubtitle.textContent = `${UI.formatFileSize(file.size)} • ${file.mime_type || 'File'}`;
 
     // Reset default UI state
+    this.clearPasswordRequested = false;
+    this.currentShareStatus = null;
     if (linkInput) linkInput.value = 'Loading share settings...';
     if (copyBtnText) copyBtnText.textContent = 'Copy link';
     if (pwInput) {
@@ -1370,6 +1374,7 @@ const App = {
       pwInput.type = 'password';
       pwInput.placeholder = 'Set a password or leave blank';
     }
+    if (btnRemovePw) btnRemovePw.style.display = 'none';
     if (pwStatus) pwStatus.textContent = '';
     if (expSelect) expSelect.value = 'never';
     if (expStatus) expStatus.textContent = '';
@@ -1380,6 +1385,7 @@ const App = {
 
     try {
       const data = await API.getShareStatus(file.id);
+      this.currentShareStatus = data;
       const isShared = !!data.is_shared;
 
       const ICON_LOCK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
@@ -1409,11 +1415,15 @@ const App = {
 
       if (pwStatus) {
         if (data.has_password) {
-          pwStatus.textContent = 'Password protection is active. Enter a new password to change, or leave blank to keep current password.';
+          pwStatus.textContent = '🔒 Password protection is ACTIVE.';
           pwStatus.style.color = 'var(--primary-color)';
+          if (pwInput) pwInput.placeholder = 'Enter new password to change, or leave blank to keep';
+          if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
         } else {
-          pwStatus.textContent = 'Direct access enabled without password.';
+          pwStatus.textContent = 'Direct public access without password.';
           pwStatus.style.color = 'var(--text-muted)';
+          if (pwInput) pwInput.placeholder = 'Set a password or leave blank';
+          if (btnRemovePw) btnRemovePw.style.display = 'none';
         }
       }
 
@@ -2173,6 +2183,30 @@ const App = {
       };
     }
 
+    const btnRemovePw = document.getElementById('btn-remove-share-pw');
+    const pwStatus = document.getElementById('share-pw-status');
+
+    if (btnRemovePw && pwInput) {
+      btnRemovePw.onclick = () => {
+        this.clearPasswordRequested = true;
+        pwInput.value = '';
+        pwInput.placeholder = 'Password will be removed upon saving';
+        if (pwStatus) {
+          pwStatus.textContent = 'Password will be removed when you click "Save Changes".';
+          pwStatus.style.color = 'var(--text-muted)';
+        }
+        btnRemovePw.style.display = 'none';
+      };
+    }
+
+    if (pwInput) {
+      pwInput.oninput = () => {
+        if (pwInput.value.trim() !== '') {
+          this.clearPasswordRequested = false;
+        }
+      };
+    }
+
     if (pwToggleBtn && pwInput) {
       const ICON_EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
       const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -2196,14 +2230,26 @@ const App = {
         const expVal = expSelect ? expSelect.value : 'never';
         const expiresInDays = expVal === 'never' ? null : parseInt(expVal, 10);
 
+        const payload = {
+          is_shared: isShared,
+          expires_in_days: expiresInDays
+        };
+
+        if (this.clearPasswordRequested) {
+          payload.clear_password = true;
+          payload.password = null;
+        } else if (password) {
+          payload.password = password;
+        } else if (!this.currentShareStatus || !this.currentShareStatus.has_password) {
+          // If the file currently had no password and input is left blank, ensure it stays cleared
+          payload.clear_password = true;
+          payload.password = null;
+        }
+
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
-          await API.updateShareStatus(this.currentShareFile.id, {
-            is_shared: isShared,
-            password: password || undefined,
-            expires_in_days: expiresInDays
-          });
+          await API.updateShareStatus(this.currentShareFile.id, payload);
 
           UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
           await this.openShareModal(this.currentShareFile);

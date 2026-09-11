@@ -546,7 +546,7 @@
 
     const token = getToken();
     let currentFile = null;
-    let verifiedPassword = '';
+    let verifiedAccessKey = sessionStorage.getItem('share_key_' + token) || '';
 
     function showToast(msg) {
       const toast = document.getElementById('share-toast');
@@ -578,7 +578,12 @@
       }
 
       try {
-        const res = await fetch(`/api/share/public/${encodeURIComponent(token)}`);
+        const headers = {};
+        if (verifiedAccessKey) {
+          headers['x-share-key'] = verifiedAccessKey;
+        }
+
+        const res = await fetch(`/api/share/public/${encodeURIComponent(token)}`, { headers });
         if (res.status === 404 || res.status === 410) {
           const errData = await res.json().catch(() => ({}));
           showError('Link Expired or Revoked', errData.error || 'This link is no longer available.');
@@ -591,12 +596,12 @@
 
         const data = await res.json();
 
-        if (data.requiresPassword) {
+        if (data.requiresPassword && !verifiedAccessKey) {
           showPasswordPrompt();
           return;
         }
 
-        renderActiveShare(data);
+        renderActiveShare(data, verifiedAccessKey);
       } catch (err) {
         console.error('Share load error:', err);
         showError('Unable to Load File', err.message || 'Check your internet connection.');
@@ -619,7 +624,10 @@
       document.getElementById('state-active').style.display = 'none';
       document.getElementById('state-password').style.display = 'block';
       const pwInput = document.getElementById('pw-input');
-      if (pwInput) pwInput.focus();
+      if (pwInput) {
+        pwInput.value = '';
+        pwInput.focus();
+      }
     }
 
     async function handlePasswordSubmit(e) {
@@ -629,7 +637,7 @@
       const submitBtn = document.getElementById('pw-submit-btn');
       const pw = pwInput.value;
 
-      if (!pw) return false;
+      if (!pw && pw !== '') return false;
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Verifying...';
@@ -651,11 +659,17 @@
         }
 
         const data = await res.json();
-        verifiedPassword = pw;
+        const accessKey = data.accessKey || '';
+        if (accessKey) {
+          verifiedAccessKey = accessKey;
+          try {
+            sessionStorage.setItem('share_key_' + token, accessKey);
+          } catch (e) {}
+        }
         const fileObj = data.file || data;
-        renderActiveShare(fileObj);
+        renderActiveShare(fileObj, accessKey);
       } catch (err) {
-        pwError.textContent = 'Failed to verify password: ' + err.message;
+        pwError.textContent = 'Failed to verify password: ' + (err.message || 'Unknown error');
         pwError.style.display = 'block';
       } finally {
         submitBtn.disabled = false;
@@ -665,7 +679,7 @@
       return false;
     }
 
-    function renderActiveShare(data) {
+    function renderActiveShare(data, accessKey) {
       currentFile = data;
       document.title = `${data.name} — TeleDrive`;
 
@@ -681,10 +695,10 @@
       // Build Stream & Download URLs
       let streamUrl = `/api/share/public/${encodeURIComponent(token)}/stream`;
       let downloadUrl = `/api/share/public/${encodeURIComponent(token)}/download`;
-      if (verifiedPassword) {
-        const pwParam = `?pw=${encodeURIComponent(verifiedPassword)}`;
-        streamUrl += pwParam;
-        downloadUrl += pwParam;
+      if (accessKey) {
+        const keyParam = `?key=${encodeURIComponent(accessKey)}`;
+        streamUrl += keyParam;
+        downloadUrl += keyParam;
       }
 
       const downloadBtn = document.getElementById('btn-download');

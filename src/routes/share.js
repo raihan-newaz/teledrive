@@ -27,6 +27,13 @@ function verifyShareAccessToken(token, accessKey) {
   return crypto.timingSafeEqual(keyBuf, expBuf);
 }
 
+/**
+ * Helper to determine if a file actually has an active password
+ */
+function hasPassword(file) {
+  return Boolean(file && file.share_password && typeof file.share_password === 'string' && file.share_password.trim() !== '');
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // 1. PUBLIC ENDPOINTS (No Login Required)
 // ══════════════════════════════════════════════════════════════════════════
@@ -58,7 +65,7 @@ router.get('/public/:token', async (req, res) => {
       size: file.size,
       mime_type: file.mime_type,
       created_at: file.created_at,
-      requiresPassword: Boolean(file.share_password),
+      requiresPassword: hasPassword(file),
       expiresAt: file.share_expires_at || null,
       views: (file.share_views || 0) + 1,
       downloads: file.share_downloads || 0
@@ -82,20 +89,56 @@ router.post('/public/:token/verify', async (req, res) => {
       return res.status(404).json({ error: 'File not found or link has expired' });
     }
 
-    if (!file.share_password) {
-      return res.json({ success: true, accessKey: generateShareAccessToken(token) });
+    if (!hasPassword(file)) {
+      const accessKey = generateShareAccessToken(token);
+      res.cookie(`share_key_${token}`, accessKey, { httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 });
+      return res.json({
+        success: true,
+        accessKey,
+        file: {
+          name: file.name,
+          size: file.size,
+          mime_type: file.mime_type,
+          created_at: file.created_at,
+          requiresPassword: false,
+          expiresAt: file.share_expires_at || null,
+          views: file.share_views || 0,
+          downloads: file.share_downloads || 0
+        }
+      });
     }
 
-    if (!password) {
+    if (!password && password !== '') {
       return res.status(400).json({ error: 'Password is required' });
     }
 
-    const isValid = await bcrypt.compare(password, file.share_password);
+    let isValid = false;
+    const inputPw = String(password || '').trim();
+
+    try {
+      if (file.share_password.startsWith('$2a$') || file.share_password.startsWith('$2b$')) {
+        isValid = await bcrypt.compare(inputPw, file.share_password);
+      } else {
+        // Fallback for legacy plain-text password
+        isValid = (inputPw === file.share_password.trim());
+        if (isValid) {
+          // Auto-migrate to secure bcrypt hash
+          const upgradedHash = await bcrypt.hash(inputPw, 10);
+          db.updateFileShare(file.id, { password: upgradedHash });
+        }
+      }
+    } catch (cmpErr) {
+      console.error('[Share] Password verification comparison error:', cmpErr);
+      isValid = false;
+    }
+
     if (!isValid) {
       return res.status(401).json({ error: 'Incorrect password' });
     }
 
     const accessKey = generateShareAccessToken(token);
+    res.cookie(`share_key_${token}`, accessKey, { httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 });
+
     res.json({
       success: true,
       accessKey,
@@ -120,16 +163,34 @@ router.post('/public/:token/verify', async (req, res) => {
  * Helper to check password access for download and stream
  */
 async function checkPublicAccess(req, res, file) {
-  if (!file.share_password) return true;
+  if (!hasPassword(file)) return true;
 
+  // 1. Check accessKey in query (?key=...) or header (x-share-key)
   const accessKey = req.query.key || req.headers['x-share-key'];
   if (accessKey && verifyShareAccessToken(file.share_token, accessKey)) {
     return true;
   }
 
-  // Fallback: support ?pw=password directly in URL
+  // 2. Check httpOnly cookie
+  if (req.cookies && req.cookies[`share_key_${file.share_token}`]) {
+    const cookieKey = req.cookies[`share_key_${file.share_token}`];
+    if (verifyShareAccessToken(file.share_token, cookieKey)) {
+      return true;
+    }
+  }
+
+  // 3. Fallback: support ?pw=password directly in URL
   if (req.query.pw) {
-    return await bcrypt.compare(req.query.pw, file.share_password);
+    try {
+      const inputPw = String(req.query.pw).trim();
+      if (file.share_password.startsWith('$2a$') || file.share_password.startsWith('$2b$')) {
+        return await bcrypt.compare(inputPw, file.share_password);
+      } else {
+        return inputPw === file.share_password.trim();
+      }
+    } catch (e) {
+      return false;
+    }
   }
 
   return false;
@@ -236,8 +297,8 @@ router.get('/file/:fileId', authMiddleware, async (req, res) => {
       share_token: file.share_token || null,
       shareUrl,
       share_url: shareUrl,
-      hasPassword: Boolean(file.share_password),
-      has_password: Boolean(file.share_password),
+      hasPassword: hasPassword(file),
+      has_password: hasPassword(file),
       expiresAt: file.share_expires_at || null,
       share_expires_at: file.share_expires_at || null,
       views: file.share_views || 0,
@@ -273,9 +334,9 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
     }
 
     let hashedPassword = file.share_password;
-    if (clearPassword) {
+    if (clearPassword || password === null || password === '') {
       hashedPassword = null;
-    } else if (password && password.trim()) {
+    } else if (typeof password === 'string' && password.trim() !== '') {
       hashedPassword = await bcrypt.hash(password.trim(), 10);
     }
 
@@ -311,8 +372,8 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
       share_token: updated.share_token,
       shareUrl,
       share_url: shareUrl,
-      hasPassword: Boolean(updated.share_password),
-      has_password: Boolean(updated.share_password),
+      hasPassword: hasPassword(updated),
+      has_password: hasPassword(updated),
       expiresAt: updated.share_expires_at,
       share_expires_at: updated.share_expires_at,
       views: updated.share_views || 0,
