@@ -453,28 +453,6 @@ const UI = {
     const size = this.formatFileSize(file.size);
     const date = this.formatDate(file.created_at);
     const starIcon = file.is_starred ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fbbc04" style="vertical-align: -2px;"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' : '';
-    const isShared = Boolean(file.is_shared);
-    const hasSharePassword = Boolean(file.share_password && String(file.share_password).trim() !== '');
-
-    let shareBadgeHtml = '';
-    let previewSharedIndicator = '';
-    if (isShared) {
-      const shareTitle = hasSharePassword ? 'Publicly shared (Password Protected)' : 'Publicly shared link active';
-      const shareIconSvg = hasSharePassword
-        ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="var(--primary-color, #1a73e8)"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>'
-        : '<svg viewBox="0 0 24 24" width="13" height="13" fill="var(--primary-color, #1a73e8)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
-
-      shareBadgeHtml = `<span class="file-shared-badge" title="${shareTitle}">${shareIconSvg}</span>`;
-      previewSharedIndicator = `
-        <div class="file-shared-indicator" title="${shareTitle}">
-          ${hasSharePassword
-            ? '<svg viewBox="0 0 24 24" width="11" height="11" fill="#fff"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>'
-            : '<svg viewBox="0 0 24 24" width="11" height="11" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>'
-          }
-        </div>
-      `;
-    }
-
     const downloadUrl = API.getDownloadUrl(file.id);
     const streamUrl = API.getStreamUrl(file.id);
 
@@ -485,7 +463,6 @@ const UI = {
         <div class="file-card-preview has-thumbnail">
           <div class="file-type-icon-lg fallback-icon">${icon}</div>
           <img src="${thumbUrl}" class="file-thumb-media" loading="lazy" alt="" onload="this.classList.add('loaded')" onerror="this.style.display='none'">
-          ${previewSharedIndicator}
         </div>
       `;
     } else if (cat === 'video') {
@@ -501,14 +478,12 @@ const UI = {
           <div class="video-play-badge">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
           </div>
-          ${previewSharedIndicator}
         </div>
       `;
     } else {
       previewHtml = `
         <div class="file-card-preview">
           <div class="file-type-icon-lg">${icon}</div>
-          ${previewSharedIndicator}
         </div>
       `;
     }
@@ -522,10 +497,7 @@ const UI = {
         <div class="file-card-info">
           <div class="file-card-title-row">
             <span class="file-name" title="${safeName}">${safeName}</span>
-            <span class="file-badges">
-              ${shareBadgeHtml}
-              ${starIcon}
-            </span>
+            <span class="file-star">${starIcon}</span>
           </div>
           <div class="file-meta-row">
             <span class="file-size">${size}</span>
@@ -643,18 +615,11 @@ const UI = {
     const shareBtn = menu.querySelector('[data-action="share"]');
     const infoBtn = menu.querySelector('[data-action="info"]');
 
-    const renameBtn = menu.querySelector('[data-action="rename"]');
-    const moveBtn = menu.querySelector('[data-action="move"]');
-
     if (trashBtn) trashBtn.style.display = isTrashed ? 'none' : 'flex';
     if (restoreBtn) restoreBtn.style.display = isTrashed ? 'flex' : 'none';
     if (permDeleteBtn) permDeleteBtn.style.display = isTrashed ? 'flex' : 'none';
-    if (downloadBtn) downloadBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
-    if (starBtn) starBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
-    if (shareBtn) shareBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
-    if (infoBtn) infoBtn.style.display = isTrashed ? 'none' : 'flex';
-    if (renameBtn) renameBtn.style.display = isTrashed ? 'none' : 'flex';
-    if (moveBtn) moveBtn.style.display = isTrashed ? 'none' : 'flex';
+    if (downloadBtn) downloadBtn.style.display = item.type === 'file' ? 'flex' : 'none';
+    if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
     const lockFolderBtn = menu.querySelector('[data-action="lock-folder"]');
     const lockFolderText = document.getElementById('ctx-lock-folder-text');
     const relockFolderBtn = menu.querySelector('[data-action="relock-folder"]');

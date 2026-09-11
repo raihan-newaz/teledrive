@@ -39,9 +39,6 @@ const realtimeRouter = require('./src/routes/realtime');
 
 const app = express();
 
-// Trust proxy headers for Docker, Cloudflare, Nginx, Caddy
-app.set('trust proxy', true);
-
 // Apply security middleware
 const securityMiddleware = getSecurityMiddleware();
 securityMiddleware.forEach(mw => app.use(mw));
@@ -55,16 +52,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(globalLimiter);
 
-// Serve static files with freshness headers for scripts and styles
-app.use(express.static(path.join(__dirname, 'public'), {
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    }
-  }
-}));
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Mount routes
 app.use('/api/setup', setupRouter);
