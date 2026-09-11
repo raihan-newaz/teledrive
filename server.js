@@ -60,6 +60,43 @@ app.options('*', (req, res) => {
   res.status(200).end();
 });
 
+// Root PROPFIND responder for Windows WebDAV Mini-Redirector Discovery
+app.all('/', (req, res, next) => {
+  if (req.method.toUpperCase() === 'PROPFIND') {
+    res.status(207).set({
+      'Content-Type': 'application/xml; charset=utf-8',
+      'DAV': '1, 2',
+      'MS-Author-Via': 'DAV'
+    }).send(`<?xml version="1.0" encoding="utf-8" ?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:resourcetype><D:collection/></D:resourcetype>
+        <D:displayname>TeleDrive</D:displayname>
+        <D:getcontentlength>0</D:getcontentlength>
+        <D:supportedlock>
+          <D:lockentry>
+            <D:lockscope><D:exclusive/></D:lockscope>
+            <D:locktype><D:write/></D:locktype>
+          </D:lockentry>
+          <D:lockentry>
+            <D:lockscope><D:shared/></D:lockscope>
+            <D:locktype><D:write/></D:locktype>
+          </D:lockentry>
+        </D:supportedlock>
+        <D:lockdiscovery/>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>`);
+    return;
+  }
+  next();
+});
+
 // Core middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

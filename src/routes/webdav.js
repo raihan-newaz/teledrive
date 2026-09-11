@@ -139,8 +139,20 @@ function renderFolderXml(folderHref, folderName, createdAt, updatedAt) {
         <D:prop>
           <D:resourcetype><D:collection/></D:resourcetype>
           <D:displayname>${escapeXml(folderName || 'Root')}</D:displayname>
+          <D:getcontentlength>0</D:getcontentlength>
           <D:creationdate>${toISO8601(createdAt)}</D:creationdate>
           <D:getlastmodified>${toRFC1123(updatedAt || createdAt)}</D:getlastmodified>
+          <D:supportedlock>
+            <D:lockentry>
+              <D:lockscope><D:exclusive/></D:lockscope>
+              <D:locktype><D:write/></D:locktype>
+            </D:lockentry>
+            <D:lockentry>
+              <D:lockscope><D:shared/></D:lockscope>
+              <D:locktype><D:write/></D:locktype>
+            </D:lockentry>
+          </D:supportedlock>
+          <D:lockdiscovery/>
         </D:prop>
         <D:status>HTTP/1.1 200 OK</D:status>
       </D:propstat>
@@ -163,6 +175,17 @@ function renderFileXml(fileHref, file) {
           <D:creationdate>${toISO8601(file.created_at)}</D:creationdate>
           <D:getlastmodified>${toRFC1123(file.updated_at || file.created_at)}</D:getlastmodified>
           <D:getetag>"${file.id}_${new Date(file.updated_at || file.created_at).getTime()}"</D:getetag>
+          <D:supportedlock>
+            <D:lockentry>
+              <D:lockscope><D:exclusive/></D:lockscope>
+              <D:locktype><D:write/></D:locktype>
+            </D:lockentry>
+            <D:lockentry>
+              <D:lockscope><D:shared/></D:lockscope>
+              <D:locktype><D:write/></D:locktype>
+            </D:lockentry>
+          </D:supportedlock>
+          <D:lockdiscovery/>
         </D:prop>
         <D:status>HTTP/1.1 200 OK</D:status>
       </D:propstat>
@@ -179,25 +202,29 @@ router.all('*', async (req, res, next) => {
 
   const depth = req.headers['depth'] || '1'; // '0', '1', or 'infinity'
   const resolved = resolveWebdavPath(req.path);
-  const basePath = '/webdav' + (req.path.replace(/^\/webdav/, '') || '/').replace(/\/+$/, '');
+  
+  // Base URL prefix as requested by client (e.g., /webdav or /DavWWWRoot/webdav)
+  const reqBase = (req.baseUrl || '/webdav').replace(/\/+$/, '');
+  const rawSubPath = decodeURIComponent(req.path || '').replace(/^\/+|\/+$/g, '');
+  const basePath = rawSubPath ? `${reqBase}/${rawSubPath}` : reqBase;
 
   let responsesXml = '';
 
   if (resolved.type === 'root') {
     // 1. Root Collection
-    responsesXml += renderFolderXml('/webdav/', 'TeleDrive', null, null);
+    responsesXml += renderFolderXml(`${reqBase}/`, 'TeleDrive', null, null);
 
     if (depth !== '0') {
       // List root folders
       const rootFolders = db.all('SELECT * FROM folders WHERE parent_id IS NULL ORDER BY name ASC');
       for (const f of rootFolders) {
-        responsesXml += renderFolderXml(`/webdav/${encodeURIComponent(f.name)}/`, f.name, f.created_at, f.updated_at);
+        responsesXml += renderFolderXml(`${reqBase}/${encodeURIComponent(f.name)}/`, f.name, f.created_at, f.updated_at);
       }
 
       // List root files
       const rootFiles = db.all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC');
       for (const f of rootFiles) {
-        responsesXml += renderFileXml(`/webdav/${encodeURIComponent(f.name)}`, f);
+        responsesXml += renderFileXml(`${reqBase}/${encodeURIComponent(f.name)}`, f);
       }
     }
   } else if (resolved.type === 'folder') {
@@ -246,12 +273,12 @@ router.get('*', async (req, res) => {
     const folders = db.all('SELECT * FROM folders WHERE (parent_id = ? OR (parent_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
     const files = db.all('SELECT * FROM files WHERE is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
 
-    let html = `<html><head><title>${escapeXml(folderName)} - WebDAV</title></head><body>`;
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeXml(folderName)} - TeleDrive WebDAV</title><style>body{font-family:sans-serif;padding:24px;line-height:1.6;}ul{list-style:none;padding:0;}li{padding:6px 0;}a{color:#1a73e8;text-decoration:none;}a:hover{text-decoration:underline;}</style></head><body>`;
     html += `<h2>Index of ${escapeXml(req.path)}</h2><hr><ul>`;
-    html += `<li><a href="../">../ (Parent Directory)</a></li>`;
+    html += `<li>📁 <a href="../">../ (Parent Directory)</a></li>`;
     for (const f of folders) html += `<li>📁 <a href="./${encodeURIComponent(f.name)}/">${escapeXml(f.name)}/</a></li>`;
     for (const f of files) html += `<li>📄 <a href="./${encodeURIComponent(f.name)}">${escapeXml(f.name)}</a> (${(f.size / 1024).toFixed(1)} KB)</li>`;
-    html += `</ul><hr><i>TeleDrive WebDAV Storage</i></body></html>`;
+    html += `</ul><hr><p><em>TeleDrive WebDAV Network Storage &bull; End-to-End Encrypted</em></p></body></html>`;
     return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(html);
   }
 
@@ -262,6 +289,17 @@ router.get('*', async (req, res) => {
   const file = resolved.item;
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
   const fileSize = file.size;
+
+  // Handle 0-byte file immediately
+  if (fileSize === 0) {
+    res.writeHead(200, {
+      'Content-Length': 0,
+      'Content-Type': file.mime_type || getMimeType(file.name),
+      'Accept-Ranges': 'bytes',
+      'ETag': `"${file.id}"`,
+    });
+    return res.end();
+  }
 
   // Handle Range Header for media players and streaming
   const range = req.headers.range;
@@ -326,18 +364,32 @@ router.get('*', async (req, res) => {
     try { fs.copyFileSync(tempDecPath, cachedPath); } catch (e) {}
     try { fs.unlinkSync(tempEncPath); } catch (e) {}
 
-    res.writeHead(200, {
-      'Content-Length': fileSize,
-      'Content-Type': file.mime_type || getMimeType(file.name),
-      'Accept-Ranges': 'bytes',
-      'ETag': `"${file.id}"`,
-    });
-
-    const stream = fs.createReadStream(tempDecPath);
-    stream.pipe(res);
-    stream.on('close', () => {
-      try { if (fs.existsSync(tempDecPath)) fs.unlinkSync(tempDecPath); } catch (e) {}
-    });
+    if (isRangeRequest) {
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': (end - start) + 1,
+        'Content-Type': file.mime_type || getMimeType(file.name),
+        'ETag': `"${file.id}"`,
+      });
+      const stream = fs.createReadStream(tempDecPath, { start, end });
+      stream.pipe(res);
+      stream.on('close', () => {
+        try { if (fs.existsSync(tempDecPath)) fs.unlinkSync(tempDecPath); } catch (e) {}
+      });
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': file.mime_type || getMimeType(file.name),
+        'Accept-Ranges': 'bytes',
+        'ETag': `"${file.id}"`,
+      });
+      const stream = fs.createReadStream(tempDecPath);
+      stream.pipe(res);
+      stream.on('close', () => {
+        try { if (fs.existsSync(tempDecPath)) fs.unlinkSync(tempDecPath); } catch (e) {}
+      });
+    }
   } catch (err) {
     console.error('[WebDAV GET Error]', err);
     if (!res.headersSent) {
@@ -365,7 +417,12 @@ router.head('*', async (req, res) => {
 
 // ─── WebDAV PUT Handler (Upload & Save/Edit Files) ─────────────────────
 router.put('*', async (req, res) => {
-  const cleanPath = decodeURIComponent(req.path || '').replace(/^\/webdav/, '');
+  const cleanPath = decodeURIComponent(req.path || '')
+    .replace(/^\/DavWWWRoot\/webdav/i, '')
+    .replace(/^\/DavWWWRoot/i, '')
+    .replace(/^\/webdav/i, '')
+    .replace(/^\/+|\/+$/g, '');
+
   const segments = cleanPath.split('/').filter(Boolean);
 
   if (segments.length === 0) {
@@ -453,7 +510,7 @@ router.put('*', async (req, res) => {
       );
     }
 
-    // Place into local cache for 0ms instant playback
+    // Place into local cache for instant playback
     const cachedPath = path.join(cacheDir, `${fileId}.dec`);
     try { fs.copyFileSync(tempUploadPath, cachedPath); } catch (e) {}
 
@@ -478,7 +535,11 @@ router.put('*', async (req, res) => {
 router.all('*', async (req, res, next) => {
   if (req.method.toUpperCase() !== 'MKCOL') return next();
 
-  const cleanPath = decodeURIComponent(req.path || '').replace(/^\/webdav/, '').replace(/\/+$/, '');
+  const cleanPath = decodeURIComponent(req.path || '')
+    .replace(/^\/DavWWWRoot\/webdav/i, '')
+    .replace(/^\/DavWWWRoot/i, '')
+    .replace(/^\/webdav/i, '')
+    .replace(/^\/+|\/+$/g, '');
   const segments = cleanPath.split('/').filter(Boolean);
 
   if (segments.length === 0) {
@@ -620,7 +681,12 @@ router.all('*', async (req, res, next) => {
     destUrlPath = decodeURIComponent(destHeader);
   }
 
-  const destClean = destUrlPath.replace(/^\/webdav/, '').replace(/\/+$/, '');
+  const destClean = destUrlPath
+    .replace(/^\/DavWWWRoot\/webdav/i, '')
+    .replace(/^\/DavWWWRoot/i, '')
+    .replace(/^\/webdav/i, '')
+    .replace(/^\/+|\/+$/g, '');
+
   const destSegments = destClean.split('/').filter(Boolean);
 
   if (destSegments.length === 0) {
@@ -657,6 +723,113 @@ router.all('*', async (req, res, next) => {
   } catch (err) {
     console.error('[WebDAV MOVE Error]', err);
     res.status(500).set('Content-Type', 'text/plain').send('Failed to move resource: ' + err.message);
+  }
+});
+
+// ─── WebDAV COPY Handler (Copy Files & Folders) ─────────────────────────
+router.all('*', async (req, res, next) => {
+  if (req.method.toUpperCase() !== 'COPY') return next();
+
+  const destHeader = req.headers['destination'];
+  if (!destHeader) {
+    return res.status(400).set('Content-Type', 'text/plain').send('Missing Destination header.');
+  }
+
+  const srcResolved = resolveWebdavPath(req.path);
+  if (srcResolved.type === 'not_found' || srcResolved.type === 'root') {
+    return res.status(404).set('Content-Type', 'text/plain').send('Source resource not found.');
+  }
+
+  let destUrlPath = '';
+  try {
+    const url = new URL(destHeader);
+    destUrlPath = decodeURIComponent(url.pathname);
+  } catch (e) {
+    destUrlPath = decodeURIComponent(destHeader);
+  }
+
+  const destClean = destUrlPath
+    .replace(/^\/DavWWWRoot\/webdav/i, '')
+    .replace(/^\/DavWWWRoot/i, '')
+    .replace(/^\/webdav/i, '')
+    .replace(/^\/+|\/+$/g, '');
+
+  const destSegments = destClean.split('/').filter(Boolean);
+  if (destSegments.length === 0) {
+    return res.status(400).set('Content-Type', 'text/plain').send('Invalid destination.');
+  }
+
+  const targetName = destSegments[destSegments.length - 1];
+  const destDirSegments = destSegments.slice(0, -1);
+
+  let targetParentId = null;
+  for (const dir of destDirSegments) {
+    const folder = db.get(
+      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
+      [dir, targetParentId, targetParentId]
+    );
+    if (!folder) {
+      return res.status(409).set('Content-Type', 'text/plain').send('Destination parent directory does not exist.');
+    }
+    targetParentId = folder.id;
+  }
+
+  try {
+    const now = new Date().toISOString();
+    if (srcResolved.type === 'file') {
+      const srcFile = srcResolved.item;
+      const newFileId = uuidv4();
+      db.run(
+        `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+        [newFileId, targetName, srcFile.mime_type, srcFile.size, targetParentId, srcFile.telegram_message_id, srcFile.iv, srcFile.salt, srcFile.is_chunked || 0, srcFile.total_chunks || 1, now, now]
+      );
+      // Also duplicate chunks if chunked
+      if (srcFile.is_chunked) {
+        const chunks = db.getFileChunks(srcFile.id);
+        for (const chunk of chunks) {
+          db.addFileChunk({
+            id: uuidv4(),
+            fileId: newFileId,
+            chunkIndex: chunk.chunk_index,
+            telegramMessageId: chunk.telegram_message_id,
+            size: chunk.size,
+            iv: chunk.iv,
+            salt: chunk.salt
+          });
+        }
+      }
+      res.status(201).end();
+    } else if (srcResolved.type === 'folder') {
+      const copyFolderRecursive = (srcF, destParentId, newFolderName) => {
+        const newFId = uuidv4();
+        const fNow = new Date().toISOString();
+        db.run('INSERT INTO folders (id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [newFId, newFolderName, destParentId, fNow, fNow]);
+        
+        // Copy files in folder
+        const childFiles = db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0', [srcF.id]);
+        for (const cf of childFiles) {
+          const nFileId = uuidv4();
+          db.run(
+            `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+            [nFileId, cf.name, cf.mime_type, cf.size, newFId, cf.telegram_message_id, cf.iv, cf.salt, cf.is_chunked || 0, cf.total_chunks || 1, fNow, fNow]
+          );
+        }
+
+        // Copy subfolders
+        const childFolders = db.all('SELECT * FROM folders WHERE parent_id = ?', [srcF.id]);
+        for (const chF of childFolders) {
+          copyFolderRecursive(chF, newFId, chF.name);
+        }
+      };
+
+      copyFolderRecursive(srcResolved.item, targetParentId, targetName);
+      res.status(201).end();
+    }
+  } catch (err) {
+    console.error('[WebDAV COPY Error]', err);
+    res.status(500).set('Content-Type', 'text/plain').send('Failed to copy resource: ' + err.message);
   }
 });
 

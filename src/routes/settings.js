@@ -42,6 +42,8 @@ function getDirectorySize(dirPath) {
   return { totalSize, fileCount };
 }
 
+const rootEnvPath = path.join(__dirname, '../../.env');
+
 /**
  * Helper to update .env key-value pairs
  */
@@ -52,6 +54,8 @@ async function updateEnvVariables(updates) {
     try { content = await fsPromises.readFile(configEnvPath, 'utf8'); } catch (e) {}
   } else if (fs.existsSync(dataEnvPath)) {
     try { content = await fsPromises.readFile(dataEnvPath, 'utf8'); } catch (e) {}
+  } else if (fs.existsSync(rootEnvPath)) {
+    try { content = await fsPromises.readFile(rootEnvPath, 'utf8'); } catch (e) {}
   }
 
   const lines = content.split('\n');
@@ -79,6 +83,7 @@ async function updateEnvVariables(updates) {
   const finalContent = lines.join('\n').trim() + '\n';
   await fsPromises.writeFile(configEnvPath, finalContent);
   try { await fsPromises.writeFile(dataEnvPath, finalContent); } catch (e) {}
+  try { await fsPromises.writeFile(rootEnvPath, finalContent); } catch (e) {}
 }
 
 /**

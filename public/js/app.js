@@ -2153,6 +2153,7 @@ const App = {
     const pwToggleBtn = document.getElementById('share-toggle-pw');
     const pwInput = document.getElementById('share-password-input');
     const expSelect = document.getElementById('share-expiration-select');
+    const expStatus = document.getElementById('share-expiry-status');
     const saveBtn = document.getElementById('btn-save-share');
     const revokeBtn = document.getElementById('btn-revoke-share');
 

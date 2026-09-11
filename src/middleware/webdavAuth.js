@@ -40,8 +40,12 @@ function webdavAuthMiddleware(req, res, next) {
     return res.status(401).set('Content-Type', 'text/plain').send('Invalid authorization header encoding.');
   }
 
-  const [username, ...passParts] = credentials.split(':');
+  const [rawUsername, ...passParts] = credentials.split(':');
   const password = passParts.join(':');
+  let username = (rawUsername || '').trim();
+  if (username.includes('\\')) {
+    username = username.split('\\').pop().trim();
+  }
 
   // Configured WebDAV credentials (or fall back to admin credentials)
   const configuredWebdavUser = (process.env.WEBDAV_USERNAME || 'admin').trim().toLowerCase();

@@ -95,6 +95,16 @@ function decryptFile(inputPath, outputPath, passphrase, ivBase64, saltBase64) {
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
       decipher.setAuthTag(authTagBuffer);
       
+      if (encryptedDataSize === 0) {
+        try {
+          decipher.final();
+          fs.writeFileSync(outputPath, Buffer.alloc(0));
+          return resolve();
+        } catch (authErr) {
+          return reject(authErr);
+        }
+      }
+      
       const readStream = fs.createReadStream(inputPath, { end: encryptedDataSize - 1 });
       const writeStream = fs.createWriteStream(outputPath);
       
