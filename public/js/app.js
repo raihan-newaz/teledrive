@@ -2271,10 +2271,15 @@ const App = {
         try {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
-          await API.updateShareStatus(this.currentShareFile.id, payload);
-
+          const updated = await API.updateShareStatus(this.currentShareFile.id, payload);
+          if (updated) {
+            this.currentShareFile.is_shared = updated.is_shared ? 1 : 0;
+            this.currentShareFile.share_password = updated.has_password ? 'set' : null;
+            this.currentShareFile.share_token = updated.share_token;
+          }
           UI.showToast(isShared ? 'Public sharing updated successfully!' : 'File is now restricted', 'success');
           await this.openShareModal(this.currentShareFile);
+          this.refreshCurrentView();
         } catch (err) {
           UI.showToast('Failed to save share settings: ' + err.message, 'error');
         } finally {
@@ -2301,8 +2306,12 @@ const App = {
         try {
           revokeBtn.disabled = true;
           await API.revokeShare(this.currentShareFile.id);
+          this.currentShareFile.is_shared = 0;
+          this.currentShareFile.share_password = null;
+          this.currentShareFile.share_token = null;
           UI.showToast('Public link revoked successfully', 'info');
           await this.openShareModal(this.currentShareFile);
+          this.refreshCurrentView();
         } catch (err) {
           UI.showToast('Failed to revoke link: ' + err.message, 'error');
         } finally {
