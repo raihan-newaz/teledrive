@@ -44,8 +44,21 @@ app.set('trust proxy', 1);
 const securityMiddleware = getSecurityMiddleware();
 securityMiddleware.forEach(mw => app.use(mw));
 
-// WebDAV Network Storage Engine (mounted before body parsers to allow streaming PUT payloads)
+// WebDAV Network Storage Engine (supports standard /webdav and Windows UNC /DavWWWRoot paths)
 app.use('/webdav', webdavRouter);
+app.use('/DavWWWRoot/webdav', webdavRouter);
+app.use('/DavWWWRoot', webdavRouter);
+
+// Global OPTIONS responder for Windows WebClient / macOS Finder discovery
+app.options('*', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, If, Lock-Token, Overwrite, Timeout, X-Requested-With');
+  res.set('MS-Author-Via', 'DAV');
+  res.set('DAV', '1, 2');
+  res.set('Allow', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
+  res.status(200).end();
+});
 
 // Core middleware
 app.use(express.json({ limit: '10mb' }));

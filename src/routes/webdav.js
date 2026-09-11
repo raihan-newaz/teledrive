@@ -75,7 +75,10 @@ function getMimeType(filename) {
  */
 function resolveWebdavPath(requestPath) {
   // Normalize and decode URI path
-  let cleanPath = decodeURIComponent(requestPath || '').replace(/^\/webdav/, '');
+  let cleanPath = decodeURIComponent(requestPath || '')
+    .replace(/^\/DavWWWRoot\/webdav/i, '')
+    .replace(/^\/DavWWWRoot/i, '')
+    .replace(/^\/webdav/i, '');
   cleanPath = cleanPath.replace(/^\/+|\/+$/g, ''); // strip leading/trailing slashes
 
   if (!cleanPath) {

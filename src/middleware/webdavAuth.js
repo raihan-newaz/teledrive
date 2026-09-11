@@ -46,7 +46,7 @@ function webdavAuthMiddleware(req, res, next) {
   // Configured WebDAV credentials (or fall back to admin credentials)
   const configuredWebdavUser = process.env.WEBDAV_USERNAME || 'admin';
   const configuredWebdavPass = process.env.WEBDAV_PASSWORD;
-  const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH;
+  const adminPasswordHash = process.env.MASTER_PASSWORD_HASH || process.env.ADMIN_PASSWORD_HASH;
 
   let isAuthenticated = false;
 
