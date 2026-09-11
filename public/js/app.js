@@ -1407,12 +1407,15 @@ const App = {
     try {
       const data = await API.getShareStatus(file.id);
       this.currentShareStatus = data;
-      const isShared = !!data.is_shared;
+      const isShared = Boolean(data.is_shared || data.isShared);
 
       if (isShared && (data.share_token || data.share_url)) {
         const shareToken = data.share_token || data.shareToken;
         const finalUrl = shareToken ? `${window.location.origin}/share/${shareToken}` : (data.share_url || '');
         if (linkInput) linkInput.value = finalUrl;
+        if (accessSelect) accessSelect.value = 'public';
+        if (accessIcon) accessIcon.innerHTML = ICON_GLOBE;
+        if (publicSettings) publicSettings.style.display = 'flex';
         if (revokeBtn) revokeBtn.style.display = 'inline-flex';
       } else {
         if (linkInput) linkInput.value = 'Click "Save Changes" to generate public link';
@@ -1420,7 +1423,7 @@ const App = {
       }
 
       if (pwStatus && pwInput) {
-        if (data.has_password) {
+        if (data.has_password || data.hasPassword) {
           pwStatus.innerHTML = '<span style="color:#34a853;">🔒 Password protection is ACTIVE</span>';
           pwInput.placeholder = 'Type new password to change (or leave blank)';
           if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
@@ -1432,22 +1435,25 @@ const App = {
       }
 
       if (expStatus && expSelect) {
-        if (data.share_expires_at) {
-          const expDate = new Date(data.share_expires_at);
+        const expAt = data.share_expires_at || data.expiresAt;
+        if (expAt) {
+          const expDate = new Date(expAt);
           const now = new Date();
           const isExpired = expDate < now;
 
           expStatus.innerHTML = isExpired
-            ? `<span style="color:#ea4335;">⚠️ Expired on ${UI.formatFullDateTime(data.share_expires_at)}</span>`
-            : `<span style="color:#34a853;">● Active:</span> Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
+            ? `<span style="color:#ea4335;">⚠️ Expired on ${UI.formatFullDateTime(expAt)}</span>`
+            : `<span style="color:#34a853;">● Active:</span> Expires on ${UI.formatFullDateTime(expAt)}`;
         } else {
           expSelect.value = 'never';
           expStatus.innerHTML = '<span style="color:var(--text-muted);">● Link never expires</span>';
         }
       }
 
-      if (viewsEl) viewsEl.textContent = data.share_views || 0;
-      if (dlsEl) dlsEl.textContent = data.share_downloads || 0;
+      const viewsCount = (data.share_views !== undefined && data.share_views !== null) ? data.share_views : (data.views !== undefined ? data.views : 0);
+      const dlsCount = (data.share_downloads !== undefined && data.share_downloads !== null) ? data.share_downloads : (data.downloads !== undefined ? data.downloads : 0);
+      if (viewsEl) viewsEl.textContent = viewsCount;
+      if (dlsEl) dlsEl.textContent = dlsCount;
     } catch (err) {
       console.warn('Share status load warning:', err);
     }
@@ -2322,8 +2328,10 @@ const App = {
 
           const viewsEl = document.getElementById('share-stats-views');
           const dlsEl = document.getElementById('share-stats-downloads');
-          if (viewsEl) viewsEl.textContent = data.share_views || data.views || 0;
-          if (dlsEl) dlsEl.textContent = data.share_downloads || data.downloads || 0;
+          const finalViews = (data.share_views !== undefined && data.share_views !== null) ? data.share_views : (data.views !== undefined ? data.views : 0);
+          const finalDls = (data.share_downloads !== undefined && data.share_downloads !== null) ? data.share_downloads : (data.downloads !== undefined ? data.downloads : 0);
+          if (viewsEl) viewsEl.textContent = finalViews;
+          if (dlsEl) dlsEl.textContent = finalDls;
 
           UI.showToast(isShared ? 'Public share link generated & saved!' : 'File is now restricted', 'success');
         } catch (err) {

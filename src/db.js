@@ -239,7 +239,13 @@ function all(sql, params = []) {
  * @returns {Object|undefined} The file record
  */
 function getFile(id) {
-  return get('SELECT * FROM files WHERE id = ?', [id]);
+  if (id === undefined || id === null) return undefined;
+  const strId = String(id).trim();
+  const numId = !isNaN(Number(strId)) ? Number(strId) : null;
+  if (numId !== null) {
+    return get('SELECT * FROM files WHERE id = ? OR id = ?', [strId, numId]);
+  }
+  return get('SELECT * FROM files WHERE id = ?', [strId]);
 }
 
 /**
@@ -455,10 +461,21 @@ function updateFileShare(fileId, options = {}) {
   const password = options.password !== undefined ? options.password : options.share_password;
   const expiresAt = options.expiresAt !== undefined ? options.expiresAt : options.share_expires_at;
 
-  run(
-    'UPDATE files SET is_shared = ?, share_token = ?, share_password = ?, share_expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [isShared ? 1 : 0, token || null, password || null, expiresAt || null, fileId]
-  );
+  const strId = String(fileId).trim();
+  const numId = !isNaN(Number(strId)) ? Number(strId) : null;
+
+  if (numId !== null) {
+    run(
+      'UPDATE files SET is_shared = ?, share_token = ?, share_password = ?, share_expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR id = ?',
+      [isShared ? 1 : 0, token || null, password || null, expiresAt || null, strId, numId]
+    );
+  } else {
+    run(
+      'UPDATE files SET is_shared = ?, share_token = ?, share_password = ?, share_expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [isShared ? 1 : 0, token || null, password || null, expiresAt || null, strId]
+    );
+  }
+  save(true);
   return getFile(fileId);
 }
 
@@ -466,10 +483,14 @@ function updateFileShare(fileId, options = {}) {
  * Revokes public share link for a file
  */
 function revokeFileShare(fileId) {
-  run(
-    'UPDATE files SET is_shared = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [fileId]
-  );
+  const strId = String(fileId).trim();
+  const numId = !isNaN(Number(strId)) ? Number(strId) : null;
+  if (numId !== null) {
+    run('UPDATE files SET is_shared = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR id = ?', [strId, numId]);
+  } else {
+    run('UPDATE files SET is_shared = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [strId]);
+  }
+  save(true);
   return getFile(fileId);
 }
 
@@ -478,6 +499,7 @@ function revokeFileShare(fileId) {
  */
 function incrementShareViews(token) {
   run('UPDATE files SET share_views = COALESCE(share_views, 0) + 1 WHERE share_token = ?', [token]);
+  save(true);
 }
 
 /**
@@ -485,6 +507,7 @@ function incrementShareViews(token) {
  */
 function incrementShareDownloads(token) {
   run('UPDATE files SET share_downloads = COALESCE(share_downloads, 0) + 1 WHERE share_token = ?', [token]);
+  save(true);
 }
 
 /**
