@@ -652,10 +652,54 @@ const UI = {
     }
 
     menu.style.display = 'block';
-    const x = Math.min(event.pageX, window.innerWidth - 220);
-    const y = Math.min(event.pageY, window.innerHeight - 250);
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
+
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width || 220;
+    const menuHeight = menuRect.height || 340;
+    const padding = 10;
+
+    let x = 0;
+    let y = 0;
+
+    const moreBtn = event && event.target ? event.target.closest('.item-more-btn') : null;
+    if (moreBtn) {
+      const btnRect = moreBtn.getBoundingClientRect();
+      // Align with button right edge
+      x = btnRect.right - menuWidth;
+      // Default to opening below button
+      y = btnRect.bottom + 4;
+
+      // If overflows bottom of viewport, flip above the button
+      if (y + menuHeight > window.innerHeight - padding) {
+        y = btnRect.top - menuHeight - 4;
+      }
+    } else if (event) {
+      const clientX = event.clientX !== undefined ? event.clientX : (event.pageX - (window.scrollX || window.pageXOffset || 0));
+      const clientY = event.clientY !== undefined ? event.clientY : (event.pageY - (window.scrollY || window.pageYOffset || 0));
+
+      x = clientX;
+      y = clientY;
+
+      if (x + menuWidth > window.innerWidth - padding) {
+        x = clientX - menuWidth;
+      }
+      if (y + menuHeight > window.innerHeight - padding) {
+        y = clientY - menuHeight;
+      }
+    }
+
+    // Keep completely within screen viewport bounds
+    if (x < padding) x = padding;
+    if (x + menuWidth > window.innerWidth - padding) {
+      x = Math.max(padding, window.innerWidth - menuWidth - padding);
+    }
+    if (y < padding) y = padding;
+    if (y + menuHeight > window.innerHeight - padding) {
+      y = Math.max(padding, window.innerHeight - menuHeight - padding);
+    }
+
+    menu.style.left = `${Math.round(x)}px`;
+    menu.style.top = `${Math.round(y)}px`;
   },
 
   // ─── Generate Real Video Thumbnails via Canvas (Lazy & Concurrency-Throttled) ───

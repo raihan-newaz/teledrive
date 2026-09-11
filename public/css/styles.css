@@ -2551,6 +2551,8 @@ input:focus, select:focus, textarea:focus {
   padding: 6px 0;
   z-index: 1000;
   min-width: 200px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
 }
 .context-item {
   width: 100%;
