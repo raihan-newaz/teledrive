@@ -643,11 +643,18 @@ const UI = {
     const shareBtn = menu.querySelector('[data-action="share"]');
     const infoBtn = menu.querySelector('[data-action="info"]');
 
+    const renameBtn = menu.querySelector('[data-action="rename"]');
+    const moveBtn = menu.querySelector('[data-action="move"]');
+
     if (trashBtn) trashBtn.style.display = isTrashed ? 'none' : 'flex';
     if (restoreBtn) restoreBtn.style.display = isTrashed ? 'flex' : 'none';
     if (permDeleteBtn) permDeleteBtn.style.display = isTrashed ? 'flex' : 'none';
-    if (downloadBtn) downloadBtn.style.display = item.type === 'file' ? 'flex' : 'none';
-    if (starBtn) starBtn.style.display = item.type === 'file' ? 'flex' : 'none';
+    if (downloadBtn) downloadBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
+    if (starBtn) starBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
+    if (shareBtn) shareBtn.style.display = (!isTrashed && item.type === 'file') ? 'flex' : 'none';
+    if (infoBtn) infoBtn.style.display = isTrashed ? 'none' : 'flex';
+    if (renameBtn) renameBtn.style.display = isTrashed ? 'none' : 'flex';
+    if (moveBtn) moveBtn.style.display = isTrashed ? 'none' : 'flex';
     const lockFolderBtn = menu.querySelector('[data-action="lock-folder"]');
     const lockFolderText = document.getElementById('ctx-lock-folder-text');
     const relockFolderBtn = menu.querySelector('[data-action="relock-folder"]');
