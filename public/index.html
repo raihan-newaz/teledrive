@@ -593,7 +593,7 @@
       <label class="share-section-title">General access</label>
       <div class="share-access-card">
         <div class="share-access-icon-wrap" id="share-access-icon-wrap">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
         </div>
         <div class="share-access-info">
           <select id="share-access-select" class="share-access-select">
@@ -608,54 +608,73 @@
     <!-- Public Controls (Shown when Anyone with the link is active) -->
     <div class="share-public-settings" id="share-public-settings" style="display:none;">
       <!-- Link Copy Box -->
-      <label class="share-section-title">Share link</label>
-      <div class="share-link-box">
-        <input type="text" id="share-link-input" readonly placeholder="Generating link...">
-        <button class="btn-primary" id="btn-copy-share-link" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-          <span id="copy-share-btn-text">Copy link</span>
-        </button>
+      <div class="share-section" style="margin-bottom: 0;">
+        <label class="share-section-title">Share link</label>
+        <div class="share-link-box">
+          <div class="share-link-input-wrap">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="share-link-icon"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+            <input type="text" id="share-link-input" readonly placeholder="Generating link...">
+          </div>
+          <button class="btn-primary share-copy-btn" id="btn-copy-share-link" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            <span id="copy-share-btn-text">Copy link</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Advanced Controls Grid -->
-      <div class="share-advanced-grid">
-        <!-- Optional Password -->
-        <div class="share-field-group">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-            <label class="share-field-label" style="margin-bottom: 0;">
-              <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>Password Protection</span>
+      <!-- Security Settings Card (Password & Expiration) -->
+      <div class="share-options-card">
+        <!-- Password Field -->
+        <div class="share-option-item">
+          <div class="share-option-header">
+            <div class="share-option-title-wrap">
+              <span class="share-option-title">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+                Password Protection
+              </span>
               <span class="share-field-optional">(Optional)</span>
-            </label>
-            <button type="button" id="btn-remove-share-pw" style="display: none; background: none; border: none; color: #ea4335; font-size: 12px; font-weight: 500; cursor: pointer; padding: 2px 6px; border-radius: 4px;">Remove Password</button>
+            </div>
+            <button type="button" id="btn-remove-share-pw" class="btn-option-action" style="display: none;">Remove password</button>
           </div>
           <div class="share-pw-wrap">
-            <input type="password" id="share-password-input" placeholder="Set a password or leave blank">
+            <input type="password" id="share-password-input" class="share-clean-input" placeholder="Set a password or leave blank">
             <button type="button" class="btn-toggle-pw" id="share-toggle-pw" title="Show / Hide Password">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
-          <small class="share-field-help" id="share-pw-status"></small>
+          <div class="share-field-status" id="share-pw-status"></div>
         </div>
 
-        <!-- Expiration -->
-        <div class="share-field-group">
-          <label class="share-field-label">
-            <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>Link Expiration</span>
-          </label>
-          <select id="share-expiration-select" class="share-select">
+        <div class="share-option-divider"></div>
+
+        <!-- Expiration Field -->
+        <div class="share-option-item">
+          <div class="share-option-header">
+            <div class="share-option-title-wrap">
+              <span class="share-option-title">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                Link Expiration
+              </span>
+            </div>
+          </div>
+          <select id="share-expiration-select" class="share-clean-select">
             <option value="never">Never expires</option>
             <option value="1">Expires in 1 day</option>
             <option value="7">Expires in 7 days</option>
             <option value="30">Expires in 30 days</option>
           </select>
-          <small class="share-field-help" id="share-expiry-status"></small>
+          <div class="share-field-status" id="share-expiry-status"></div>
         </div>
       </div>
 
-      <!-- Stats Badge -->
-      <div class="share-stats-badge" id="share-stats-badge">
-        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><strong id="share-stats-views">0</strong> views</span>
-        <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><strong id="share-stats-downloads">0</strong> downloads</span>
+      <!-- Stats Pill -->
+      <div class="share-stats-pill" id="share-stats-badge">
+        <div class="share-stats-pill-left">
+          <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><strong id="share-stats-views">0</strong> views</span>
+          <span class="share-stats-dot">•</span>
+          <span><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><strong id="share-stats-downloads">0</strong> downloads</span>
+        </div>
+        <span class="share-stats-pill-right">End-to-End Encrypted</span>
       </div>
     </div>
 

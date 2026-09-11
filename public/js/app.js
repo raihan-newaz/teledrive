@@ -1413,28 +1413,30 @@ const App = {
         if (linkInput) linkInput.value = '';
       }
 
-      if (pwStatus) {
+      if (pwStatus && pwInput) {
         if (data.has_password) {
-          pwStatus.textContent = '🔒 Password protection is ACTIVE.';
-          pwStatus.style.color = 'var(--primary-color)';
-          if (pwInput) pwInput.placeholder = 'Enter new password to change, or leave blank to keep';
+          pwStatus.innerHTML = '<span style="color:#34a853;">🔒 Password protection is ACTIVE</span>';
+          pwInput.placeholder = 'Type new password to change (or leave blank)';
           if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
         } else {
-          pwStatus.textContent = 'Direct public access without password.';
-          pwStatus.style.color = 'var(--text-muted)';
-          if (pwInput) pwInput.placeholder = 'Set a password or leave blank';
+          pwStatus.innerHTML = '<span style="color:var(--text-muted);">🔓 No password protection</span>';
+          pwInput.placeholder = 'Set a password or leave blank';
           if (btnRemovePw) btnRemovePw.style.display = 'none';
         }
       }
 
-      if (expStatus) {
+      if (expStatus && expSelect) {
         if (data.share_expires_at) {
           const expDate = new Date(data.share_expires_at);
-          expStatus.textContent = `Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
-          expStatus.style.color = expDate < new Date() ? '#ea4335' : 'var(--primary-color)';
+          const now = new Date();
+          const isExpired = expDate < now;
+
+          expStatus.innerHTML = isExpired
+            ? `<span style="color:#ea4335;">⚠️ Expired on ${UI.formatFullDateTime(data.share_expires_at)}</span>`
+            : `<span style="color:#34a853;">● Active:</span> Expires on ${UI.formatFullDateTime(data.share_expires_at)}`;
         } else {
-          expStatus.textContent = 'Link never expires.';
-          expStatus.style.color = 'var(--text-muted)';
+          expSelect.value = 'never';
+          expStatus.innerHTML = '<span style="color:var(--text-muted);">● Link never expires</span>';
         }
       }
 
@@ -2186,23 +2188,43 @@ const App = {
     const btnRemovePw = document.getElementById('btn-remove-share-pw');
     const pwStatus = document.getElementById('share-pw-status');
 
-    if (btnRemovePw && pwInput) {
+    if (btnRemovePw && pwInput && pwStatus) {
       btnRemovePw.onclick = () => {
         this.clearPasswordRequested = true;
         pwInput.value = '';
         pwInput.placeholder = 'Password will be removed upon saving';
-        if (pwStatus) {
-          pwStatus.textContent = 'Password will be removed when you click "Save Changes".';
-          pwStatus.style.color = 'var(--text-muted)';
-        }
+        pwStatus.innerHTML = '<span style="color:#ea4335;">🗑️ Password will be REMOVED when you click "Save Changes"</span>';
         btnRemovePw.style.display = 'none';
       };
     }
 
-    if (pwInput) {
+    if (pwInput && pwStatus) {
       pwInput.oninput = () => {
         if (pwInput.value.trim() !== '') {
           this.clearPasswordRequested = false;
+          pwStatus.innerHTML = '<span style="color:var(--primary-color);">🔑 New password:</span> Will be saved upon clicking "Save Changes"';
+          if (btnRemovePw) btnRemovePw.style.display = 'none';
+        } else if (this.clearPasswordRequested) {
+          pwStatus.innerHTML = '<span style="color:#ea4335;">🗑️ Password will be REMOVED when you click "Save Changes"</span>';
+        } else if (this.currentShareStatus && this.currentShareStatus.has_password) {
+          pwStatus.innerHTML = '<span style="color:#34a853;">🔒 Password protection is ACTIVE</span>';
+          if (btnRemovePw) btnRemovePw.style.display = 'inline-block';
+        } else {
+          pwStatus.innerHTML = '<span style="color:var(--text-muted);">🔓 No password protection</span>';
+          if (btnRemovePw) btnRemovePw.style.display = 'none';
+        }
+      };
+    }
+
+    if (expSelect && expStatus) {
+      expSelect.onchange = () => {
+        const val = expSelect.value;
+        if (val === 'never') {
+          expStatus.innerHTML = '<span style="color:var(--text-muted);">● Link will not expire</span>';
+        } else {
+          const d = new Date();
+          d.setDate(d.getDate() + Number(val));
+          expStatus.innerHTML = `<span style="color:var(--primary-color);">● Will expire on:</span> ${UI.formatFullDateTime(d.toISOString())}`;
         }
       };
     }
