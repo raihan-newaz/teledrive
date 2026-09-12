@@ -766,10 +766,16 @@ router.delete('/upload-session/:uploadId', async (req, res) => {
   try {
     const uploadId = req.params.uploadId;
     const chunks = db.getUploadedSessionChunks(uploadId);
-    for (const ch of chunks) {
-      try {
-        await telegram.deleteFile(ch.telegram_message_id);
-      } catch (e) {}
+    if (chunks && chunks.length > 0) {
+      const msgIds = chunks.map(ch => parseInt(ch.telegram_message_id, 10)).filter(id => !isNaN(id) && id > 0);
+      if (msgIds.length > 0) {
+        try {
+          await telegram.deleteFiles(msgIds);
+          console.log(`[UploadSession] Deleted ${msgIds.length} uploaded chunk(s) from Telegram for cancelled session ${uploadId}`);
+        } catch (tgErr) {
+          console.error(`[UploadSession] Error deleting ${msgIds.length} chunks from Telegram:`, tgErr.message);
+        }
+      }
     }
     db.deleteUploadSession(uploadId);
     res.json({ success: true });
@@ -1191,6 +1197,38 @@ async function purgeExpiredTrash() {
 setInterval(purgeExpiredTrash, 6 * 3600 * 1000).unref();
 // Run on startup
 setTimeout(purgeExpiredTrash, 30 * 1000).unref();
+
+/**
+ * Automated Incomplete Upload Sessions Purge Worker
+ * Purges unfinished upload sessions older than 24h and deletes any orphaned Telegram chunks.
+ */
+async function purgeExpiredUploadSessions() {
+  try {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const expiredSessions = db.getExpiredUploadSessions(oneDayAgo);
+    if (expiredSessions && expiredSessions.length > 0) {
+      console.log(`[Auto-Purge] Found ${expiredSessions.length} abandoned upload session(s) older than 24h. Purging...`);
+      for (const session of expiredSessions) {
+        try {
+          const chunks = db.getUploadedSessionChunks(session.id);
+          if (chunks && chunks.length > 0) {
+            const msgIds = chunks.map(ch => parseInt(ch.telegram_message_id, 10)).filter(id => !isNaN(id) && id > 0);
+            if (msgIds.length > 0) {
+              await telegram.deleteFiles(msgIds).catch(() => {});
+            }
+          }
+          db.deleteUploadSession(session.id);
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.error('[Auto-Purge] Error during expired upload sessions purge:', err.message);
+  }
+}
+
+// Run expired upload sessions purge every 6 hours and on startup
+setInterval(purgeExpiredUploadSessions, 6 * 3600 * 1000).unref();
+setTimeout(purgeExpiredUploadSessions, 60 * 1000).unref();
 
 /**
  * DELETE /trash/empty — Empty all files currently in Trash

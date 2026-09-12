@@ -25,6 +25,8 @@ class LocalWebDavServer @Inject constructor(
     private var server: ApplicationEngine? = null
 
     fun start() {
+        if (server != null) return // Prevent BindException on Activity recreation
+
         server = embeddedServer(CIO, host = "127.0.0.1", port = 8080) {
             routing {
                 get("/") {
@@ -122,5 +124,6 @@ class LocalWebDavServer @Inject constructor(
 
     fun stop() {
         server?.stop(1000, 5000)
+        server = null
     }
 }

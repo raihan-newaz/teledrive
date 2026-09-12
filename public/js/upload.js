@@ -310,6 +310,14 @@ const Upload = {
       UI.showToast(`Cancelled upload of "${item.file.name}"`, 'info');
     }
 
+    // Immediately trigger server deletion of any already-uploaded chunks in Telegram
+    try {
+      fetch(`/api/files/upload-session/${encodeURIComponent(itemId)}`, {
+        method: 'DELETE',
+        headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
+      }).catch(err => console.warn('[Upload] Cancel session delete warning:', err.message));
+    } catch (e) {}
+
     this.renderQueue();
 
     // If no other item is uploading, continue queue processing
@@ -349,6 +357,17 @@ const Upload = {
         }
         this.isUploading = false;
       }
+      
+      // If item was not fully completed, ensure partial chunks are cleaned up from Telegram
+      if (item.status !== 'done') {
+        try {
+          fetch(`/api/files/upload-session/${encodeURIComponent(itemId)}`, {
+            method: 'DELETE',
+            headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
       this.queue.splice(index, 1);
       this.renderQueue();
       if (!this.isUploading) {
