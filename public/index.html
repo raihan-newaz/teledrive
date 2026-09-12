@@ -1044,7 +1044,12 @@
               <option value="1073741824">1.0 GB (Ultra Fast)</option>
               <option value="1610612736">1.5 GB (Heavy Multi-GB Files)</option>
               <option value="2039480320">1.9 GB (Max Telegram Limit)</option>
+              <option value="custom">Custom Size...</option>
             </select>
+            <div id="pref-custom-chunk-wrap" style="display: none; margin-top: 8px; align-items: center; gap: 8px;">
+              <input type="number" id="pref-custom-chunk-input" class="settings-input" placeholder="e.g. 250" min="5" max="1900" style="width: 110px;">
+              <span style="font-size: 13px; color: var(--text-secondary);">MB (Range: 5 MB – 1900 MB)</span>
+            </div>
           </div>
         </div>
         <div class="pref-row">

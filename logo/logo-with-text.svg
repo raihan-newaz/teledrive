@@ -1,0 +1,14 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 240" width="800" height="240">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285f4"/>
+      <stop offset="100%" stop-color="#1a73e8"/>
+    </linearGradient>
+  </defs>
+  <!-- Cloud Icon -->
+  <g transform="translate(40, 30) scale(0.35)">
+    <path fill="url(#cloudGrad)" d="M412.8 214.2C398.3 140.6 333.7 85.3 256 85.3c-61.6 0-115.2 34.9-141.8 86.2C49.9 178.3 0 232.7 0 298.7c0 70.6 57.4 128 128 128h277.3c58.9 0 106.7-47.8 106.7-106.7 0-56.3-43.7-101.9-99.2-105.8z"/>
+  </g>
+  <!-- Brand Text -->
+  <text x="240" y="142" font-family="-apple-system, BlinkMacSystemFont, 'Google Sans', 'Roboto', 'Segoe UI', sans-serif" font-size="78" font-weight="700" fill="#1a73e8">Tele<tspan fill="#1e1f20">Drive</tspan></text>
+</svg>

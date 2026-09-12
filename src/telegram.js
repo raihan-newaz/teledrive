@@ -32,7 +32,8 @@ async function initialize(apiId, apiHash, botToken) {
   const stringSession = new StringSession(sessionStr);
   
   client = new TelegramClient(stringSession, parseInt(apiId, 10), apiHash, {
-    connectionRetries: 5,
+    connectionRetries: 10,
+    autoReconnect: true,
   });
 
   try {
@@ -127,15 +128,32 @@ async function testConnection(apiId, apiHash, botToken, channelId) {
  * @param {Function} fn - Async operation to execute
  * @param {number} maxRetries - Maximum retry attempts
  */
-async function withTelegramRetry(fn, maxRetries = 3) {
+async function withTelegramRetry(fn, maxRetries = 4) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      if (client && !client.connected) {
+        console.log(`[Telegram] Client not connected (attempt ${attempt}), connecting now...`);
+        try { await client.connect(); } catch (e) {}
+      }
       return await fn();
     } catch (err) {
       if (err.seconds) {
         console.warn(`[Telegram] FloodWait detected: waiting ${err.seconds + 1}s...`);
         await new Promise(r => setTimeout(r, (err.seconds + 1) * 1000));
         continue;
+      }
+      const isConnErr = err.message && (
+        err.message.includes('disconnected') ||
+        err.message.includes('Connection') ||
+        err.message.includes('TIMEOUT') ||
+        err.message.includes('closed') ||
+        err.message.includes('socket')
+      );
+      if (isConnErr) {
+        console.warn(`[Telegram] Connection error on attempt ${attempt}: ${err.message}. Reconnecting...`);
+        try {
+          if (client) await client.connect();
+        } catch (e) {}
       }
       if (attempt === maxRetries) throw err;
       await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -151,6 +169,9 @@ async function withTelegramRetry(fn, maxRetries = 3) {
  * @returns {Promise<Object>} The sent message object
  */
 async function uploadFile(filePath, fileName, progressCallback) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Upload source file does not exist: ${filePath}`);
+  }
   const tClient = getClient();
   const channelEntity = await getChannelInputEntity();
 

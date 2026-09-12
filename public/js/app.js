@@ -2830,11 +2830,53 @@ const App = {
     const prefConcurrent = document.getElementById('pref-concurrent-chunks');
 
     if (prefChunkSize) {
-      prefChunkSize.value = localStorage.getItem('teledrive_chunk_size') || '314572800';
+      const customWrap = document.getElementById('pref-custom-chunk-wrap');
+      const customInput = document.getElementById('pref-custom-chunk-input');
+      const savedChunkSize = localStorage.getItem('teledrive_chunk_size') || '314572800';
+
+      const presetValues = ['52428800', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
+      if (presetValues.includes(savedChunkSize)) {
+        prefChunkSize.value = savedChunkSize;
+        if (customWrap) customWrap.style.display = 'none';
+      } else {
+        prefChunkSize.value = 'custom';
+        if (customWrap) customWrap.style.display = 'flex';
+        if (customInput) customInput.value = Math.round(parseInt(savedChunkSize, 10) / (1024 * 1024)) || 250;
+      }
+
       prefChunkSize.onchange = () => {
-        localStorage.setItem('teledrive_chunk_size', prefChunkSize.value);
-        UI.showToast('Upload chunk size preference saved!', 'success');
+        if (prefChunkSize.value === 'custom') {
+          if (customWrap) customWrap.style.display = 'flex';
+          if (customInput) {
+            customInput.focus();
+            const mb = Math.min(1900, Math.max(5, parseInt(customInput.value, 10) || 250));
+            customInput.value = mb;
+            localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+          }
+          UI.showToast('Custom chunk size mode enabled', 'info');
+        } else {
+          if (customWrap) customWrap.style.display = 'none';
+          localStorage.setItem('teledrive_chunk_size', prefChunkSize.value);
+          UI.showToast('Upload chunk size preference saved!', 'success');
+        }
       };
+
+      if (customInput) {
+        customInput.oninput = () => {
+          let mb = parseInt(customInput.value, 10);
+          if (!isNaN(mb) && mb >= 5 && mb <= 1900) {
+            localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+          }
+        };
+        customInput.onchange = () => {
+          let mb = parseInt(customInput.value, 10);
+          if (isNaN(mb) || mb < 5) mb = 5;
+          if (mb > 1900) mb = 1900;
+          customInput.value = mb;
+          localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+          UI.showToast(`Custom chunk size set to ${mb} MB!`, 'success');
+        };
+      }
     }
 
     if (prefConcurrent) {
@@ -3108,7 +3150,18 @@ const App = {
     const prefConcurrent = document.getElementById('pref-concurrent-chunks');
     const prefWakeLock = document.getElementById('pref-wake-lock');
     if (prefChunkSize) {
-      prefChunkSize.value = localStorage.getItem('teledrive_chunk_size') || '314572800';
+      const customWrap = document.getElementById('pref-custom-chunk-wrap');
+      const customInput = document.getElementById('pref-custom-chunk-input');
+      const savedChunkSize = localStorage.getItem('teledrive_chunk_size') || '314572800';
+      const presetValues = ['52428800', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
+      if (presetValues.includes(savedChunkSize)) {
+        prefChunkSize.value = savedChunkSize;
+        if (customWrap) customWrap.style.display = 'none';
+      } else {
+        prefChunkSize.value = 'custom';
+        if (customWrap) customWrap.style.display = 'flex';
+        if (customInput) customInput.value = Math.round(parseInt(savedChunkSize, 10) / (1024 * 1024)) || 250;
+      }
     }
     if (prefConcurrent) {
       prefConcurrent.value = localStorage.getItem('teledrive_concurrent_chunks') || '2';
