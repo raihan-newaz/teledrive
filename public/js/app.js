@@ -820,61 +820,120 @@ const App = {
     }
   },
 
-  removeFileLocally(fileId) {
-    if (!fileId) return;
-    this.files = this.files.filter(f => String(f.id) !== String(fileId));
-    this.filesMap.delete(String(fileId));
+  removeItemsLocally(items) {
+    if (!items) return;
+    const itemList = Array.isArray(items) ? items : [items];
+    if (itemList.length === 0) return;
 
-    const filesGrid = document.getElementById('files-grid');
-    if (filesGrid) {
-      const card = filesGrid.querySelector(`[data-id="${fileId}"]`);
-      if (card) {
-        card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-        card.style.opacity = '0';
-        card.style.transform = 'scale(0.9)';
-        setTimeout(() => card.remove(), 200);
+    const fileIdSet = new Set();
+    const folderIdSet = new Set();
+    const elementsToAnimate = [];
+
+    itemList.forEach(item => {
+      let id, type;
+      if (typeof item === 'object' && item !== null) {
+        id = String(item.id);
+        type = item.type || (this.foldersMap.has(id) ? 'folder' : 'file');
+      } else {
+        id = String(item);
+        type = this.foldersMap.has(id) ? 'folder' : 'file';
       }
-    }
 
-    if (this.files.length === 0) {
+      if (type === 'folder') {
+        folderIdSet.add(id);
+      } else {
+        fileIdSet.add(id);
+      }
+
+      const card = document.querySelector(`.file-card[data-id="${id}"], .folder-card[data-id="${id}"]`);
+      if (card) {
+        elementsToAnimate.push(card);
+      }
+
+      // Deselect immediately
+      UI.selectedItems.delete(id);
+    });
+
+    UI.updateActionBar();
+
+    // Instant smooth vanishing animation (Google Drive style)
+    elementsToAnimate.forEach(card => {
+      card.classList.add('item-vanishing');
+      card.style.pointerEvents = 'none';
+    });
+
+    // Update local dataset immediately so searches/filters/counts stay consistent
+    this.files = this.files.filter(f => !fileIdSet.has(String(f.id)));
+    this.folders = this.folders.filter(f => !folderIdSet.has(String(f.id)));
+    if (this.filteredFiles) {
+      this.filteredFiles = this.filteredFiles.filter(f => !fileIdSet.has(String(f.id)));
+    }
+    fileIdSet.forEach(id => this.filesMap.delete(id));
+    folderIdSet.forEach(id => this.foldersMap.delete(id));
+
+    setTimeout(() => {
+      elementsToAnimate.forEach(card => card.remove());
+
+      const hasFolders = this.folders.length > 0;
+      const hasFiles = (this.filteredFiles ? this.filteredFiles.length : this.files.length) > 0;
+
+      const foldersSection = document.getElementById('folders-section');
       const filesSection = document.getElementById('files-section');
-      if (filesSection) filesSection.style.display = 'none';
-      if (this.folders.length === 0) {
-        const fileContainer = document.getElementById('file-container');
-        const emptyState = document.getElementById('empty-state');
+      const fileContainer = document.getElementById('file-container');
+      const emptyState = document.getElementById('empty-state');
+
+      if (!hasFolders && foldersSection) {
+        foldersSection.style.display = 'none';
+      }
+      if (!hasFiles && filesSection) {
+        filesSection.style.display = 'none';
+      }
+      if (!hasFolders && !hasFiles) {
         if (fileContainer) fileContainer.style.display = 'none';
         if (emptyState) emptyState.style.display = 'flex';
       }
-    }
+    }, 220);
+
     this.loadStorageStats();
+  },
+
+  emptyTrashLocally() {
+    UI.clearSelection();
+    const allCards = document.querySelectorAll('.file-card, .folder-card');
+    allCards.forEach(card => {
+      card.classList.add('item-vanishing');
+      card.style.pointerEvents = 'none';
+    });
+
+    this.files = [];
+    this.folders = [];
+    this.filteredFiles = [];
+    this.filesMap.clear();
+    this.foldersMap.clear();
+
+    setTimeout(() => {
+      allCards.forEach(c => c.remove());
+      const fileContainer = document.getElementById('file-container');
+      const emptyState = document.getElementById('empty-state');
+      const foldersSection = document.getElementById('folders-section');
+      const filesSection = document.getElementById('files-section');
+      if (foldersSection) foldersSection.style.display = 'none';
+      if (filesSection) filesSection.style.display = 'none';
+      if (fileContainer) fileContainer.style.display = 'none';
+      if (emptyState) emptyState.style.display = 'flex';
+    }, 220);
+
+    this.loadStorageStats();
+  },
+
+  removeFileLocally(fileId) {
+    if (!fileId) return;
+    this.removeItemsLocally([{ id: fileId, type: 'file' }]);
   },
 
   removeFolderLocally(folderId) {
     if (!folderId) return;
-    this.folders = this.folders.filter(f => String(f.id) !== String(folderId));
-    this.foldersMap.delete(String(folderId));
-
-    const foldersGrid = document.getElementById('folders-grid');
-    if (foldersGrid) {
-      const card = foldersGrid.querySelector(`[data-id="${folderId}"]`);
-      if (card) {
-        card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-        card.style.opacity = '0';
-        card.style.transform = 'scale(0.9)';
-        setTimeout(() => card.remove(), 200);
-      }
-    }
-
-    if (this.folders.length === 0) {
-      const foldersSection = document.getElementById('folders-section');
-      if (foldersSection) foldersSection.style.display = 'none';
-      if (this.files.length === 0) {
-        const fileContainer = document.getElementById('file-container');
-        const emptyState = document.getElementById('empty-state');
-        if (fileContainer) fileContainer.style.display = 'none';
-        if (emptyState) emptyState.style.display = 'flex';
-      }
-    }
+    this.removeItemsLocally([{ id: folderId, type: 'folder' }]);
   },
 
   updateFileLocally(file) {
@@ -1403,9 +1462,14 @@ const App = {
       this.openMoveModal(itemData);
     } else if (action === 'trash') {
       if (itemData.type === 'file') {
-        await API.trashFile(itemData.id);
-        UI.showToast('Moved to Trash', 'info');
-        this.refreshCurrentView();
+        this.removeItemsLocally([itemData]);
+        try {
+          await API.trashFile(itemData.id);
+          UI.showToast('Moved to Trash', 'info');
+        } catch (e) {
+          UI.showToast('Failed to trash file: ' + e.message, 'error');
+          this.refreshCurrentView();
+        }
       } else {
         const confirmed = await UI.confirm({
           title: 'Move Folder to Trash?',
@@ -1417,16 +1481,26 @@ const App = {
           cancelText: 'Cancel'
         });
         if (!confirmed) return;
+        this.removeItemsLocally([itemData]);
         UI.showToast('Moving folder to Trash...', 'info');
-        await API.deleteFolder(itemData.id);
-        UI.showToast('Folder moved to Trash', 'info');
-        this.refreshCurrentView();
+        try {
+          await API.deleteFolder(itemData.id);
+          UI.showToast('Folder moved to Trash', 'info');
+        } catch (e) {
+          UI.showToast('Failed to move folder to trash: ' + e.message, 'error');
+          this.refreshCurrentView();
+        }
       }
     } else if (action === 'restore') {
       if (itemData.type === 'file') {
-        await API.restoreFile(itemData.id);
-        UI.showToast('File restored', 'success');
-        this.refreshCurrentView();
+        this.removeItemsLocally([itemData]);
+        try {
+          await API.restoreFile(itemData.id);
+          UI.showToast('File restored', 'success');
+        } catch (e) {
+          UI.showToast('Failed to restore file: ' + e.message, 'error');
+          this.refreshCurrentView();
+        }
       }
     } else if (action === 'permanent-delete') {
       this.openDeleteModal(itemData);
@@ -1772,6 +1846,7 @@ const App = {
         if (!confirmed) return;
 
         try {
+          this.emptyTrashLocally();
           UI.showToast('Permanently deleting all items from Telegram...', 'info');
           const res = await API.emptyTrash();
           if (res.warnings && res.warnings.length > 0) {
@@ -1779,9 +1854,9 @@ const App = {
           } else {
             UI.showToast(`Permanently deleted ${res.count || 0} file(s) from Telegram`, 'success');
           }
-          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to empty trash: ' + e.message, 'error');
+          await this.refreshCurrentView();
         }
       };
     }
@@ -1921,12 +1996,12 @@ const App = {
         if (!confirmed) return;
 
         try {
+          this.removeItemsLocally(selectedItems);
           await API.batchTrash(fileIds, folderIds);
           UI.showToast(`Moved ${count} item(s) to Trash`, 'success');
-          UI.clearSelection();
-          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to trash items: ' + e.message, 'error');
+          await this.refreshCurrentView();
         }
       };
     }
@@ -1937,12 +2012,12 @@ const App = {
         const fileIds = selectedItems.filter(i => i.type === 'file').map(i => i.id);
         if (fileIds.length === 0) return;
         try {
+          this.removeItemsLocally(selectedItems);
           await API.batchRestore(fileIds);
           UI.showToast(`Restored ${fileIds.length} file(s)`, 'success');
-          UI.clearSelection();
-          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to restore files: ' + e.message, 'error');
+          await this.refreshCurrentView();
         }
       };
     }
@@ -1967,6 +2042,7 @@ const App = {
         if (!confirmed) return;
 
         try {
+          this.removeItemsLocally(selectedItems);
           UI.showToast('Permanently deleting from Telegram...', 'info');
           const res = await API.batchDelete(fileIds, folderIds);
           if (res.warnings && res.warnings.length > 0) {
@@ -1974,10 +2050,9 @@ const App = {
           } else {
             UI.showToast(`Permanently deleted ${count} item(s) from Telegram`, 'success');
           }
-          UI.clearSelection();
-          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to permanently delete items: ' + e.message, 'error');
+          await this.refreshCurrentView();
         }
       };
     }
@@ -2304,18 +2379,20 @@ const App = {
     if (deleteConfirm) {
       deleteConfirm.onclick = async () => {
         if (!this.selectedItem) return;
+        const targetItem = this.selectedItem;
+        UI.hideAllModals();
+        this.removeItemsLocally([targetItem]);
         try {
           UI.showToast('Deleting permanently from Telegram...', 'info');
-          if (this.selectedItem.type === 'folder') {
-            await API.deleteFolder(this.selectedItem.id, true);
+          if (targetItem.type === 'folder') {
+            await API.deleteFolder(targetItem.id, true);
           } else {
-            await API.permanentDeleteFile(this.selectedItem.id);
+            await API.permanentDeleteFile(targetItem.id);
           }
           UI.showToast('Permanently deleted from Telegram', 'success');
-          UI.hideAllModals();
-          this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Delete failed: ' + e.message, 'error');
+          this.refreshCurrentView();
         }
       };
     }
@@ -2807,6 +2884,7 @@ const App = {
     if (!confirmed) return;
 
     try {
+      this.removeItemsLocally([item]);
       UI.showToast('Deleting permanently from Telegram...', 'info');
       if (isFolder) {
         await API.deleteFolder(item.id, true);
@@ -2814,9 +2892,9 @@ const App = {
         await API.permanentDeleteFile(item.id);
       }
       UI.showToast('Permanently deleted from Telegram', 'success');
-      this.refreshCurrentView();
     } catch (e) {
       UI.showToast('Delete failed: ' + e.message, 'error');
+      this.refreshCurrentView();
     }
   },
 

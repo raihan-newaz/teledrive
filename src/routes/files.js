@@ -1370,12 +1370,12 @@ async function permanentlyDeleteFilesBatch(files, userId) {
   // 2. Clean up local disk cache & DB records for all files
   for (const file of validFiles) {
     try { db.deleteFileChunks(file.id); } catch (e) {}
+    try { db.deleteTranscodeJob(file.id); } catch (e) {}
 
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
     await fsPromises.unlink(cachedPath).catch(() => {});
     const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
     await fsPromises.unlink(thumbPath).catch(() => {});
-    await videoTranscode.deleteFileHlsCache(userId || file.user_id, file.id).catch(() => {});
 
     db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
     if (userId) {
@@ -1439,17 +1439,19 @@ async function permanentlyDeleteFile(file, options = {}) {
     }
   }
 
-  // 3. Clean up file chunks in DB
+  // 3. Clean up file chunks & transcode jobs in DB
   try {
     db.deleteFileChunks(file.id);
   } catch (e) {}
+  try {
+    db.deleteTranscodeJob(file.id);
+  } catch (e) {}
 
-  // 4. Remove local decrypted cache, thumbnail, and HLS transcoded cache
+  // 4. Remove local decrypted cache & thumbnail
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
   await fsPromises.unlink(cachedPath).catch(() => {});
   const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
   await fsPromises.unlink(thumbPath).catch(() => {});
-  await videoTranscode.deleteFileHlsCache(file.user_id, file.id).catch(() => {});
 
   // 5. Remove file record and video metadata from database
   db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
@@ -1726,6 +1728,18 @@ router.post('/batch-delete', async (req, res) => {
     }
 
     if (userId) db.recalculateUserStorage(userId);
+
+    try {
+      const eventBroadcaster = require('../services/eventBroadcaster');
+      for (const f of filesToDelete) {
+        eventBroadcaster.broadcast('file_deleted', { fileId: f.id, folderId: f.folder_id, userId });
+      }
+      if (Array.isArray(folderIds)) {
+        for (const fId of folderIds) {
+          eventBroadcaster.broadcast('folder_deleted', { folderId: fId, userId });
+        }
+      }
+    } catch (e) {}
 
     res.json({
       success: true,
