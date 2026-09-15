@@ -740,15 +740,15 @@ const Upload = {
 
     body.innerHTML = this.queue.map(item => {
       const safeName = item.file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      let statusIcon = '<span class="status-spinner-sm" style="display:inline-block; width:12px; height:12px; border:2px solid var(--accent-color); border-right-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></span>';
+      let statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#9aa0a6" style="vertical-align:middle;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
       if (item.status === 'uploading') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="var(--accent-color)"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>';
+        statusIcon = '<svg class="upload-spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent-color);"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-linecap="round"></path></svg>';
       } else if (item.status === 'done') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#34a853"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#34a853" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
       } else if (item.status === 'error') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#ea4335"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#ea4335" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
       } else if (item.status === 'cancelled') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#5f6368"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
+        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
       }
 
       const partText = item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '';
@@ -778,7 +778,7 @@ const Upload = {
           <div class="upload-item-header">
             <span class="upload-item-name" title="${safeName}">${safeName}</span>
             <div class="upload-item-right">
-              <span class="upload-item-status">${statusIcon}${partText} ${item.progress}%</span>
+              <span class="upload-item-status">${statusIcon}<span>${partText} ${item.progress}%</span></span>
               ${actionBtn}
             </div>
           </div>
@@ -804,17 +804,31 @@ const Upload = {
       const metrics = el.querySelector('.upload-item-metrics');
 
       if (status) {
-        if (customText) {
-          status.textContent = `${customText} (${item.progress}%)`;
-        } else if (item.totalParts && item.totalParts > 1) {
-          status.textContent = `⬆️ Part ${item.currentPart || 1}/${item.totalParts} (${chunkPct || item.progress}%) · ${item.progress}%`;
-        } else {
-          status.textContent = `⬆️ ${item.progress}%`;
+        let iconHtml = '<svg class="upload-spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent-color);"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-linecap="round"></path></svg>';
+        if (item.status === 'done') {
+          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#34a853" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
+        } else if (item.status === 'error') {
+          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#ea4335" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+        } else if (item.status === 'cancelled') {
+          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
+        } else if (item.status === 'pending') {
+          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#9aa0a6" style="vertical-align:middle;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
         }
+
+        let textPart = '';
+        if (customText) {
+          textPart = `${customText} (${item.progress}%)`;
+        } else if (item.totalParts && item.totalParts > 1) {
+          textPart = `Part ${item.currentPart || 1}/${item.totalParts} (${chunkPct || item.progress}%) · ${item.progress}%`;
+        } else {
+          textPart = `${item.progress}%`;
+        }
+        status.innerHTML = `${iconHtml}<span>${textPart}</span>`;
       }
 
       if (fill) {
         fill.style.width = `${item.progress}%`;
+        fill.className = `upload-progress-fill ${item.status}`;
       }
 
       if (metrics) {
