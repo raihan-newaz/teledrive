@@ -49,18 +49,37 @@ http://YOUR_VPS_IP:3000
 
 ---
 
+## 🔒 Security & Encryption Architecture
+
+```
+User (Browser / PWA)
+       │ (HTTPS)
+       ▼
+TeleDrive Private Server (Self-Hosted VPS)
+       │  ├─ Encrypts on-the-fly with AES-256-GCM
+       │  └─ Generates unique Salt, IV & Auth Tag
+       ▼ (MTProto)
+Telegram Cloud Storage (Stores ONLY Encrypted Ciphertext)
+```
+
+- **Server-Side AES-256-GCM AEAD Encryption**: Files are encrypted on your private self-hosted server instance before being dispatched to Telegram.
+- **Zero-Knowledge at Rest on Telegram**: Telegram servers only receive and store opaque encrypted binary chunks. Telegram has zero access to plaintext contents, filenames, or encryption keys.
+- **Per-Chunk Cryptographic Integrity**: Every chunk has a distinct PBKDF2 salt, 96-bit IV, and 128-bit authentication tag verified before decryption.
+
+---
+
 ## 💾 Critical Backup & Security Advisory
 
 > [!IMPORTANT]
-> **Why Backups Are Essential for Zero-Knowledge Encryption:**
+> **Why Database and Key Backups Are Essential:**
 > 
-> TeleDrive uses **Zero-Knowledge AES-256-GCM encryption**. This means **no one** (not even Telegram, nor any server provider) can decrypt your files without your `ENCRYPTION_KEY` and the metadata stored in `data/teledrive.db`.
+> Because Telegram stores only encrypted binary blobs without keys, **no one** (not Telegram, nor any cloud provider) can recover your files without your `ENCRYPTION_KEY` and the metadata stored in `data/teledrive.db`.
 > 
-> If you lose your VPS or destroy the container without persistent volumes:
+> If you migrate VPS or rebuild containers:
 > 1. Always keep a safe copy of your **`ENCRYPTION_KEY`** (found in your `.env` file).
-> 2. Always back up your **`data/teledrive.db`** file.
+> 2. Always back up your **`data/teledrive.db`** file or use the built-in encrypted backup feature in Settings.
 > 
-> With `docker-compose.yml`, your `./data` folder and `./.env` are automatically mounted to the host machine so container restarts or updates will never lose your database or encryption keys.
+> With `docker-compose.yml`, your `./data` folder and `./.env` are automatically mounted to the host machine so container updates preserve your database and keys.
 
 ---
 

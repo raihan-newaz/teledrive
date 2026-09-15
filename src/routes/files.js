@@ -967,6 +967,19 @@ router.get('/:id/thumbnail', async (req, res) => {
 /**
  * POST /:id/thumbnail — Store client-extracted thumbnail permanently on server
  */
+function isValidImageMagicBytes(buf) {
+  if (!buf || buf.length < 12) return false;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+      buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A) return true;
+  // WebP: RIFF .... WEBP
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
+  return false;
+}
+
 router.post('/:id/thumbnail', async (req, res) => {
   try {
     const file = db.getFile(req.params.id);
@@ -979,8 +992,16 @@ router.post('/:id/thumbnail', async (req, res) => {
 
     const base64Data = thumbnail.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
+    
     if (buffer.length < 100) {
       return res.status(400).json({ error: 'Thumbnail data too small' });
+    }
+    const MAX_THUMBNAIL_SIZE = 2 * 1024 * 1024; // 2MB cap
+    if (buffer.length > MAX_THUMBNAIL_SIZE) {
+      return res.status(400).json({ error: 'Thumbnail exceeds maximum size limit (2MB)' });
+    }
+    if (!isValidImageMagicBytes(buffer)) {
+      return res.status(400).json({ error: 'Invalid image format: must be valid JPEG, PNG, or WebP' });
     }
 
     const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
