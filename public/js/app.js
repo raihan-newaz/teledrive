@@ -2754,7 +2754,7 @@ const App = {
 
         try {
           const res = await Upload.startRemoteDownload(url, fileName, App.currentFolderId);
-          UI.hideModals();
+          UI.hideModal('remote-upload-modal');
           if (res && res.isFolder) {
             UI.showToast(res.message || `Discovered folder "${res.folderName}" with ${res.totalFiles} files. Downloads queued!`, 'success');
             if (typeof App.loadFolder === 'function') {

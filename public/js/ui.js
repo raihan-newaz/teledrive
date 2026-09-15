@@ -98,6 +98,10 @@ const UI = {
     }
   },
 
+  hideModals() {
+    this.hideAllModals();
+  },
+
   /**
    * Modern, Promise-based custom confirmation dialog with beautiful UI
    * @param {Object} options
