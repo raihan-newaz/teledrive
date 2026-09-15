@@ -11,7 +11,7 @@ router.use(authMiddleware);
  */
 const handleStartJob = async (req, res) => {
   try {
-    const { url, fileName, filename, folderId } = req.body;
+    const { url, fileName, filename, folderId, chunkSize, chunk_size } = req.body;
     const targetUrl = url || req.body.link;
 
     if (!targetUrl || typeof targetUrl !== 'string' || !targetUrl.trim()) {
@@ -21,13 +21,15 @@ const handleStartJob = async (req, res) => {
     const userId = req.user.id;
     const userKey = req.user.encryptionKey;
     const resolvedName = (fileName || filename || '').trim();
+    const parsedChunkSize = parseInt(chunkSize || chunk_size, 10);
 
     const job = await remoteDownloader.createJob({
       userId,
       userKey,
       url: targetUrl.trim(),
       customFileName: resolvedName,
-      folderId: folderId || null
+      folderId: folderId || null,
+      chunkSize: (!isNaN(parsedChunkSize) && parsedChunkSize > 0) ? parsedChunkSize : null
     });
 
     res.json({

@@ -706,7 +706,8 @@ const Upload = {
   remoteTasks: [],
 
   async startRemoteDownload(url, customName, folderId) {
-    const res = await API.startRemoteUpload(url, customName, folderId);
+    const userChunkSize = this.CHUNK_SIZE;
+    const res = await API.startRemoteUpload(url, customName, folderId, userChunkSize);
     if (res && res.task) {
       this.remoteTasks.unshift({
         id: res.task.taskId,

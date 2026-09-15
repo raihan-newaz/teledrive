@@ -415,8 +415,8 @@ const API = {
   },
 
   // ─── Remote URL Upload ─────────────────────────────────────────────
-  async startRemoteUpload(url, fileName, folderId) {
-    return this.request('POST', '/api/remote-upload/start', { url, fileName, folderId });
+  async startRemoteUpload(url, fileName, folderId, chunkSize) {
+    return this.request('POST', '/api/remote-upload/start', { url, fileName, folderId, chunkSize });
   },
 
   async getRemoteTasks() {

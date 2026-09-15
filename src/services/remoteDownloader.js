@@ -14,7 +14,7 @@ const eventBroadcaster = require('./eventBroadcaster');
 
 // Configurable environment settings
 const MAX_CONCURRENT_JOBS = parseInt(process.env.REMOTE_DOWNLOAD_MAX_CONCURRENT || '2', 10);
-const CHUNK_SIZE = parseInt(process.env.REMOTE_DOWNLOAD_CHUNK_SIZE || String(16 * 1024 * 1024), 10); // 16 MB default
+const DEFAULT_CHUNK_SIZE = parseInt(process.env.REMOTE_DOWNLOAD_CHUNK_SIZE || String(300 * 1024 * 1024), 10); // 300 MB default (matches TeleDrive standard)
 const MAX_REDIRECTS = parseInt(process.env.REMOTE_DOWNLOAD_MAX_REDIRECTS || '5', 10);
 const TIMEOUT_MS = parseInt(process.env.REMOTE_DOWNLOAD_TIMEOUT_MS || '30000', 10);
 const RETRY_COUNT = parseInt(process.env.REMOTE_DOWNLOAD_RETRY_COUNT || '3', 10);
@@ -191,7 +191,7 @@ class RemoteDownloader {
   /**
    * Add a new remote download job to database queue
    */
-  async createJob({ userId, userKey, url, customFileName, folderId }) {
+  async createJob({ userId, userKey, url, customFileName, folderId, chunkSize }) {
     await this.validateRemoteUrl(url);
 
     const jobId = uuidv4();
@@ -208,6 +208,7 @@ class RemoteDownloader {
       downloadedBytes: 0,
       uploadedBytes: 0,
       progress: 0,
+      chunkSize: chunkSize || DEFAULT_CHUNK_SIZE,
       userKey
     });
 
@@ -273,6 +274,7 @@ class RemoteDownloader {
       id: jobId,
       userId,
       userKey,
+      chunkSize: jobRecord.chunk_size || DEFAULT_CHUNK_SIZE,
       abortController,
       chunks: [],
       jobDir: path.join(TEMP_ROOT, jobId)
@@ -394,6 +396,10 @@ class RemoteDownloader {
    */
   async streamAndUploadChunks(resStream, activeTask, filename, totalSize, folderId) {
     const { id: jobId, userId, userKey, jobDir, abortController } = activeTask;
+    const configuredChunkSize = activeTask.chunkSize > 0 ? activeTask.chunkSize : DEFAULT_CHUNK_SIZE;
+    // Clamp safely: min 20MB (to avoid telegram rate limits on large files), max 1.95GB (Telegram bot limit)
+    const effectiveChunkSize = Math.max(20 * 1024 * 1024, Math.min(configuredChunkSize, 1950 * 1024 * 1024));
+
     let chunkIndex = 0;
     let currentChunkBuffers = [];
     let currentChunkBytes = 0;
@@ -470,7 +476,7 @@ class RemoteDownloader {
         bytesSinceLastBroadcast = 0;
       }
 
-      if (currentChunkBytes >= CHUNK_SIZE) {
+      if (currentChunkBytes >= effectiveChunkSize) {
         const fullBuffer = Buffer.concat(currentChunkBuffers);
         currentChunkBuffers = [];
         currentChunkBytes = 0;

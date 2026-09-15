@@ -207,6 +207,7 @@ async function initialize() {
       progress INTEGER DEFAULT 0,
       content_type TEXT,
       supports_range INTEGER DEFAULT 0,
+      chunk_size INTEGER DEFAULT 0,
       etag TEXT,
       last_modified TEXT,
       error_message TEXT,
@@ -218,6 +219,10 @@ async function initialize() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  try {
+    db.run('ALTER TABLE remote_download_jobs ADD COLUMN chunk_size INTEGER DEFAULT 0');
+  } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS video_transcode_jobs (
@@ -996,8 +1001,8 @@ function deleteTranscodeJob(fileId) {
 function createRemoteJob(job) {
   const now = new Date().toISOString();
   run(
-    `INSERT INTO remote_download_jobs (id, user_id, url, filename, folder_id, status, total_size, downloaded_bytes, uploaded_bytes, progress, content_type, supports_range, etag, last_modified, error_message, file_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO remote_download_jobs (id, user_id, url, filename, folder_id, status, total_size, downloaded_bytes, uploaded_bytes, progress, content_type, supports_range, chunk_size, etag, last_modified, error_message, file_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       job.id,
       job.userId,
@@ -1011,6 +1016,7 @@ function createRemoteJob(job) {
       job.progress || 0,
       job.contentType || null,
       job.supportsRange ? 1 : 0,
+      job.chunkSize || job.chunk_size || 0,
       job.etag || null,
       job.lastModified || null,
       job.errorMessage || null,
@@ -1035,7 +1041,7 @@ function updateRemoteJob(id, updates) {
   const values = [];
   const allowed = [
     'filename', 'folder_id', 'status', 'total_size', 'downloaded_bytes',
-    'uploaded_bytes', 'progress', 'content_type', 'supports_range', 'etag',
+    'uploaded_bytes', 'progress', 'content_type', 'supports_range', 'chunk_size', 'etag',
     'last_modified', 'error_message', 'file_id', 'started_at', 'completed_at', 'cancelled_at'
   ];
 
