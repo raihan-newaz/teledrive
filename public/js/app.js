@@ -275,9 +275,167 @@ const App = {
       case 'trash':
         await this.loadTrashedFiles();
         break;
+      case 'storage':
+        await this.openStorageAnalyticsModal();
+        break;
       case 'settings':
         this.openSettings();
         break;
+    }
+  },
+
+  async loadStorageStats() {
+    try {
+      const res = await API.getStorageStats();
+      if (res && res.stats) {
+        const stats = res.stats;
+        const storageText = document.getElementById('storage-text');
+        const storageSubtext = document.getElementById('storage-subtext');
+        const storageFill = document.getElementById('storage-fill');
+
+        const usedFormatted = UI.formatSize(stats.storageUsed);
+        if (storageText) {
+          storageText.textContent = `${stats.activeFileCount} files · ${usedFormatted}`;
+        }
+
+        if (stats.storageLimit > 0) {
+          const quotaFormatted = UI.formatSize(stats.storageLimit);
+          if (storageSubtext) {
+            storageSubtext.textContent = `${stats.usagePercentage}% of ${quotaFormatted} used`;
+          }
+          if (storageFill) {
+            storageFill.style.width = `${Math.min(100, stats.usagePercentage)}%`;
+            if (stats.usagePercentage >= 95) storageFill.style.background = '#ea4335';
+            else if (stats.usagePercentage >= 80) storageFill.style.background = '#fbbc05';
+            else storageFill.style.background = 'var(--accent-color)';
+          }
+        } else {
+          if (storageSubtext) {
+            storageSubtext.textContent = 'Unlimited Free Storage';
+          }
+          if (storageFill) {
+            storageFill.style.width = '100%';
+            storageFill.style.background = 'var(--accent-color)';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[App] Could not update storage stats:', e);
+    }
+  },
+
+  async openStorageAnalyticsModal() {
+    try {
+      UI.showModal('storage-analytics-modal');
+
+      const [statsRes, breakdownRes, largestRes] = await Promise.all([
+        API.getStorageStats(),
+        API.getStorageBreakdown(),
+        API.getLargestFiles(10)
+      ]);
+
+      if (statsRes && statsRes.stats) {
+        const s = statsRes.stats;
+        const usedEl = document.getElementById('storage-modal-used-text');
+        const quotaEl = document.getElementById('storage-modal-quota-text');
+        const barEl = document.getElementById('storage-modal-bar');
+        const percEl = document.getElementById('storage-modal-percentage');
+        const freeEl = document.getElementById('storage-modal-free');
+        const warnBanner = document.getElementById('storage-warning-banner');
+        const warnText = document.getElementById('storage-warning-text');
+
+        if (usedEl) usedEl.textContent = `${UI.formatSize(s.storageUsed)} used`;
+        if (quotaEl) quotaEl.textContent = s.storageLimit > 0 ? `of ${UI.formatSize(s.storageLimit)} limit` : 'of Unlimited quota';
+
+        if (s.storageLimit > 0) {
+          if (barEl) {
+            barEl.style.width = `${s.usagePercentage}%`;
+            if (s.usagePercentage >= 95) barEl.style.background = '#ea4335';
+            else if (s.usagePercentage >= 80) barEl.style.background = '#fbbc05';
+            else barEl.style.background = 'var(--accent-color)';
+          }
+          if (percEl) percEl.textContent = `${s.usagePercentage}% used`;
+          if (freeEl) freeEl.textContent = `${UI.formatSize(s.freeStorage)} remaining`;
+
+          if (s.warningLevel && warnBanner) {
+            warnBanner.style.display = 'block';
+            if (s.warningLevel === '100') warnText.textContent = '⚠️ Storage is 100% full! Free up space to upload more files.';
+            else if (s.warningLevel === '95') warnText.textContent = '⚠️ Only 5% storage remaining. Storage almost full!';
+            else if (s.warningLevel === '90') warnText.textContent = '⚠️ You are using 90% of your storage quota.';
+            else if (s.warningLevel === '80') warnText.textContent = 'ℹ️ You are using 80% of your storage quota.';
+          } else if (warnBanner) {
+            warnBanner.style.display = 'none';
+          }
+        } else {
+          if (barEl) {
+            barEl.style.width = '100%';
+            barEl.style.background = 'var(--accent-color)';
+          }
+          if (percEl) percEl.textContent = 'Active';
+          if (freeEl) freeEl.textContent = 'Unlimited Free';
+          if (warnBanner) warnBanner.style.display = 'none';
+        }
+      }
+
+      // Render Categories Breakdown
+      const catList = document.getElementById('storage-categories-list');
+      if (catList && breakdownRes && breakdownRes.breakdown) {
+        catList.innerHTML = '';
+        const b = breakdownRes.breakdown;
+        const iconMap = {
+          video: '🎬',
+          image: '🖼️',
+          document: '📄',
+          audio: '🎵',
+          archive: '📦',
+          other: '📁'
+        };
+
+        for (const [key, item] of Object.entries(b)) {
+          const card = document.createElement('div');
+          card.style.cssText = 'background: var(--bg-primary, #fff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;';
+          card.innerHTML = `
+            <span style="font-size: 20px;">${iconMap[key] || '📁'}</span>
+            <div style="min-width: 0;">
+              <div style="font-weight: 600; font-size: 13px;">${item.label}</div>
+              <div style="font-size: 11.5px; color: var(--text-secondary);">${UI.formatSize(item.size)} (${item.count})</div>
+            </div>
+          `;
+          catList.appendChild(card);
+        }
+      }
+
+      // Render Largest Files
+      const largestContainer = document.getElementById('storage-largest-files');
+      if (largestContainer && largestRes && Array.isArray(largestRes.files)) {
+        if (largestRes.files.length === 0) {
+          largestContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px;">No files yet.</div>';
+        } else {
+          largestContainer.innerHTML = '';
+          largestRes.files.forEach((f, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border-color, #f0f0f0); font-size: 13px; cursor: pointer;';
+            row.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                <span style="color: var(--text-secondary); font-size: 12px; width: 18px;">${idx + 1}.</span>
+                <span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f.name}</span>
+              </div>
+              <span style="font-weight: 600; color: var(--text-secondary); font-size: 12px; margin-left: 12px; white-space: nowrap;">${UI.formatSize(f.size)}</span>
+            `;
+            row.onclick = () => {
+              UI.hideAllModals();
+              if (f.folder_id) {
+                App.navigateToFolder(f.folder_id);
+              } else {
+                App.navigateToFolder(null);
+              }
+            };
+            largestContainer.appendChild(row);
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[App] Error opening storage analytics:', err);
     }
   },
 
@@ -1862,6 +2020,15 @@ const App = {
         }
       };
     });
+
+    const storageCard = document.getElementById('sidebar-storage-card');
+    if (storageCard) {
+      storageCard.onclick = () => {
+        this.openStorageAnalyticsModal();
+        if (sidebar) sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+      };
+    }
   },
 
   initBottomNav() {

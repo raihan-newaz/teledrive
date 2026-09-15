@@ -42,6 +42,7 @@ function encryptFile(inputPath, outputPath, passphrase) {
     
     const key = deriveKey(passphrase, salt);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
+    const sha256Hash = crypto.createHash('sha256');
     
     const readStream = fs.createReadStream(inputPath);
     const writeStream = fs.createWriteStream(outputPath);
@@ -50,15 +51,21 @@ function encryptFile(inputPath, outputPath, passphrase) {
     writeStream.on('error', reject);
     cipher.on('error', reject);
     
+    readStream.on('data', (chunk) => {
+      sha256Hash.update(chunk);
+    });
+
     readStream.pipe(cipher).pipe(writeStream, { end: false });
     
     cipher.on('end', () => {
       const authTag = cipher.getAuthTag();
+      const sha256 = sha256Hash.digest('hex');
       writeStream.end(authTag, () => {
         resolve({
           iv,
           salt,
-          authTag: authTag.toString('base64')
+          authTag: authTag.toString('base64'),
+          sha256
         });
       });
     });

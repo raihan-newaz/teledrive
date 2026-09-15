@@ -425,6 +425,45 @@ const API = {
 
   async cancelRemoteTask(taskId) {
     return this.request('POST', '/api/remote-upload/cancel', { taskId });
+  },
+
+  // ─── Duplicate Detection ───────────────────────────────────────────
+  async checkFileDuplicate(sha256, size, fileName) {
+    return this.request('POST', '/api/files/check-duplicate', { sha256, size, fileName });
+  },
+
+  // ─── Storage Analytics ─────────────────────────────────────────────
+  async getStorageStats() {
+    return this.request('GET', '/api/storage/stats');
+  },
+
+  async getStorageBreakdown() {
+    return this.request('GET', '/api/storage/breakdown');
+  },
+
+  async getLargestFiles(limit = 10) {
+    return this.request('GET', `/api/storage/largest?limit=${limit}`);
+  },
+
+  async getRecentStorageActivity(limit = 10) {
+    return this.request('GET', `/api/storage/recent?limit=${limit}`);
+  },
+
+  // ─── Admin Storage Analytics ───────────────────────────────────────
+  async getAdminStorageStats() {
+    return this.request('GET', '/api/admin/storage/stats');
+  },
+
+  async getAdminStorageBreakdown() {
+    return this.request('GET', '/api/admin/storage/breakdown');
+  },
+
+  async getAdminUserStorage() {
+    return this.request('GET', '/api/admin/storage/users');
+  },
+
+  async reconcileStorage() {
+    return this.request('POST', '/api/admin/storage/reconcile');
   }
 };
 

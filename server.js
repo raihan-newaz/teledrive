@@ -38,6 +38,8 @@ const webdavRouter = require('./src/routes/webdav');
 const realtimeRouter = require('./src/routes/realtime');
 const adminRouter = require('./src/routes/admin');
 const remoteUploadRouter = require('./src/routes/remoteUpload');
+const storageRouter = require('./src/routes/storage');
+const storageReconciler = require('./src/services/storageReconciler');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -130,6 +132,7 @@ app.use('/api/share', shareRouter);
 app.use('/api/realtime', realtimeRouter);
 app.use('/api/remote-upload', remoteUploadRouter);
 app.use('/api/remote-download', remoteUploadRouter);
+app.use('/api/storage', storageRouter);
 
 // Public share landing page
 app.get('/share/:token', (req, res) => {
@@ -152,6 +155,13 @@ async function startServer() {
     // Initialize SQLite database first
     await db.initialize();
     console.log('[DB] Database ready.');
+
+    // Start background storage reconciler
+    try {
+      storageReconciler.start();
+    } catch (sErr) {
+      console.warn('[StorageReconciler] Could not start reconciler:', sErr.message);
+    }
 
     // Initialize Auto LRU Cache Manager (Default 3 GB limit)
     try {

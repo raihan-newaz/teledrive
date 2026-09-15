@@ -440,9 +440,107 @@ const Upload = {
     }
   },
 
+  async computeFileHash(file) {
+    try {
+      if (file.size <= 64 * 1024 * 1024) {
+        const buffer = await file.arrayBuffer();
+        const hashBuf = await crypto.subtle.digest('SHA-256', buffer);
+        return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      const sample = await file.slice(0, 32 * 1024 * 1024).arrayBuffer();
+      const hashBuf = await crypto.subtle.digest('SHA-256', sample);
+      return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      return null;
+    }
+  },
+
+  promptDuplicate(item, existingFile) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('duplicate-modal');
+      const nameEl = document.getElementById('dup-file-name');
+      const sizeEl = document.getElementById('dup-file-size');
+      const dateEl = document.getElementById('dup-file-date');
+      const btnOpen = document.getElementById('dup-btn-open');
+      const btnUploadAnyway = document.getElementById('dup-btn-upload-anyway');
+      const btnCancel = document.getElementById('dup-btn-cancel');
+
+      if (nameEl) nameEl.textContent = item.file.name;
+      if (sizeEl) sizeEl.textContent = this.formatSize(item.file.size);
+      if (dateEl) {
+        const d = existingFile.createdAt ? new Date(existingFile.createdAt) : new Date();
+        dateEl.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+
+      if (modal) modal.style.display = 'block';
+
+      const cleanup = () => {
+        if (modal) modal.style.display = 'none';
+        btnOpen.onclick = null;
+        btnUploadAnyway.onclick = null;
+        btnCancel.onclick = null;
+      };
+
+      if (btnOpen) {
+        btnOpen.onclick = () => {
+          cleanup();
+          resolve({ action: 'open', existingFile });
+        };
+      }
+
+      if (btnUploadAnyway) {
+        btnUploadAnyway.onclick = () => {
+          cleanup();
+          resolve({ action: 'upload' });
+        };
+      }
+
+      if (btnCancel) {
+        btnCancel.onclick = () => {
+          cleanup();
+          resolve({ action: 'cancel' });
+        };
+      }
+    });
+  },
+
   async uploadFile(item) {
     const file = item.file;
     const totalSize = file.size;
+
+    // Check for duplicate if not already user-approved
+    if (!item.duplicateChecked) {
+      item.duplicateChecked = true;
+      const sha256 = await this.computeFileHash(file);
+      if (sha256) {
+        item.sha256 = sha256;
+        try {
+          const dupRes = await API.checkFileDuplicate(sha256, totalSize, file.name);
+          if (dupRes && dupRes.isDuplicate && dupRes.existingFile) {
+            const userChoice = await this.promptDuplicate(item, dupRes.existingFile);
+            if (userChoice.action === 'cancel') {
+              this.cancelItem(item.id);
+              return;
+            } else if (userChoice.action === 'open') {
+              this.cancelItem(item.id);
+              if (window.App) {
+                if (dupRes.existingFile.folderId) {
+                  App.navigateToFolder(dupRes.existingFile.folderId);
+                } else {
+                  App.navigateToFolder(null);
+                }
+              }
+              if (window.UI) {
+                UI.showToast(`Found "${dupRes.existingFile.name}" in your drive!`, 'info');
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[Upload] Duplicate check warning:', e.message);
+        }
+      }
+    }
 
     // Single-part upload for files <= CHUNK_SIZE
     if (totalSize <= this.CHUNK_SIZE) {

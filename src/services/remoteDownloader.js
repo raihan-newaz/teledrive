@@ -400,6 +400,9 @@ class RemoteDownloader {
     // Clamp safely: min 20MB (to avoid telegram rate limits on large files), max 1.95GB (Telegram bot limit)
     const effectiveChunkSize = Math.max(20 * 1024 * 1024, Math.min(configuredChunkSize, 1950 * 1024 * 1024));
 
+    const crypto = require('crypto');
+    const sha256Hash = crypto.createHash('sha256');
+
     let chunkIndex = 0;
     let currentChunkBuffers = [];
     let currentChunkBytes = 0;
@@ -446,6 +449,13 @@ class RemoteDownloader {
         throw new Error('Cancelled by user');
       }
 
+      // Check quota during streaming
+      const user = db.getUserById(userId);
+      if (user && user.storage_limit > 0 && ((user.storage_used || 0) + totalDownloaded + chunk.length > user.storage_limit)) {
+        throw new Error(`Storage quota exceeded: You have reached your ${formatBytes(user.storage_limit)} storage limit.`);
+      }
+
+      sha256Hash.update(chunk);
       currentChunkBuffers.push(chunk);
       currentChunkBytes += chunk.length;
       totalDownloaded += chunk.length;
@@ -490,14 +500,16 @@ class RemoteDownloader {
       await uploadCurrentChunk(finalBuffer, true);
     }
 
+    const calculatedSha256 = sha256Hash.digest('hex');
+
     // Assemble file in TeleDrive database
-    await this.assembleFinalFile(jobId, userId, filename, totalDownloaded, folderId, activeTask.chunks);
+    await this.assembleFinalFile(jobId, userId, filename, totalDownloaded, folderId, activeTask.chunks, calculatedSha256);
   }
 
   /**
    * Finalizes file creation in TeleDrive SQLite DB
    */
-  async assembleFinalFile(jobId, userId, filename, totalSize, folderId, chunks) {
+  async assembleFinalFile(jobId, userId, filename, totalSize, folderId, chunks, sha256 = null) {
     const fileId = jobId;
     const mimeType = getMimeType(filename);
     const now = new Date().toISOString();
@@ -506,8 +518,8 @@ class RemoteDownloader {
 
     // 1. Insert into files table
     db.run(
-      `INSERT OR REPLACE INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, sha256, content_hash, hash_algorithm, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, 'sha256', ?, ?)`,
       [
         fileId,
         userId,
@@ -521,6 +533,8 @@ class RemoteDownloader {
         firstChunk.authTag || null,
         totalChunks > 1 ? 1 : 0,
         totalChunks,
+        sha256 || null,
+        sha256 || null,
         now,
         now
       ]

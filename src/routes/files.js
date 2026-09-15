@@ -689,6 +689,60 @@ async function streamFileToResponse(file, req, res, isDownload = false, explicit
   }
 }
 
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function checkUserStorageQuota(userId, incomingBytes = 0) {
+  if (!userId) return { allowed: true };
+  const user = db.getUserById(userId);
+  if (!user) return { allowed: true };
+  if (!user.storage_limit || user.storage_limit <= 0) {
+    return { allowed: true }; // Unlimited quota
+  }
+  const currentUsed = user.storage_used || 0;
+  if (currentUsed + incomingBytes > user.storage_limit) {
+    return {
+      allowed: false,
+      message: `Storage quota exceeded. You are using ${formatBytes(currentUsed)} of your ${formatBytes(user.storage_limit)} quota.`
+    };
+  }
+  return { allowed: true };
+}
+
+/**
+ * POST /check-duplicate — Check if user already uploaded identical file (user-scoped)
+ */
+router.post('/check-duplicate', (req, res) => {
+  try {
+    const { sha256, size } = req.body;
+    if (!sha256 || !size) {
+      return res.json({ isDuplicate: false });
+    }
+    const existing = db.checkUserFileDuplicate(req.user.id, sha256, size);
+    if (existing) {
+      return res.json({
+        isDuplicate: true,
+        existingFile: {
+          id: existing.id,
+          name: existing.name,
+          size: existing.size,
+          folderId: existing.folder_id,
+          createdAt: existing.created_at
+        }
+      });
+    }
+    return res.json({ isDuplicate: false });
+  } catch (error) {
+    console.error('Duplicate check error:', error);
+    return res.json({ isDuplicate: false });
+  }
+});
+
 /**
  * POST /upload — Upload single file with AES-256-GCM encryption + Instant Local Cache
  */
@@ -720,9 +774,9 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
       try { copyFileSync(originalPath, cachedPath); } catch (e) {}
     }
 
-    // 2. Encrypt file using per-user encryption key
+    // 2. Encrypt file using per-user encryption key + compute plaintext SHA-256
     const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
-    const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
+    const { iv, salt, authTag, sha256 } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
     // 3. Upload encrypted file to Telegram
     const message = await telegram.uploadFile(encryptedPath, safeName + '.enc');
@@ -740,9 +794,9 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     }
 
     db.run(
-      `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
-      [fileId, userId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, authTag, now, now]
+      `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, sha256, content_hash, hash_algorithm, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?, 'sha256', ?, ?)`,
+      [fileId, userId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, authTag, sha256 || null, sha256 || null, now, now]
     );
 
     db.recalculateUserStorage(userId);
@@ -768,7 +822,7 @@ const assemblyLocks = new Set();
 /**
  * Helper to commit completed chunked file to database (with mutex lock)
  */
-function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res, userKey = null) {
+function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res, userKey = null, sha256 = null) {
   if (assemblyLocks.has(uploadId)) {
     return res.json({ success: true, message: 'Assembly in progress' });
   }
@@ -789,11 +843,13 @@ function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, 
     const mimeType = getMimeType(safeName);
     const now = new Date().toISOString();
     const firstChunk = chunksToUse[0] || {};
+    const session = db.getUploadSession(uploadId, userId);
+    const resolvedSha256 = sha256 || (session ? session.sha256 : null) || null;
 
     db.run(
-      `INSERT OR REPLACE INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-      [fileId, userId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, firstChunk.auth_tag || null, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
+      `INSERT OR REPLACE INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, sha256, content_hash, hash_algorithm, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, 'sha256', ?, ?)`,
+      [fileId, userId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, firstChunk.auth_tag || null, totalChunks > 1 ? 1 : 0, totalChunks, resolvedSha256, resolvedSha256, now, now]
     );
 
     // Clear any old records for this file ID in file_chunks, then commit all chunks
@@ -1441,6 +1497,7 @@ router.delete('/:id', (req, res) => {
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ? AND user_id = ?', [new Date().toISOString(), req.params.id, userId]);
+    if (userId) db.recalculateUserStorage(userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId: file.folder_id, userId });
@@ -1484,6 +1541,7 @@ router.post('/:id/restore', (req, res) => {
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ? AND user_id = ?', [req.params.id, userId]);
+    if (userId) db.recalculateUserStorage(userId);
     const restoredFile = db.getFile(req.params.id, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');

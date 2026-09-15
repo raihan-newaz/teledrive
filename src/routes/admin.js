@@ -257,4 +257,60 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/storage/stats
+ * Detailed system-wide storage metrics for admin dashboard
+ */
+router.get('/storage/stats', (req, res) => {
+  try {
+    const stats = db.getAdminStorageAnalytics();
+    return res.json({ success: true, stats });
+  } catch (error) {
+    console.error('[Admin Storage API] Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch admin storage stats' });
+  }
+});
+
+/**
+ * GET /api/admin/storage/breakdown
+ * Aggregate storage breakdown by file type across system (without revealing private files)
+ */
+router.get('/storage/breakdown', (req, res) => {
+  try {
+    const breakdown = db.getAdminStorageBreakdown();
+    return res.json({ success: true, ...breakdown });
+  } catch (error) {
+    console.error('[Admin Storage API] Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch admin storage breakdown' });
+  }
+});
+
+/**
+ * GET /api/admin/storage/users
+ * User storage consumption list for admin
+ */
+router.get('/storage/users', (req, res) => {
+  try {
+    const users = db.getAdminUserStorageList();
+    return res.json({ success: true, users });
+  } catch (error) {
+    console.error('[Admin Storage API] Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch admin user storage' });
+  }
+});
+
+/**
+ * POST /api/admin/storage/reconcile
+ * Trigger storage usage reconciliation across all users
+ */
+router.post('/storage/reconcile', (req, res) => {
+  try {
+    const result = db.reconcileAllUserStorage();
+    return res.json({ success: true, message: 'Storage reconciliation completed', result });
+  } catch (error) {
+    console.error('[Admin Storage API] Error:', error);
+    return res.status(500).json({ error: 'Failed to reconcile storage' });
+  }
+});
+
 module.exports = router;

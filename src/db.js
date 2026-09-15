@@ -112,12 +112,22 @@ async function initialize() {
   try { db.run('ALTER TABLE files ADD COLUMN share_password TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_expires_at DATETIME;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_views INTEGER DEFAULT 0;'); } catch (e) {}
-  try { db.run('ALTER TABLE files ADD COLUMN share_downloads INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN auth_tag TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN sha256 TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN content_hash TEXT;'); } catch (e) {}
+  try { db.run("ALTER TABLE files ADD COLUMN hash_algorithm TEXT DEFAULT 'sha256';"); } catch (e) {}
   try { db.run('ALTER TABLE folders ADD COLUMN user_id TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE folders ADD COLUMN is_locked INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE folders ADD COLUMN password_hash TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE file_chunks ADD COLUMN auth_tag TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE upload_sessions ADD COLUMN sha256 TEXT;'); } catch (e) {}
+
+  // Performance and lookup indexes
+  try { db.run('CREATE INDEX IF NOT EXISTS idx_files_user_sha_size ON files(user_id, sha256, size);'); } catch (e) {}
+  try { db.run('CREATE INDEX IF NOT EXISTS idx_files_user_trashed_size ON files(user_id, is_trashed, size);'); } catch (e) {}
+  try { db.run('CREATE INDEX IF NOT EXISTS idx_files_user_mimetype ON files(user_id, mime_type);'); } catch (e) {}
+  try { db.run('CREATE INDEX IF NOT EXISTS idx_files_user_size ON files(user_id, size DESC);'); } catch (e) {}
+  try { db.run('CREATE INDEX IF NOT EXISTS idx_files_user_created ON files(user_id, created_at DESC);'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS upload_sessions (
@@ -624,10 +634,10 @@ function getUploadSession(id, userId = null) {
 function createUploadSession(session) {
   const now = new Date().toISOString();
   run(
-    `INSERT INTO upload_sessions (id, user_id, file_name, file_size, folder_id, total_chunks, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET updated_at = ?`,
-    [session.id, session.userId || session.user_id || null, session.fileName, session.fileSize, session.folderId || null, session.totalChunks, now, now, now]
+    `INSERT INTO upload_sessions (id, user_id, file_name, file_size, folder_id, total_chunks, sha256, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET updated_at = ?, sha256 = COALESCE(excluded.sha256, upload_sessions.sha256)`,
+    [session.id, session.userId || session.user_id || null, session.fileName, session.fileSize, session.folderId || null, session.totalChunks, session.sha256 || null, now, now, now]
   );
 }
 
@@ -914,7 +924,7 @@ function deleteUser(id) {
 
 function recalculateUserStorage(userId) {
   if (!userId) return 0;
-  const stats = get('SELECT COALESCE(SUM(size), 0) as total_size FROM files WHERE user_id = ? AND is_trashed = 0', [userId]);
+  const stats = get('SELECT COALESCE(SUM(size), 0) as total_size FROM files WHERE user_id = ?', [userId]);
   const total = stats ? (stats.total_size || 0) : 0;
   run('UPDATE users SET storage_used = ? WHERE id = ?', [total, userId]);
   save();
@@ -928,6 +938,233 @@ function getUserStorageStats(userId) {
     totalFiles: stats ? stats.totalFiles : 0,
     totalSize: stats ? stats.totalSize : 0
   };
+}
+
+function checkUserFileDuplicate(userId, sha256, size) {
+  if (!userId || !sha256) return null;
+  const query = 'SELECT id, name, size, mime_type, folder_id, created_at FROM files WHERE user_id = ? AND sha256 = ? AND size = ? AND is_trashed = 0 LIMIT 1';
+  return get(query, [userId, String(sha256).toLowerCase(), parseInt(size, 10) || 0]);
+}
+
+function getUserDetailedStorageStats(userId) {
+  if (!userId) return null;
+  const user = getUserById(userId);
+  if (!user) return null;
+
+  const activeStats = get('SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as totalSize FROM files WHERE user_id = ? AND is_trashed = 0', [userId]);
+  const trashStats = get('SELECT COUNT(*) as count, COALESCE(SUM(size), 0) as totalSize FROM files WHERE user_id = ? AND is_trashed = 1', [userId]);
+  const folderStats = get('SELECT COUNT(*) as count FROM folders WHERE user_id = ?', [userId]);
+
+  const activeFilesSize = activeStats ? activeStats.totalSize : 0;
+  const trashSize = trashStats ? trashStats.totalSize : 0;
+  const totalUsed = activeFilesSize + trashSize;
+  const storageLimit = user.storage_limit || 0; // 0 = unlimited
+
+  let usagePercentage = 0;
+  let freeStorage = 0;
+  if (storageLimit > 0) {
+    usagePercentage = Math.min(100, Math.round((totalUsed / storageLimit) * 100));
+    freeStorage = Math.max(0, storageLimit - totalUsed);
+  }
+
+  let warningLevel = null;
+  if (storageLimit > 0) {
+    if (usagePercentage >= 100) warningLevel = '100';
+    else if (usagePercentage >= 95) warningLevel = '95';
+    else if (usagePercentage >= 90) warningLevel = '90';
+    else if (usagePercentage >= 80) warningLevel = '80';
+  }
+
+  return {
+    userId,
+    userName: user.name,
+    userEmail: user.email,
+    userRole: user.role,
+    storageLimit,
+    storageUsed: totalUsed,
+    activeFilesSize,
+    trashSize,
+    freeStorage,
+    usagePercentage,
+    warningLevel,
+    fileCount: (activeStats ? activeStats.count : 0) + (trashStats ? trashStats.count : 0),
+    activeFileCount: activeStats ? activeStats.count : 0,
+    trashFileCount: trashStats ? trashStats.count : 0,
+    folderCount: folderStats ? folderStats.count : 0
+  };
+}
+
+function getUserStorageBreakdown(userId) {
+  if (!userId) return {};
+  const rows = all(`
+    SELECT 
+      CASE 
+        WHEN mime_type LIKE 'video/%' OR LOWER(name) LIKE '%.mp4' OR LOWER(name) LIKE '%.mkv' OR LOWER(name) LIKE '%.avi' OR LOWER(name) LIKE '%.mov' OR LOWER(name) LIKE '%.webm' OR LOWER(name) LIKE '%.wmv' OR LOWER(name) LIKE '%.flv' OR LOWER(name) LIKE '%.ts' OR LOWER(name) LIKE '%.m4v' THEN 'video'
+        WHEN mime_type LIKE 'image/%' OR LOWER(name) LIKE '%.jpg' OR LOWER(name) LIKE '%.jpeg' OR LOWER(name) LIKE '%.png' OR LOWER(name) LIKE '%.gif' OR LOWER(name) LIKE '%.webp' OR LOWER(name) LIKE '%.svg' OR LOWER(name) LIKE '%.bmp' OR LOWER(name) LIKE '%.ico' OR LOWER(name) LIKE '%.avif' THEN 'image'
+        WHEN mime_type LIKE 'audio/%' OR LOWER(name) LIKE '%.mp3' OR LOWER(name) LIKE '%.wav' OR LOWER(name) LIKE '%.ogg' OR LOWER(name) LIKE '%.flac' OR LOWER(name) LIKE '%.aac' OR LOWER(name) LIKE '%.m4a' OR LOWER(name) LIKE '%.opus' OR LOWER(name) LIKE '%.wma' THEN 'audio'
+        WHEN mime_type = 'application/pdf' OR mime_type LIKE 'text/%' OR LOWER(name) LIKE '%.pdf' OR LOWER(name) LIKE '%.doc' OR LOWER(name) LIKE '%.docx' OR LOWER(name) LIKE '%.xls' OR LOWER(name) LIKE '%.xlsx' OR LOWER(name) LIKE '%.ppt' OR LOWER(name) LIKE '%.pptx' OR LOWER(name) LIKE '%.txt' OR LOWER(name) LIKE '%.csv' OR LOWER(name) LIKE '%.md' THEN 'document'
+        WHEN mime_type LIKE '%zip%' OR mime_type LIKE '%rar%' OR mime_type LIKE '%tar%' OR mime_type LIKE '%compressed%' OR LOWER(name) LIKE '%.zip' OR LOWER(name) LIKE '%.rar' OR LOWER(name) LIKE '%.7z' OR LOWER(name) LIKE '%.tar' OR LOWER(name) LIKE '%.gz' OR LOWER(name) LIKE '%.iso' THEN 'archive'
+        ELSE 'other'
+      END AS category,
+      COUNT(*) as count,
+      COALESCE(SUM(size), 0) as total_size
+    FROM files
+    WHERE user_id = ? AND is_trashed = 0
+    GROUP BY category
+  `, [userId]);
+
+  const breakdown = {
+    video: { count: 0, size: 0, label: 'Videos', icon: 'video' },
+    image: { count: 0, size: 0, label: 'Images', icon: 'image' },
+    document: { count: 0, size: 0, label: 'Documents', icon: 'document' },
+    audio: { count: 0, size: 0, label: 'Audio', icon: 'audio' },
+    archive: { count: 0, size: 0, label: 'Archives', icon: 'archive' },
+    other: { count: 0, size: 0, label: 'Other', icon: 'other' }
+  };
+
+  let totalSize = 0;
+  for (const r of rows) {
+    if (breakdown[r.category]) {
+      breakdown[r.category].count = r.count;
+      breakdown[r.category].size = r.total_size;
+      totalSize += r.total_size;
+    } else {
+      breakdown.other.count += r.count;
+      breakdown.other.size += r.total_size;
+      totalSize += r.total_size;
+    }
+  }
+
+  // Calculate percentages
+  for (const key of Object.keys(breakdown)) {
+    breakdown[key].percentage = totalSize > 0 ? Math.round((breakdown[key].size / totalSize) * 100) : 0;
+  }
+
+  return { totalSize, breakdown };
+}
+
+function getUserLargestFiles(userId, limit = 10) {
+  if (!userId) return [];
+  const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 10, 100));
+  return all(
+    'SELECT id, name, size, mime_type, folder_id, is_starred, created_at, updated_at FROM files WHERE user_id = ? AND is_trashed = 0 ORDER BY size DESC LIMIT ?',
+    [userId, safeLimit]
+  );
+}
+
+function getUserRecentStorageActivity(userId, limit = 10) {
+  if (!userId) return [];
+  const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 10, 50));
+  return all(
+    'SELECT id, name, size, mime_type, is_trashed, created_at, updated_at FROM files WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?',
+    [userId, safeLimit]
+  );
+}
+
+function getAdminStorageAnalytics() {
+  const usersCount = get('SELECT COUNT(*) as total, SUM(CASE WHEN status = "active" THEN 1 ELSE 0 END) as active FROM users') || { total: 0, active: 0 };
+  const storageSummary = get('SELECT COALESCE(SUM(storage_limit), 0) as totalAllocated, COALESCE(SUM(storage_used), 0) as totalUsed FROM users') || { totalAllocated: 0, totalUsed: 0 };
+  const filesSummary = get('SELECT COUNT(*) as totalFiles, COALESCE(SUM(size), 0) as actualStorage FROM files') || { totalFiles: 0, actualStorage: 0 };
+
+  const totalAllocated = storageSummary.totalAllocated;
+  const totalUsed = filesSummary.actualStorage;
+  const freeStorage = totalAllocated > totalUsed ? (totalAllocated - totalUsed) : 0;
+  const utilization = totalAllocated > 0 ? Math.min(100, Math.round((totalUsed / totalAllocated) * 100)) : 0;
+
+  return {
+    totalUsers: usersCount.total || 0,
+    activeUsers: usersCount.active || 0,
+    totalAllocatedStorage: totalAllocated,
+    totalUsedStorage: totalUsed,
+    totalFreeStorage: freeStorage,
+    storageUtilizationPercentage: utilization,
+    totalFilesCount: filesSummary.totalFiles || 0
+  };
+}
+
+function getAdminStorageBreakdown() {
+  const rows = all(`
+    SELECT 
+      CASE 
+        WHEN mime_type LIKE 'video/%' OR LOWER(name) LIKE '%.mp4' OR LOWER(name) LIKE '%.mkv' OR LOWER(name) LIKE '%.avi' OR LOWER(name) LIKE '%.mov' OR LOWER(name) LIKE '%.webm' OR LOWER(name) LIKE '%.wmv' OR LOWER(name) LIKE '%.flv' OR LOWER(name) LIKE '%.ts' OR LOWER(name) LIKE '%.m4v' THEN 'video'
+        WHEN mime_type LIKE 'image/%' OR LOWER(name) LIKE '%.jpg' OR LOWER(name) LIKE '%.jpeg' OR LOWER(name) LIKE '%.png' OR LOWER(name) LIKE '%.gif' OR LOWER(name) LIKE '%.webp' OR LOWER(name) LIKE '%.svg' OR LOWER(name) LIKE '%.bmp' OR LOWER(name) LIKE '%.ico' OR LOWER(name) LIKE '%.avif' THEN 'image'
+        WHEN mime_type LIKE 'audio/%' OR LOWER(name) LIKE '%.mp3' OR LOWER(name) LIKE '%.wav' OR LOWER(name) LIKE '%.ogg' OR LOWER(name) LIKE '%.flac' OR LOWER(name) LIKE '%.aac' OR LOWER(name) LIKE '%.m4a' OR LOWER(name) LIKE '%.opus' OR LOWER(name) LIKE '%.wma' THEN 'audio'
+        WHEN mime_type = 'application/pdf' OR mime_type LIKE 'text/%' OR LOWER(name) LIKE '%.pdf' OR LOWER(name) LIKE '%.doc' OR LOWER(name) LIKE '%.docx' OR LOWER(name) LIKE '%.xls' OR LOWER(name) LIKE '%.xlsx' OR LOWER(name) LIKE '%.ppt' OR LOWER(name) LIKE '%.pptx' OR LOWER(name) LIKE '%.txt' OR LOWER(name) LIKE '%.csv' OR LOWER(name) LIKE '%.md' THEN 'document'
+        WHEN mime_type LIKE '%zip%' OR mime_type LIKE '%rar%' OR mime_type LIKE '%tar%' OR mime_type LIKE '%compressed%' OR LOWER(name) LIKE '%.zip' OR LOWER(name) LIKE '%.rar' OR LOWER(name) LIKE '%.7z' OR LOWER(name) LIKE '%.tar' OR LOWER(name) LIKE '%.gz' OR LOWER(name) LIKE '%.iso' THEN 'archive'
+        ELSE 'other'
+      END AS category,
+      COUNT(*) as count,
+      COALESCE(SUM(size), 0) as total_size
+    FROM files
+    GROUP BY category
+  `);
+
+  const breakdown = {
+    video: { count: 0, size: 0, label: 'Videos' },
+    image: { count: 0, size: 0, label: 'Images' },
+    document: { count: 0, size: 0, label: 'Documents' },
+    audio: { count: 0, size: 0, label: 'Audio' },
+    archive: { count: 0, size: 0, label: 'Archives' },
+    other: { count: 0, size: 0, label: 'Other' }
+  };
+
+  let totalSize = 0;
+  for (const r of rows) {
+    if (breakdown[r.category]) {
+      breakdown[r.category].count = r.count;
+      breakdown[r.category].size = r.total_size;
+      totalSize += r.total_size;
+    } else {
+      breakdown.other.count += r.count;
+      breakdown.other.size += r.total_size;
+      totalSize += r.total_size;
+    }
+  }
+
+  for (const key of Object.keys(breakdown)) {
+    breakdown[key].percentage = totalSize > 0 ? Math.round((breakdown[key].size / totalSize) * 100) : 0;
+  }
+
+  return { totalSize, breakdown };
+}
+
+function getAdminUserStorageList() {
+  const users = getAllUsers();
+  return users.map(user => {
+    const stats = getUserDetailedStorageStats(user.id);
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      storageLimit: stats ? stats.storageLimit : (user.storage_limit || 0),
+      storageUsed: stats ? stats.storageUsed : (user.storage_used || 0),
+      activeFilesSize: stats ? stats.activeFilesSize : 0,
+      trashSize: stats ? stats.trashSize : 0,
+      usagePercentage: stats ? stats.usagePercentage : 0,
+      warningLevel: stats ? stats.warningLevel : null,
+      fileCount: stats ? stats.fileCount : 0,
+      folderCount: stats ? stats.folderCount : 0,
+      lastLoginAt: user.last_login_at,
+      createdAt: user.created_at
+    };
+  });
+}
+
+function reconcileAllUserStorage() {
+  const users = getAllUsers();
+  let updatedCount = 0;
+  for (const u of users) {
+    const active = get('SELECT COALESCE(SUM(size), 0) as s FROM files WHERE user_id = ?', [u.id]);
+    const actualUsed = active ? active.s : 0;
+    if (u.storage_used !== actualUsed) {
+      run('UPDATE users SET storage_used = ? WHERE id = ?', [actualUsed, u.id]);
+      updatedCount++;
+    }
+  }
+  if (updatedCount > 0) save();
+  return { usersChecked: users.length, updatedCount };
 }
 
 function getVideoMetadata(fileId) {
@@ -1149,6 +1386,15 @@ module.exports = {
   deleteUser,
   recalculateUserStorage,
   getUserStorageStats,
+  checkUserFileDuplicate,
+  getUserDetailedStorageStats,
+  getUserStorageBreakdown,
+  getUserLargestFiles,
+  getUserRecentStorageActivity,
+  getAdminStorageAnalytics,
+  getAdminStorageBreakdown,
+  getAdminUserStorageList,
+  reconcileAllUserStorage,
   getVideoMetadata,
   saveVideoMetadata,
   getTranscodeJob,
