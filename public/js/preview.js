@@ -564,6 +564,20 @@ const Preview = {
       if (controls) controls.classList.remove('yt-controls-hidden');
     });
 
+    video.addEventListener('loadedmetadata', () => {
+      if (durTimeEl && video.duration) {
+        durTimeEl.textContent = formatTime(video.duration);
+      }
+      // Auto-detect vertical/portrait video (YouTube Shorts style)
+      if (playerWrap) {
+        if (video.videoHeight > video.videoWidth) {
+          playerWrap.classList.add('yt-player-vertical');
+        } else {
+          playerWrap.classList.remove('yt-player-vertical');
+        }
+      }
+    });
+
     video.addEventListener('waiting', () => {
       if (spinner) spinner.classList.add('visible');
     });
