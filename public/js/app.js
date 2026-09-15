@@ -3308,7 +3308,7 @@ const App = {
       const customInput = document.getElementById('pref-custom-chunk-input');
       const savedChunkSize = localStorage.getItem('teledrive_chunk_size') || '314572800';
 
-      const presetValues = ['52428800', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
+      const presetValues = ['52428800', '78643200', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
       if (presetValues.includes(savedChunkSize)) {
         prefChunkSize.value = savedChunkSize;
         if (customWrap) customWrap.style.display = 'none';
@@ -3718,7 +3718,7 @@ const App = {
       const customWrap = document.getElementById('pref-custom-chunk-wrap');
       const customInput = document.getElementById('pref-custom-chunk-input');
       const savedChunkSize = localStorage.getItem('teledrive_chunk_size') || '314572800';
-      const presetValues = ['52428800', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
+      const presetValues = ['52428800', '78643200', '104857600', '314572800', '524288000', '1073741824', '1610612736', '2039480320'];
       if (presetValues.includes(savedChunkSize)) {
         prefChunkSize.value = savedChunkSize;
         if (customWrap) customWrap.style.display = 'none';

@@ -712,7 +712,11 @@ const Upload = {
             const data = JSON.parse(xhr.responseText);
             reject(new Error(data.error || `Upload failed with status ${xhr.status}`));
           } catch (e) {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+            if (xhr.status === 413) {
+              reject(new Error(`Upload failed with status 413 (Payload Too Large). Your Nginx or Cloudflare limit was exceeded. Please set client_max_body_size 0 in Nginx, or enable chunked uploading in Settings.`));
+            } else {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
           }
         }
       };
@@ -807,7 +811,11 @@ const Upload = {
             const data = JSON.parse(xhr.responseText);
             reject(new Error(data.error || `Chunk ${chunkIndex + 1} upload failed`));
           } catch (e) {
-            reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+            if (xhr.status === 413) {
+              reject(new Error(`Chunk upload failed with status 413 (Payload Too Large). If using Cloudflare or Nginx, set Upload Chunk Size to 50 MB / 75 MB in Settings or increase client_max_body_size in Nginx.`));
+            } else {
+              reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+            }
           }
         }
       };
