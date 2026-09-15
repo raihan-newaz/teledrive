@@ -232,43 +232,89 @@ async function assemblePlaintextSource(file, userKey, tempOutputPath) {
     throw new Error('File chunks not found');
   }
 
+  let encKey = userKey;
+  if (!encKey && (file.user_id || userId)) {
+    const uId = file.user_id || userId;
+    const user = db.getUserById(uId);
+    const masterKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+    if (user && user.encryption_key) {
+      try {
+        encKey = cryptoModule.unwrapUserKey(user.encryption_key, masterKey);
+      } catch (e) {
+        encKey = masterKey;
+      }
+    } else {
+      encKey = masterKey;
+    }
+  }
+  if (!encKey) {
+    encKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+  }
+
   const writeStream = fs.createWriteStream(tempOutputPath);
   try {
     for (const part of parts) {
-      const encKey = userKey || process.env.ENCRYPTION_KEY;
       const key = cryptoModule.deriveKey(encKey, part.salt);
       const iv = Buffer.from(part.iv, 'base64');
-      const decipher = require('crypto').createDecipheriv('aes-256-gcm', key, iv);
       
-      if (part.auth_tag) {
-        decipher.setAuthTag(Buffer.from(part.auth_tag, 'base64'));
-      }
-
       const cipherChunks = [];
-      let totalReceived = 0;
-
       for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 1024 * 1024)) {
-        totalReceived += chunk.length;
-        let cipherChunk = chunk;
-        if (totalReceived > part.size) {
-          const overflow = totalReceived - part.size;
-          cipherChunk = chunk.subarray(0, chunk.length - overflow);
-        }
-        if (cipherChunk.length > 0) {
-          cipherChunks.push(cipherChunk);
-        }
+        cipherChunks.push(chunk);
       }
 
-      const fullCiphertext = Buffer.concat(cipherChunks);
-      const decryptedBuf = decipher.update(fullCiphertext);
-      let finalBuf = Buffer.alloc(0);
+      const rawDownloadedBuf = Buffer.concat(cipherChunks);
+      let authTag = part.auth_tag ? Buffer.from(part.auth_tag, 'base64') : null;
+      let ciphertext = rawDownloadedBuf;
+
+      if (part.size && rawDownloadedBuf.length === part.size + 16) {
+        ciphertext = rawDownloadedBuf.subarray(0, part.size);
+        if (!authTag) {
+          authTag = rawDownloadedBuf.subarray(part.size);
+        }
+      } else if (part.size && rawDownloadedBuf.length > part.size) {
+        ciphertext = rawDownloadedBuf.subarray(0, part.size);
+      }
+
+      let partPlaintext = null;
+
+      // Attempt 1: Standard decryption
       try {
-        finalBuf = decipher.final();
-      } catch (authErr) {
-        throw new Error(`AES-GCM AEAD Integrity Check Failed for part ${part.chunk_index || 0}: Data tampered`);
+        const decipher = require('crypto').createDecipheriv('aes-256-gcm', key, iv);
+        if (authTag) decipher.setAuthTag(authTag);
+        const d = decipher.update(ciphertext);
+        const f = decipher.final();
+        partPlaintext = Buffer.concat([d, f]);
+      } catch (err1) {
+        // Attempt 2: AuthTag at end of raw buffer
+        if (rawDownloadedBuf.length >= 16) {
+          try {
+            const decipher2 = require('crypto').createDecipheriv('aes-256-gcm', key, iv);
+            const tagFromEnd = rawDownloadedBuf.subarray(rawDownloadedBuf.length - 16);
+            const ctFromEnd = rawDownloadedBuf.subarray(0, rawDownloadedBuf.length - 16);
+            decipher2.setAuthTag(tagFromEnd);
+            const d2 = decipher2.update(ctFromEnd);
+            const f2 = decipher2.final();
+            partPlaintext = Buffer.concat([d2, f2]);
+          } catch (err2) {}
+        }
+
+        // Attempt 3: Raw buffer with stored tag
+        if (!partPlaintext) {
+          try {
+            const decipher3 = require('crypto').createDecipheriv('aes-256-gcm', key, iv);
+            if (authTag) decipher3.setAuthTag(authTag);
+            const d3 = decipher3.update(rawDownloadedBuf);
+            const f3 = decipher3.final();
+            partPlaintext = Buffer.concat([d3, f3]);
+          } catch (err3) {}
+        }
+
+        if (!partPlaintext) {
+          console.error(`[Crypto] Decryption failed for part ${part.chunk_index || 0}:`, err1.message);
+          throw new Error(`Integrity check failed: File part ${part.chunk_index || 0} could not be authenticated.`);
+        }
       }
 
-      const partPlaintext = (finalBuf.length > 0) ? Buffer.concat([decryptedBuf, finalBuf]) : decryptedBuf;
       const canWrite = writeStream.write(partPlaintext);
       if (!canWrite) {
         await new Promise(r => writeStream.once('drain', r));

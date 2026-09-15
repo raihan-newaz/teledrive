@@ -130,47 +130,58 @@ async function downloadAndDecryptTelegramPart(part, userKey = null) {
   const encKey = userKey || process.env.ENCRYPTION_KEY;
   const key = cryptoModule.deriveKey(encKey, part.salt);
   const iv = Buffer.from(part.iv, 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   
-  if (part.auth_tag) {
-    try {
-      decipher.setAuthTag(Buffer.from(part.auth_tag, 'base64'));
-    } catch (e) {
-      console.warn(`[Crypto] Invalid auth_tag format for part:`, e.message);
-    }
-  }
-
   const cipherChunks = [];
-  let totalReceived = 0;
-
   for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 1024 * 1024)) {
-    totalReceived += chunk.length;
-    let cipherChunk = chunk;
-    if (totalReceived > part.size) {
-      const overflow = totalReceived - part.size;
-      cipherChunk = chunk.subarray(0, chunk.length - overflow);
-    }
-    if (cipherChunk.length > 0) {
-      cipherChunks.push(cipherChunk);
-    }
+    cipherChunks.push(chunk);
   }
 
-  const fullCiphertext = Buffer.concat(cipherChunks);
-  const decryptedBuf = decipher.update(fullCiphertext);
-  
-  let finalBuf = Buffer.alloc(0);
-  if (part.auth_tag) {
+  const rawDownloadedBuf = Buffer.concat(cipherChunks);
+  let authTag = part.auth_tag ? Buffer.from(part.auth_tag, 'base64') : null;
+  let ciphertext = rawDownloadedBuf;
+
+  if (part.size && rawDownloadedBuf.length === part.size + 16) {
+    ciphertext = rawDownloadedBuf.subarray(0, part.size);
+    if (!authTag) {
+      authTag = rawDownloadedBuf.subarray(part.size);
+    }
+  } else if (part.size && rawDownloadedBuf.length > part.size) {
+    ciphertext = rawDownloadedBuf.subarray(0, part.size);
+  }
+
+  // Attempt 1: Standard decryption with stored or extracted authTag
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    if (authTag) decipher.setAuthTag(authTag);
+    const d = decipher.update(ciphertext);
+    const f = decipher.final();
+    return Buffer.concat([d, f]);
+  } catch (err1) {
+    // Attempt 2: If authTag was appended at the end of the full raw downloaded buffer
+    if (rawDownloadedBuf.length >= 16) {
+      try {
+        const decipher2 = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        const tagFromEnd = rawDownloadedBuf.subarray(rawDownloadedBuf.length - 16);
+        const ctFromEnd = rawDownloadedBuf.subarray(0, rawDownloadedBuf.length - 16);
+        decipher2.setAuthTag(tagFromEnd);
+        const d2 = decipher2.update(ctFromEnd);
+        const f2 = decipher2.final();
+        return Buffer.concat([d2, f2]);
+      } catch (err2) {}
+    }
+
+    // Attempt 3: Try full raw buffer with stored authTag
     try {
-      finalBuf = decipher.final();
-    } catch (authErr) {
-      console.error(`[Crypto] GCM authentication FAILED for part ${part.chunk_index || 0}: Data tampered!`, authErr.message);
-      throw new Error(`Integrity check failed: File part ${part.chunk_index || 0} is corrupt or tampered.`);
-    }
-  } else {
-    try { finalBuf = decipher.final(); } catch (e) {}
-  }
+      const decipher3 = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      if (authTag) decipher3.setAuthTag(authTag);
+      const d3 = decipher3.update(rawDownloadedBuf);
+      const f3 = decipher3.final();
+      return Buffer.concat([d3, f3]);
+    } catch (err3) {}
 
-  return (finalBuf.length > 0) ? Buffer.concat([decryptedBuf, finalBuf]) : decryptedBuf;
+    console.error(`[Crypto] Decryption failed for part ${part.chunk_index || 0}:`, err1.message);
+    throw new Error(`Integrity check failed: File part ${part.chunk_index || 0} could not be authenticated.`);
+  }
 }
 
 async function generateServerImageThumbnailForFile(file, outputPath, userKey = null) {
