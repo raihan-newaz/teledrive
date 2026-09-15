@@ -313,13 +313,22 @@ const Upload = {
       UI.showToast(`Cancelled upload of "${item.file.name}"`, 'info');
     }
 
-    // Immediately trigger server deletion of any already-uploaded chunks in Telegram
-    try {
-      fetch(`/api/files/upload-session/${encodeURIComponent(itemId)}`, {
-        method: 'DELETE',
-        headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
-      }).catch(err => console.warn('[Upload] Cancel session delete warning:', err.message));
-    } catch (e) {}
+    // Immediately trigger server deletion of any already-uploaded chunks in Telegram (with retry)
+    const purgeSession = async (retries = 2) => {
+      for (let r = 0; r <= retries; r++) {
+        try {
+          await fetch(`/api/files/upload-session/${encodeURIComponent(itemId)}`, {
+            method: 'DELETE',
+            headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
+          });
+          break;
+        } catch (err) {
+          if (r === retries) console.warn('[Upload] Cancel session delete warning:', err.message);
+          await new Promise(res => setTimeout(res, 500));
+        }
+      }
+    };
+    purgeSession();
 
     this.renderQueue();
 

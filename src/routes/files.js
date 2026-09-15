@@ -362,23 +362,32 @@ const upload = multer({
   }
 });
 
-// Clean up abandoned upload sessions older than 48 hours
+// Clean up abandoned upload sessions older than 2 hours
 async function purgeExpiredUploadSessions() {
   try {
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
-    const expiredSessions = db.getExpiredUploadSessions(fortyEightHoursAgo);
-    for (const session of expiredSessions) {
-      const chunks = db.getUploadedSessionChunks(session.id);
-      for (const ch of chunks) {
-        try { await telegram.deleteFile(ch.telegram_message_id); } catch (e) {}
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    const expiredSessions = db.getExpiredUploadSessions(twoHoursAgo);
+    if (expiredSessions && expiredSessions.length > 0) {
+      console.log(`[Auto-Purge] Found ${expiredSessions.length} abandoned upload session(s) older than 2h. Cleaning Telegram chunks...`);
+      for (const session of expiredSessions) {
+        try {
+          const chunks = db.getUploadedSessionChunks(session.id);
+          if (chunks && chunks.length > 0) {
+            const msgIds = chunks.map(ch => parseInt(ch.telegram_message_id, 10)).filter(id => !isNaN(id) && id > 0);
+            if (msgIds.length > 0) {
+              await telegram.deleteFiles(msgIds).catch(() => {});
+            }
+          }
+          db.deleteUploadSession(session.id, session.user_id);
+        } catch (e) {}
       }
-      db.deleteUploadSession(session.id);
     }
   } catch (err) {
     console.error('[Upload-Session] Error purging expired sessions:', err);
   }
 }
-setInterval(purgeExpiredUploadSessions, 12 * 3600 * 1000).unref();
+setInterval(purgeExpiredUploadSessions, 30 * 60 * 1000).unref();
+setTimeout(purgeExpiredUploadSessions, 15 * 1000).unref();
 
 // Clean up temporary upload files older than 2 hours in data/tmp
 async function cleanupTmpDir() {
@@ -786,6 +795,14 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const tgFileName = (userPrefix ? `${userPrefix}_` : '') + `${safeName}.enc`;
     const message = await telegram.uploadFile(encryptedPath, tgFileName);
 
+    if (req.destroyed) {
+      try {
+        await telegram.deleteFile(message.id);
+        console.log(`[Upload] Deleted aborted single file message ${message.id} from Telegram`);
+      } catch (e) {}
+      return;
+    }
+
     // 4. Save metadata to SQLite
     const mimeType = getMimeType(safeName);
     const now = new Date().toISOString();
@@ -929,16 +946,27 @@ router.get('/upload-session', (req, res) => {
   }
 });
 
+const cancelledSessions = new Map(); // uploadId -> timestamp
+
+function markSessionCancelled(uploadId) {
+  cancelledSessions.set(uploadId, Date.now());
+  const twoHoursAgo = Date.now() - 2 * 3600 * 1000;
+  for (const [id, time] of cancelledSessions.entries()) {
+    if (time < twoHoursAgo) cancelledSessions.delete(id);
+  }
+}
+
+function isSessionCancelled(uploadId) {
+  return cancelledSessions.has(uploadId);
+}
+
 /**
  * DELETE /upload-session/:uploadId — Cancel an in-progress session and delete its chunks from Telegram
  */
 router.delete('/upload-session/:uploadId', async (req, res) => {
   try {
     const uploadId = req.params.uploadId;
-    const session = db.getUploadSession(uploadId, req.user.id);
-    if (!session) {
-      return res.status(404).json({ error: 'Upload session not found' });
-    }
+    markSessionCancelled(uploadId);
 
     const chunks = db.getUploadedSessionChunks(uploadId);
     if (chunks && chunks.length > 0) {
@@ -953,7 +981,7 @@ router.delete('/upload-session/:uploadId', async (req, res) => {
       }
     }
     db.deleteUploadSession(uploadId, req.user.id);
-    res.json({ success: true });
+    res.json({ success: true, cancelled: true });
   } catch (error) {
     console.error('Delete upload session error:', error);
     res.status(500).json({ error: 'Failed to cancel upload session' });
@@ -991,6 +1019,10 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       return res.status(400).json({ error: 'Invalid total file size' });
     }
 
+    if (isSessionCancelled(uploadId) || req.destroyed) {
+      return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
+    }
+
     // Check storage quota on initial chunk or ongoing
     const quotaCheck = checkUserStorageQuota(userId, totalFileSize);
     if (!quotaCheck.allowed) {
@@ -1019,6 +1051,10 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       return res.json({ success: true, done: false, chunkIndex, uploadedChunks: existingChunks.length, totalChunks });
     }
 
+    if (isSessionCancelled(uploadId) || req.destroyed) {
+      return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
+    }
+
     originalPath = req.file.path;
     encryptedPath = originalPath + '.enc';
 
@@ -1026,10 +1062,33 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
+    if (isSessionCancelled(uploadId) || req.destroyed) {
+      return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
+    }
+
     // 4. Upload chunk to Telegram (with optional user prefix)
     const userPrefix = req.user.filePrefix || '';
     const chunkTgName = (userPrefix ? `${userPrefix}_` : '') + `${safeName}.part${chunkIndex + 1}.enc`;
     const message = await telegram.uploadFile(encryptedPath, chunkTgName);
+
+    // CRITICAL: Check if upload was cancelled while chunk was in-flight to Telegram
+    if (isSessionCancelled(uploadId) || req.destroyed) {
+      try {
+        await telegram.deleteFile(message.id);
+        console.log(`[UploadChunk] Deleted in-flight chunk message ${message.id} from Telegram for cancelled session ${uploadId}`);
+      } catch (e) {}
+      return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
+    }
+
+    // Verify session still exists in DB before committing chunk
+    const currentSession = db.getUploadSession(uploadId, userId);
+    if (!currentSession) {
+      try {
+        await telegram.deleteFile(message.id);
+        console.log(`[UploadChunk] Deleted orphaned chunk message ${message.id} from Telegram for deleted session ${uploadId}`);
+      } catch (e) {}
+      return res.status(409).json({ error: 'Upload session has been removed', cancelled: true });
+    }
 
     // 5. Persist chunk in DB
     db.addUploadSessionChunk({
@@ -1562,37 +1621,6 @@ setInterval(purgeExpiredTrash, 6 * 3600 * 1000).unref();
 // Run on startup
 setTimeout(purgeExpiredTrash, 30 * 1000).unref();
 
-/**
- * Automated Incomplete Upload Sessions Purge Worker
- * Purges unfinished upload sessions older than 24h and deletes any orphaned Telegram chunks.
- */
-async function purgeExpiredUploadSessions() {
-  try {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const expiredSessions = db.getExpiredUploadSessions(oneDayAgo);
-    if (expiredSessions && expiredSessions.length > 0) {
-      console.log(`[Auto-Purge] Found ${expiredSessions.length} abandoned upload session(s) older than 24h. Purging...`);
-      for (const session of expiredSessions) {
-        try {
-          const chunks = db.getUploadedSessionChunks(session.id);
-          if (chunks && chunks.length > 0) {
-            const msgIds = chunks.map(ch => parseInt(ch.telegram_message_id, 10)).filter(id => !isNaN(id) && id > 0);
-            if (msgIds.length > 0) {
-              await telegram.deleteFiles(msgIds).catch(() => {});
-            }
-          }
-          db.deleteUploadSession(session.id, session.user_id);
-        } catch (e) {}
-      }
-    }
-  } catch (err) {
-    console.error('[Auto-Purge] Error during expired upload sessions purge:', err.message);
-  }
-}
-
-// Run expired upload sessions purge every 6 hours and on startup
-setInterval(purgeExpiredUploadSessions, 6 * 3600 * 1000).unref();
-setTimeout(purgeExpiredUploadSessions, 60 * 1000).unref();
 
 /**
  * DELETE /trash/empty — Empty all files currently in Trash for this user
