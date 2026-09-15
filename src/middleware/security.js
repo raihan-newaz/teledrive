@@ -32,11 +32,12 @@ const securityMiddleware = () => {
             crossOriginResourcePolicy: { policy: "cross-origin" }
         }),
 
-        // Custom security headers
+        // Custom security & anti-indexing headers
         (req, res, next) => {
             res.setHeader('X-Content-Type-Options', 'nosniff');
             res.setHeader('X-Frame-Options', 'SAMEORIGIN');
             res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+            res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate');
             next();
         },
 
