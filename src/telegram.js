@@ -311,23 +311,37 @@ async function deleteFiles(messageIds) {
     return { success: true, count: 0 };
   }
 
+  const { utils: tgUtils } = require('telegram');
+
   try {
     const channelEntity = await getChannelInputEntity();
     console.log(`[Telegram] Deleting message ID(s): [${ids.join(', ')}] from channel...`);
 
+    let inputChannel;
+    try {
+      inputChannel = tgUtils.getInputChannel(channelEntity);
+    } catch (e) {
+      try {
+        const rawEntity = await tClient.getEntity(process.env.CHANNEL_ID);
+        inputChannel = tgUtils.getInputChannel(rawEntity);
+      } catch (e2) {
+        inputChannel = channelEntity;
+      }
+    }
+
     let result;
     try {
-      // First attempt direct MTProto channels.DeleteMessages
+      // Direct MTProto channels.DeleteMessages
       result = await withTelegramRetry(() => tClient.invoke(new Api.channels.DeleteMessages({
-        channel: channelEntity,
+        channel: inputChannel,
         id: ids
       })));
     } catch (chanErr) {
-      // Fallback to client.deleteMessages
+      console.warn(`[Telegram] Direct channels.DeleteMessages attempt note: ${chanErr.message}. Trying client.deleteMessages...`);
       result = await withTelegramRetry(() => tClient.deleteMessages(channelEntity, ids, { revoke: true }));
     }
 
-    console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}]`);
+    console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}] from Telegram channel`);
     return { success: true, count: ids.length, result };
   } catch (err) {
     _cachedChannelEntity = null; // Invalidate cached entity on error

@@ -138,20 +138,22 @@ async function runTests() {
     throw new Error('FAIL: Video metadata or transcode jobs still exist!');
   }
 
-  // --- Test 3: Already Deleted Telegram Message Graceful Handling ---
-  console.log('\n--- Test 3: Telegram Error / Already-Deleted Message Handling ---');
+  // --- Test 3: Telegram Error Handling (File preserved in DB when Telegram delete fails) ---
+  console.log('\n--- Test 3: Telegram Error Handling (Preserve file in DB when Telegram delete fails) ---');
   shouldSimulateTelegramError = true;
-  const missingTgFile = createTestFileRecord({ name: 'already_deleted_in_tg.zip', mimeType: 'application/zip', size: 500000 });
+  const failingTgFile = createTestFileRecord({ name: 'tg_failed_file.zip', mimeType: 'application/zip', size: 500000 });
 
-  const gracefulResult = await filesRouter.permanentlyDeleteFile(missingTgFile, { throwOnError: false });
+  const failedResult = await filesRouter.permanentlyDeleteFile(failingTgFile, { throwOnError: false });
   shouldSimulateTelegramError = false;
 
-  console.log('Graceful delete result:', gracefulResult);
-  const checkMissingTgDb = db.getFile(missingTgFile.id, testUserId);
-  if (!checkMissingTgDb && gracefulResult.success === true) {
-    console.log('✓ PASS: Handled Telegram deletion failure gracefully without crashing; DB cleanup completed.');
+  console.log('Failed Telegram delete result:', failedResult);
+  const checkFailingTgDb = db.getFile(failingTgFile.id, testUserId);
+  if (checkFailingTgDb && failedResult.success === false) {
+    console.log('✓ PASS: File correctly preserved in DB when Telegram deletion fails.');
+    // Clean up manually for remaining tests
+    db.run('DELETE FROM files WHERE id = ?', [failingTgFile.id]);
   } else {
-    throw new Error('FAIL: Telegram failure blocked DB cleanup!');
+    throw new Error('FAIL: File was deleted from DB despite Telegram failure!');
   }
 
   // --- Test 4: Batch Delete with Chunked Files ---

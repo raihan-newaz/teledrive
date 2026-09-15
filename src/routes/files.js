@@ -1366,18 +1366,15 @@ async function permanentlyDeleteFilesBatch(files, userId) {
       try {
         await telegram.deleteFiles(Array.from(fileMessageIds));
         console.log(`[Batch Delete] Successfully deleted Telegram message(s) for "${file.name}" (${file.id})`);
+        tgSuccess = true;
       } catch (tgErr) {
-        console.warn(`[Batch Delete] Telegram deletion note for "${file.name}":`, tgErr.message);
-        if (tgErr.message && (tgErr.message.includes('MESSAGE_ID_INVALID') || tgErr.message.includes('not found'))) {
-          tgSuccess = true;
-        } else {
-          warnings.push(`File "${file.name}": ${tgErr.message}`);
-          tgSuccess = false;
-        }
+        console.warn(`[Batch Delete] Telegram deletion error for "${file.name}":`, tgErr.message);
+        warnings.push(`File "${file.name}": ${tgErr.message}`);
+        tgSuccess = false;
       }
     }
 
-    // 3. Only delete from local DB & cache if Telegram confirmed or was already removed
+    // 3. Only delete from local DB & cache if Telegram confirmed
     if (tgSuccess) {
       try { db.deleteFileChunks(file.id); } catch (e) {}
       try { db.deleteTranscodeJob(file.id); } catch (e) {}
@@ -1439,25 +1436,14 @@ async function permanentlyDeleteFile(file, options = {}) {
   } catch (e) {}
 
   // 2. Delete from Telegram
-  let tgSuccess = true;
-  let tgError = null;
   if (messageIds.size > 0) {
     try {
       await telegram.deleteFiles(Array.from(messageIds));
       console.log(`[Delete] Successfully deleted Telegram message(s) for "${file.name}" (${file.id})`);
     } catch (err) {
-      tgError = err;
-      if (err.message && (err.message.includes('MESSAGE_ID_INVALID') || err.message.includes('not found'))) {
-        tgSuccess = true;
-      } else {
-        tgSuccess = false;
-        console.warn(`[Delete] Telegram message delete error for "${file.name}":`, err.message);
-      }
+      console.warn(`[Delete] Telegram message delete error for "${file.name}":`, err.message);
+      return { success: false, fileId: file.id, telegramDeleted: false, error: err.message };
     }
-  }
-
-  if (!tgSuccess) {
-    return { success: false, fileId: file.id, telegramDeleted: false, error: tgError ? tgError.message : 'Telegram deletion failed' };
   }
 
   // 3. Clean DB and cache
