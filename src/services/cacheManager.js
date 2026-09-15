@@ -111,7 +111,7 @@ function startCacheMaintenanceSchedule() {
 }
 
 function isPlaintextCacheEnabled() {
-  return process.env.PLAINTEXT_CACHE_ENABLED !== 'false';
+  return process.env.PLAINTEXT_CACHE_ENABLED === 'true';
 }
 
 module.exports = {

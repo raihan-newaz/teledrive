@@ -115,6 +115,57 @@ function generateImageThumbnailServer(imagePath, outputPath) {
   });
 }
 
+/**
+ * Downloads and authenticates a single Telegram part with AES-256-GCM AEAD integrity check
+ * @param {Object} part - { telegram_message_id, size, iv, salt, auth_tag, chunk_index }
+ * @returns {Promise<Buffer>} Plaintext buffer
+ */
+async function downloadAndDecryptTelegramPart(part) {
+  const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
+  const iv = Buffer.from(part.iv, 'base64');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  
+  if (part.auth_tag) {
+    try {
+      decipher.setAuthTag(Buffer.from(part.auth_tag, 'base64'));
+    } catch (e) {
+      console.warn(`[Crypto] Invalid auth_tag format for part:`, e.message);
+    }
+  }
+
+  const cipherChunks = [];
+  let totalReceived = 0;
+
+  for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 1024 * 1024)) {
+    totalReceived += chunk.length;
+    let cipherChunk = chunk;
+    if (totalReceived > part.size) {
+      const overflow = totalReceived - part.size;
+      cipherChunk = chunk.subarray(0, chunk.length - overflow);
+    }
+    if (cipherChunk.length > 0) {
+      cipherChunks.push(cipherChunk);
+    }
+  }
+
+  const fullCiphertext = Buffer.concat(cipherChunks);
+  const decryptedBuf = decipher.update(fullCiphertext);
+  
+  let finalBuf = Buffer.alloc(0);
+  if (part.auth_tag) {
+    try {
+      finalBuf = decipher.final();
+    } catch (authErr) {
+      console.error(`[Crypto] GCM authentication FAILED for part ${part.chunk_index || 0}: Data tampered!`, authErr.message);
+      throw new Error(`Integrity check failed: File part ${part.chunk_index || 0} is corrupt or tampered.`);
+    }
+  } else {
+    try { finalBuf = decipher.final(); } catch (e) {}
+  }
+
+  return (finalBuf.length > 0) ? Buffer.concat([decryptedBuf, finalBuf]) : decryptedBuf;
+}
+
 async function generateServerImageThumbnailForFile(file, outputPath) {
   try {
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
@@ -126,49 +177,28 @@ async function generateServerImageThumbnailForFile(file, outputPath) {
     let parts = [];
     if (file.is_chunked === 1) {
       parts = db.getFileChunks(file.id);
-      if (parts && parts.length > 0) {
-        parts.sort((a, b) => a.chunk_index - b.chunk_index);
-      }
+      if (parts && parts.length > 0) parts.sort((a, b) => a.chunk_index - b.chunk_index);
     } else {
       parts = [{
         chunk_index: 0,
         telegram_message_id: file.telegram_message_id,
         size: file.size,
         iv: file.iv,
-        salt: file.salt
+        salt: file.salt,
+        auth_tag: file.auth_tag
       }];
     }
 
     if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
     const tempImgPath = path.join(tmpDir, `img_${file.id}${path.extname(file.name || '') || '.jpg'}`);
-    const writeStream = createWriteStream(tempImgPath);
-
-    for (const part of parts) {
-      const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
-      const iv = Buffer.from(part.iv, 'base64');
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-
-      let totalPartReceived = 0;
-      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
-        totalPartReceived += chunk.length;
-        let cipherChunk = chunk;
-        if (totalPartReceived > part.size) {
-          const overflow = totalPartReceived - part.size;
-          cipherChunk = chunk.subarray(0, chunk.length - overflow);
-        }
-        if (cipherChunk.length > 0) {
-          writeStream.write(decipher.update(cipherChunk));
-        }
-      }
-    }
-
-    await new Promise((resolve) => writeStream.end(resolve));
+    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0]);
+    await fsPromises.writeFile(tempImgPath, firstPartDecrypted);
 
     const ok = await generateImageThumbnailServer(tempImgPath, outputPath);
 
-    // Keep in data/cache if file size <= 40MB so subsequent full photo views open with 0ms delay
-    if (file.size <= 40 * 1024 * 1024 && !existsSync(cachedPath)) {
+    // Keep in data/cache if file size <= 40MB and caching is explicitly enabled
+    if (file.size <= 40 * 1024 * 1024 && process.env.PLAINTEXT_CACHE_ENABLED === 'true' && !existsSync(cachedPath)) {
       try {
         await fsPromises.copyFile(tempImgPath, cachedPath);
         const cacheManager = require('../services/cacheManager');
@@ -191,54 +221,38 @@ async function generateServerThumbnailForFile(file, outputPath) {
       return await generateVideoThumbnailServer(cachedPath, outputPath);
     }
 
-    // Download and decrypt required video part directly to generate thumbnail
     let parts = [];
     if (file.is_chunked === 1) {
       parts = db.getFileChunks(file.id);
-      if (parts && parts.length > 0) {
-        parts.sort((a, b) => a.chunk_index - b.chunk_index);
-      }
+      if (parts && parts.length > 0) parts.sort((a, b) => a.chunk_index - b.chunk_index);
     } else {
       parts = [{
         chunk_index: 0,
         telegram_message_id: file.telegram_message_id,
         size: file.size,
         iv: file.iv,
-        salt: file.salt
+        salt: file.salt,
+        auth_tag: file.auth_tag
       }];
     }
 
     if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
-    const targetFilePath = cachedPath;
-    const writeStream = createWriteStream(targetFilePath);
+    const tempVidPath = path.join(tmpDir, `vid_thumb_${file.id}${path.extname(file.name || '') || '.mp4'}`);
+    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0]);
+    await fsPromises.writeFile(tempVidPath, firstPartDecrypted);
 
-    for (const part of parts) {
-      const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
-      const iv = Buffer.from(part.iv, 'base64');
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    const ok = await generateVideoThumbnailServer(tempVidPath, outputPath);
 
-      let partRead = 0;
-      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 1024 * 1024)) {
-        partRead += chunk.length;
-        let cipherChunk = chunk;
-        if (partRead > part.size) {
-          const overflow = partRead - part.size;
-          cipherChunk = chunk.subarray(0, chunk.length - overflow);
-        }
-        if (cipherChunk.length > 0) {
-          writeStream.write(decipher.update(cipherChunk));
-        }
-      }
+    if (file.size <= 40 * 1024 * 1024 && process.env.PLAINTEXT_CACHE_ENABLED === 'true' && !existsSync(cachedPath)) {
+      try {
+        await fsPromises.copyFile(tempVidPath, cachedPath);
+        const cacheManager = require('../services/cacheManager');
+        cacheManager.touchCacheFile(cachedPath);
+      } catch (e) {}
     }
 
-    await new Promise((resolve) => writeStream.end(resolve));
-
-    const ok = await generateVideoThumbnailServer(targetFilePath, outputPath);
-    if (existsSync(targetFilePath)) {
-      const cacheManager = require('../services/cacheManager');
-      cacheManager.touchCacheFile(targetFilePath);
-    }
+    await fsPromises.unlink(tempVidPath).catch(() => {});
     return ok && existsSync(outputPath);
   } catch (err) {
     console.warn(`[Thumbnail] Error generating server thumbnail for ${file.id}:`, err.message);
@@ -246,7 +260,15 @@ async function generateServerThumbnailForFile(file, outputPath) {
   }
 }
 
-const upload = multer({ dest: tmpDir, limits: { fileSize: 2 * 1024 * 1024 * 1024 } }); // 2GB max
+const upload = multer({
+  dest: tmpDir,
+  limits: {
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB max
+    files: 1,
+    fields: 10,
+    parts: 20
+  }
+});
 
 // Clean up abandoned upload sessions older than 48 hours
 async function purgeExpiredUploadSessions() {
@@ -451,7 +473,8 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       telegram_message_id: file.telegram_message_id,
       size: file.size,
       iv: file.iv,
-      salt: file.salt
+      salt: file.salt,
+      auth_tag: file.auth_tag
     }];
   }
 
@@ -476,7 +499,7 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     });
   }
 
-  const plaintextCacheEnabled = process.env.PLAINTEXT_CACHE_ENABLED !== 'false';
+  const plaintextCacheEnabled = process.env.PLAINTEXT_CACHE_ENABLED === 'true';
   const shouldCache = plaintextCacheEnabled && (start === 0);
   const tempCachedPath = `${cachedPath}.tmp`;
   let cacheWriteStream = null;
@@ -518,52 +541,20 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       const neededStartInPart = Math.max(0, start - partStartOffset);
       const neededEndInPart = Math.min(partSize - 1, end - partStartOffset);
 
-      const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
-      const iv = Buffer.from(part.iv, 'base64');
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      if (part.auth_tag) {
-        try {
-          decipher.setAuthTag(Buffer.from(part.auth_tag, 'base64'));
-        } catch (e) {}
+      // Download and fully authenticate the encrypted part with AES-GCM AEAD check (decipher.final)
+      const decryptedPartBuf = await downloadAndDecryptTelegramPart(part);
+
+      const sliceToSend = decryptedPartBuf.subarray(neededStartInPart, neededEndInPart + 1);
+
+      if (!isClientClosed && sliceToSend.length > 0) {
+        const canContinue = res.write(sliceToSend);
+        if (!canContinue) {
+          await new Promise(r => res.once('drain', r));
+        }
       }
 
-      let totalEncReceived = 0;
-      let partDecryptedOffset = 0;
-
-      for await (const chunk of telegram.iterDownloadFile(part.telegram_message_id, 512 * 1024)) {
-        if (isClientClosed) break;
-        totalEncReceived += chunk.length;
-
-        let cipherChunk = chunk;
-        if (totalEncReceived > partSize) {
-          const overflow = totalEncReceived - partSize;
-          cipherChunk = chunk.subarray(0, chunk.length - overflow);
-        }
-
-        if (cipherChunk.length > 0) {
-          const decrypted = decipher.update(cipherChunk);
-          const chunkDecStart = partDecryptedOffset;
-          const chunkDecEnd = partDecryptedOffset + decrypted.length - 1;
-          partDecryptedOffset += decrypted.length;
-
-          // Check if this decrypted chunk overlaps [neededStartInPart, neededEndInPart]
-          if (chunkDecEnd >= neededStartInPart && chunkDecStart <= neededEndInPart) {
-            const sliceStart = Math.max(0, neededStartInPart - chunkDecStart);
-            const sliceEnd = Math.min(decrypted.length, neededEndInPart - chunkDecStart + 1);
-            const sliceToSend = decrypted.subarray(sliceStart, sliceEnd);
-
-            if (!isClientClosed && sliceToSend.length > 0) {
-              const canContinue = res.write(sliceToSend);
-              if (!canContinue) {
-                await new Promise(r => res.once('drain', r));
-              }
-            }
-          }
-
-          if (cacheWriteStream && !isClientClosed) {
-            cacheWriteStream.write(decrypted);
-          }
-        }
+      if (cacheWriteStream && !isClientClosed) {
+        cacheWriteStream.write(decryptedPartBuf);
       }
     }
 
@@ -915,12 +906,12 @@ router.get('/:id/thumbnail', async (req, res) => {
       return res.status(403).json({ error: 'Folder is locked.' });
     }
 
-    // 1. If static generated thumbnail exists (JPEG), serve immediately with long-lived immutable cache headers
+    // 1. If static generated thumbnail exists (JPEG), serve with private cache headers
     const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
     if (existsSync(thumbPath)) {
       res.writeHead(200, {
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, max-age=86400',
         'Access-Control-Allow-Origin': '*',
       });
       const stream = createReadStream(thumbPath);
@@ -937,7 +928,7 @@ router.get('/:id/thumbnail', async (req, res) => {
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Cache-Control': 'private, max-age=86400',
           'Access-Control-Allow-Origin': '*',
         });
         const stream = createReadStream(thumbPath);
@@ -956,7 +947,7 @@ router.get('/:id/thumbnail', async (req, res) => {
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Cache-Control': 'private, max-age=86400',
           'Access-Control-Allow-Origin': '*',
         });
         const stream = createReadStream(thumbPath);
