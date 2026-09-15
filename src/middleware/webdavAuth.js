@@ -70,12 +70,57 @@ function webdavAuthMiddleware(req, res, next) {
     }
   }
 
+  // 3. Fall back to checking database user accounts
+  const db = require('../db');
+  let matchedDbUser = null;
+  if (!isAuthenticated && password) {
+    try {
+      const allUsers = db.getAllUsers();
+      matchedDbUser = allUsers.find(u => u.email.toLowerCase() === username.toLowerCase() || u.name.toLowerCase() === username.toLowerCase());
+      if (matchedDbUser && matchedDbUser.status === 'active') {
+        if (bcrypt.compareSync(password, matchedDbUser.password_hash)) {
+          isAuthenticated = true;
+        } else {
+          matchedDbUser = null;
+        }
+      } else {
+        matchedDbUser = null;
+      }
+    } catch (e) {}
+  }
+
   if (!isAuthenticated) {
     res.set('WWW-Authenticate', 'Basic realm="TeleDrive WebDAV Network Storage"');
     return res.status(401).set('Content-Type', 'text/plain').send('Invalid WebDAV username or password.');
   }
 
-  // 3. Check Session Revocation & Track Device Session
+  // Attach user context with encryption key
+  const cryptoModule = require('../crypto');
+  const masterKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+  const targetUser = matchedDbUser || db.getUserByEmail('admin@teledrive.local') || db.getAllUsers().find(u => u.role === 'admin') || db.getAllUsers()[0];
+
+  if (targetUser) {
+    let userKey = masterKey;
+    if (targetUser.encryption_key) {
+      try {
+        userKey = cryptoModule.unwrapUserKey(targetUser.encryption_key, masterKey);
+      } catch (e) {
+        userKey = masterKey;
+      }
+    }
+    req.user = {
+      id: targetUser.id,
+      email: targetUser.email,
+      name: targetUser.name,
+      role: targetUser.role,
+      status: targetUser.status,
+      storageLimit: targetUser.storage_limit || 0,
+      storageUsed: targetUser.storage_used || 0,
+      encryptionKey: userKey
+    };
+  }
+
+  // 4. Check Session Revocation & Track Device Session
   const sessionTracker = require('../services/sessionTracker');
   const clientIp = sessionTracker.getClientIp(req);
   const userAgent = req.headers['user-agent'] || 'Generic-WebDAV';

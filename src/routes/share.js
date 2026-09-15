@@ -207,8 +207,22 @@ router.get('/public/:token/download', async (req, res) => {
     // Increment download count
     db.incrementShareDownloads(token);
 
+    // Retrieve file owner's encryption key if available
+    let ownerKey = null;
+    if (file.user_id) {
+      const owner = db.getUserById(file.user_id);
+      if (owner && owner.encryption_key) {
+        const cryptoModule = require('../crypto');
+        try {
+          ownerKey = cryptoModule.unwrapUserKey(owner.encryption_key, process.env.ENCRYPTION_KEY);
+        } catch (e) {
+          console.error('[Share] Failed to unwrap owner key for public download:', e.message);
+        }
+      }
+    }
+
     // Stream file as attachment download
-    await filesRouter.streamFileToResponse(file, req, res, true);
+    await filesRouter.streamFileToResponse(file, req, res, true, ownerKey);
   } catch (err) {
     console.error('[Share] Public download error:', err);
     if (!res.headersSent) {
@@ -238,8 +252,22 @@ router.get('/public/:token/stream', async (req, res) => {
       return res.status(403).send('Password required to stream this file.');
     }
 
+    // Retrieve file owner's encryption key if available
+    let ownerKey = null;
+    if (file.user_id) {
+      const owner = db.getUserById(file.user_id);
+      if (owner && owner.encryption_key) {
+        const cryptoModule = require('../crypto');
+        try {
+          ownerKey = cryptoModule.unwrapUserKey(owner.encryption_key, process.env.ENCRYPTION_KEY);
+        } catch (e) {
+          console.error('[Share] Failed to unwrap owner key for public stream:', e.message);
+        }
+      }
+    }
+
     // Stream file inline (supports Range requests)
-    await filesRouter.streamFileToResponse(file, req, res, false);
+    await filesRouter.streamFileToResponse(file, req, res, false, ownerKey);
   } catch (err) {
     console.error('[Share] Public stream error:', err);
     if (!res.headersSent) {
@@ -259,7 +287,7 @@ router.get('/public/:token/stream', async (req, res) => {
 router.get('/file/:fileId', authMiddleware, async (req, res) => {
   try {
     const { fileId } = req.params;
-    const file = db.getFile(fileId);
+    const file = db.getFile(fileId, req.user.id);
 
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
@@ -309,7 +337,7 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
     const password = req.body.password;
     const expiresInDays = req.body.expiresInDays !== undefined ? req.body.expiresInDays : req.body.expires_in_days;
     const clearPassword = req.body.clearPassword || req.body.clear_password;
-    const file = db.getFile(fileId);
+    const file = db.getFile(fileId, req.user.id);
 
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
@@ -380,7 +408,7 @@ router.post('/file/:fileId', authMiddleware, async (req, res) => {
 router.delete('/file/:fileId', authMiddleware, async (req, res) => {
   try {
     const { fileId } = req.params;
-    const file = db.getFile(fileId);
+    const file = db.getFile(fileId, req.user.id);
 
     if (!file) {
       return res.status(404).json({ error: 'File not found' });

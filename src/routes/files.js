@@ -118,10 +118,12 @@ function generateImageThumbnailServer(imagePath, outputPath) {
 /**
  * Downloads and authenticates a single Telegram part with AES-256-GCM AEAD integrity check
  * @param {Object} part - { telegram_message_id, size, iv, salt, auth_tag, chunk_index }
+ * @param {string|Buffer} [userKey] - Optional per-user encryption key. Fallback to process.env.ENCRYPTION_KEY
  * @returns {Promise<Buffer>} Plaintext buffer
  */
-async function downloadAndDecryptTelegramPart(part) {
-  const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
+async function downloadAndDecryptTelegramPart(part, userKey = null) {
+  const encKey = userKey || process.env.ENCRYPTION_KEY;
+  const key = cryptoModule.deriveKey(encKey, part.salt);
   const iv = Buffer.from(part.iv, 'base64');
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   
@@ -166,7 +168,7 @@ async function downloadAndDecryptTelegramPart(part) {
   return (finalBuf.length > 0) ? Buffer.concat([decryptedBuf, finalBuf]) : decryptedBuf;
 }
 
-async function generateServerImageThumbnailForFile(file, outputPath) {
+async function generateServerImageThumbnailForFile(file, outputPath, userKey = null) {
   try {
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
     if (existsSync(cachedPath)) {
@@ -192,7 +194,7 @@ async function generateServerImageThumbnailForFile(file, outputPath) {
     if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
     const tempImgPath = path.join(tmpDir, `img_${file.id}${path.extname(file.name || '') || '.jpg'}`);
-    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0]);
+    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0], userKey);
     await fsPromises.writeFile(tempImgPath, firstPartDecrypted);
 
     const ok = await generateImageThumbnailServer(tempImgPath, outputPath);
@@ -214,7 +216,7 @@ async function generateServerImageThumbnailForFile(file, outputPath) {
   }
 }
 
-async function generateServerThumbnailForFile(file, outputPath) {
+async function generateServerThumbnailForFile(file, outputPath, userKey = null) {
   try {
     const cachedPath = path.join(cacheDir, `${file.id}.dec`);
     if (existsSync(cachedPath)) {
@@ -239,7 +241,7 @@ async function generateServerThumbnailForFile(file, outputPath) {
     if (!parts || parts.length === 0 || !parts[0].telegram_message_id) return false;
 
     const tempVidPath = path.join(tmpDir, `vid_thumb_${file.id}${path.extname(file.name || '') || '.mp4'}`);
-    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0]);
+    const firstPartDecrypted = await downloadAndDecryptTelegramPart(parts[0], userKey);
     await fsPromises.writeFile(tempVidPath, firstPartDecrypted);
 
     const ok = await generateVideoThumbnailServer(tempVidPath, outputPath);
@@ -258,6 +260,25 @@ async function generateServerThumbnailForFile(file, outputPath) {
     console.warn(`[Thumbnail] Error generating server thumbnail for ${file.id}:`, err.message);
     return false;
   }
+}
+
+/**
+ * Checks if user has enough storage quota
+ */
+function checkUserStorageQuota(userId, incomingSize) {
+  const user = db.getUserById(userId);
+  if (!user || !user.storage_limit || user.storage_limit <= 0) return { allowed: true };
+  const currentUsed = user.storage_used || 0;
+  if (currentUsed + incomingSize > user.storage_limit) {
+    return {
+      allowed: false,
+      limit: user.storage_limit,
+      used: currentUsed,
+      required: incomingSize,
+      message: `Storage quota exceeded. Current usage: ${(currentUsed / (1024 * 1024)).toFixed(1)} MB / ${(user.storage_limit / (1024 * 1024)).toFixed(1)} MB.`
+    };
+  }
+  return { allowed: true };
 }
 
 const upload = multer({
@@ -393,9 +414,10 @@ function sanitizeFilename(filename) {
 /**
  * Unified Stream/Download Pipe Helper with 100% Byte-Accurate Range (Pause & Resume) Support
  */
-async function streamFileToResponse(file, req, res, isDownload = false) {
+async function streamFileToResponse(file, req, res, isDownload = false, explicitKey = null) {
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
   const fileSize = file.size;
+  const userKey = explicitKey || req.user?.encryptionKey || process.env.ENCRYPTION_KEY;
 
   // Parse Range header if requested by client (Chrome, Edge, IDM, curl, media players)
   const range = req.headers.range;
@@ -542,7 +564,7 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       const neededEndInPart = Math.min(partSize - 1, end - partStartOffset);
 
       // Download and fully authenticate the encrypted part with AES-GCM AEAD check (decipher.final)
-      const decryptedPartBuf = await downloadAndDecryptTelegramPart(part);
+      const decryptedPartBuf = await downloadAndDecryptTelegramPart(part, userKey);
 
       const sliceToSend = decryptedPartBuf.subarray(neededStartInPart, neededEndInPart + 1);
 
@@ -606,6 +628,14 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+    const userId = req.user.id;
+
+    // Check storage quota
+    const quotaCheck = checkUserStorageQuota(userId, req.file.size);
+    if (!quotaCheck.allowed) {
+      return res.status(413).json({ error: quotaCheck.message, quotaExceeded: true });
+    }
+
     const folderId = req.body.folderId || null;
     const safeName = sanitizeFilename(req.file.originalname);
     const fileId = uuidv4();
@@ -619,8 +649,8 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
       try { copyFileSync(originalPath, cachedPath); } catch (e) {}
     }
 
-    // 2. Encrypt file using AES-256-GCM
-    const encryptionKey = process.env.ENCRYPTION_KEY;
+    // 2. Encrypt file using per-user encryption key
+    const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
     // 3. Upload encrypted file to Telegram
@@ -639,12 +669,14 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     }
 
     db.run(
-      `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
-      [fileId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, authTag, now, now]
+      `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
+      [fileId, userId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, authTag, now, now]
     );
 
-    const fileRecord = db.getFile(fileId);
+    db.recalculateUserStorage(userId);
+
+    const fileRecord = db.getFile(fileId, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
@@ -664,16 +696,16 @@ const assemblyLocks = new Set();
 /**
  * Helper to commit completed chunked file to database (with mutex lock)
  */
-function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
+function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
   if (assemblyLocks.has(uploadId)) {
     return res.json({ success: true, message: 'Assembly in progress' });
   }
   assemblyLocks.add(uploadId);
 
   try {
-    const existingFile = db.getFile(uploadId);
+    const existingFile = db.getFile(uploadId, userId);
     if (existingFile && existingFile.size === totalFileSize) {
-      db.deleteUploadSession(uploadId);
+      db.deleteUploadSession(uploadId, userId);
       return res.json({ success: true, done: true, file: existingFile });
     }
 
@@ -687,9 +719,9 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
     const firstChunk = chunksToUse[0] || {};
 
     db.run(
-      `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-      [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, firstChunk.auth_tag || null, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
+      `INSERT OR REPLACE INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+      [fileId, userId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, firstChunk.auth_tag || null, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
     );
 
     // Clear any old records for this file ID in file_chunks, then commit all chunks
@@ -708,9 +740,10 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
     }
 
     // Remove upload session
-    db.deleteUploadSession(uploadId);
+    db.deleteUploadSession(uploadId, userId);
+    db.recalculateUserStorage(userId);
 
-    const fileRecord = db.getFile(fileId);
+    const fileRecord = db.getFile(fileId, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
@@ -729,7 +762,7 @@ router.get('/upload-session', (req, res) => {
     const { uploadId } = req.query;
     if (!uploadId) return res.status(400).json({ error: 'Missing uploadId' });
 
-    const session = db.getUploadSession(uploadId);
+    const session = db.getUploadSession(uploadId, req.user.id);
     if (!session) {
       return res.json({ exists: false, uploadedIndices: [] });
     }
@@ -756,6 +789,11 @@ router.get('/upload-session', (req, res) => {
 router.delete('/upload-session/:uploadId', async (req, res) => {
   try {
     const uploadId = req.params.uploadId;
+    const session = db.getUploadSession(uploadId, req.user.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Upload session not found' });
+    }
+
     const chunks = db.getUploadedSessionChunks(uploadId);
     if (chunks && chunks.length > 0) {
       const msgIds = chunks.map(ch => parseInt(ch.telegram_message_id, 10)).filter(id => !isNaN(id) && id > 0);
@@ -768,7 +806,7 @@ router.delete('/upload-session/:uploadId', async (req, res) => {
         }
       }
     }
-    db.deleteUploadSession(uploadId);
+    db.deleteUploadSession(uploadId, req.user.id);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete upload session error:', error);
@@ -786,6 +824,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
   try {
     if (!req.file) return res.status(400).json({ error: 'No chunk uploaded' });
 
+    const userId = req.user.id;
     const uploadId = req.body.uploadId;
     const chunkIndex = parseInt(req.body.chunkIndex, 10);
     const totalChunks = parseInt(req.body.totalChunks, 10);
@@ -803,11 +842,18 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       return res.status(400).json({ error: 'Invalid total file size' });
     }
 
+    // Check storage quota on initial chunk or ongoing
+    const quotaCheck = checkUserStorageQuota(userId, totalFileSize);
+    if (!quotaCheck.allowed) {
+      return res.status(413).json({ error: quotaCheck.message, quotaExceeded: true });
+    }
+
     const safeName = sanitizeFilename(fileName);
 
     // 1. Ensure persistent session exists in DB
     db.createUploadSession({
       id: uploadId,
+      userId,
       fileName: safeName,
       fileSize: totalFileSize,
       folderId,
@@ -819,7 +865,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const alreadyUploaded = existingChunks.find(c => c.chunk_index === chunkIndex);
     if (alreadyUploaded) {
       if (existingChunks.length === totalChunks) {
-        return assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, existingChunks, res);
+        return assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, existingChunks, res);
       }
       return res.json({ success: true, done: false, chunkIndex, uploadedChunks: existingChunks.length, totalChunks });
     }
@@ -827,8 +873,8 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     originalPath = req.file.path;
     encryptedPath = originalPath + '.enc';
 
-    // 3. Encrypt this chunk with AES-256-GCM
-    const encryptionKey = process.env.ENCRYPTION_KEY;
+    // 3. Encrypt this chunk with AES-256-GCM using user key
+    const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
     // 4. Upload chunk to Telegram
@@ -850,7 +896,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     // 6. Check if all chunks have been received
     const allChunks = db.getUploadedSessionChunks(uploadId);
     if (allChunks.length === totalChunks) {
-      return assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChunks, allChunks, res);
+      return assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, allChunks, res);
     }
 
     return res.json({ success: true, done: false, chunkIndex, uploadedChunks: allChunks.length, totalChunks });
@@ -883,12 +929,12 @@ function checkFileFolderAccess(file, req) {
  */
 router.get('/:id/stream', async (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
+    const file = db.getFile(req.params.id, req.user.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
     if (!checkFileFolderAccess(file, req)) {
       return res.status(403).json({ error: 'Folder is locked. Please unlock the folder to stream this file.' });
     }
-    await streamFileToResponse(file, req, res, false);
+    await streamFileToResponse(file, req, res, false, req.user.encryptionKey);
   } catch (error) {
     console.error('Stream handler error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Streaming error: ' + error.message });
@@ -900,7 +946,7 @@ router.get('/:id/stream', async (req, res) => {
  */
 router.get('/:id/thumbnail', async (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
+    const file = db.getFile(req.params.id, req.user.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
     if (!checkFileFolderAccess(file, req)) {
       return res.status(403).json({ error: 'Folder is locked.' });
@@ -924,7 +970,7 @@ router.get('/:id/thumbnail', async (req, res) => {
     
     // 2. If image, generate lightweight 240px thumbnail, save permanently to data/thumbnails, and serve
     if (mime.startsWith('image/')) {
-      const ok = await runThumbnailTask(() => generateServerImageThumbnailForFile(file, thumbPath)).catch(() => false);
+      const ok = await runThumbnailTask(() => generateServerImageThumbnailForFile(file, thumbPath, req.user.encryptionKey)).catch(() => false);
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
@@ -937,13 +983,13 @@ router.get('/:id/thumbnail', async (req, res) => {
         return;
       }
       // Fallback: stream original image
-      await streamFileToResponse(file, req, res, false);
+      await streamFileToResponse(file, req, res, false, req.user.encryptionKey);
       return;
     }
 
     // 3. If video, generate thumbnail with FFmpeg on demand, save permanently to data/thumbnails, and serve
     if (mime.startsWith('video/')) {
-      const ok = await runThumbnailTask(() => generateServerThumbnailForFile(file, thumbPath)).catch(() => false);
+      const ok = await runThumbnailTask(() => generateServerThumbnailForFile(file, thumbPath, req.user.encryptionKey)).catch(() => false);
       if (ok && existsSync(thumbPath)) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
@@ -982,7 +1028,7 @@ function isValidImageMagicBytes(buf) {
 
 router.post('/:id/thumbnail', async (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
+    const file = db.getFile(req.params.id, req.user.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     let { thumbnail } = req.body;
@@ -1018,12 +1064,12 @@ router.post('/:id/thumbnail', async (req, res) => {
  */
 router.get('/:id/download', async (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
+    const file = db.getFile(req.params.id, req.user.id);
     if (!file) return res.status(404).json({ error: 'File not found' });
     if (!checkFileFolderAccess(file, req)) {
       return res.status(403).json({ error: 'Folder is locked. Please unlock the folder to download this file.' });
     }
-    await streamFileToResponse(file, req, res, true);
+    await streamFileToResponse(file, req, res, true, req.user.encryptionKey);
   } catch (error) {
     console.error('Download error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Download failed: ' + error.message });
@@ -1031,21 +1077,22 @@ router.get('/:id/download', async (req, res) => {
 });
 
 /**
- * GET / — List files
+ * GET / — List files (User Isolated)
  */
 router.get('/', (req, res) => {
   try {
+    const userId = req.user.id;
     const { folderId, search, type, starred, trashed } = req.query;
 
-    if (search) return res.json(db.searchFiles(search));
-    if (starred === 'true') return res.json(db.getStarredFiles());
-    if (trashed === 'true') return res.json(db.getTrashedFiles());
+    if (search) return res.json(db.searchFiles(search, userId));
+    if (starred === 'true') return res.json(db.getStarredFiles(userId));
+    if (trashed === 'true') return res.json(db.getTrashedFiles(userId));
 
     let files;
     if (folderId && folderId !== 'null') {
-      files = db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0 ORDER BY name ASC', [folderId]);
+      files = db.all('SELECT * FROM files WHERE user_id = ? AND folder_id = ? AND is_trashed = 0 ORDER BY name ASC', [userId, folderId]);
     } else {
-      files = db.all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC');
+      files = db.all('SELECT * FROM files WHERE user_id = ? AND folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC', [userId]);
     }
 
     if (type && type !== 'all') {
@@ -1068,11 +1115,11 @@ router.get('/', (req, res) => {
 });
 
 /**
- * GET /stats — Storage statistics
+ * GET /stats — Storage statistics (User Isolated)
  */
 router.get('/stats', (req, res) => {
   try {
-    const stats = db.getStorageStats();
+    const stats = db.getUserStorageStats(req.user.id);
     res.json(stats);
   } catch (error) {
     console.error('Stats error:', error);
@@ -1085,8 +1132,9 @@ router.get('/stats', (req, res) => {
  */
 router.patch('/:id', (req, res) => {
   try {
+    const userId = req.user.id;
     const { name, folder_id, is_starred } = req.body;
-    const file = db.getFile(req.params.id);
+    const file = db.getFile(req.params.id, userId);
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     const updates = [];
@@ -1109,10 +1157,11 @@ router.patch('/:id', (req, res) => {
       updates.push('updated_at = ?');
       params.push(new Date().toISOString());
       params.push(req.params.id);
-      db.run(`UPDATE files SET ${updates.join(', ')} WHERE id = ?`, params);
+      params.push(userId);
+      db.run(`UPDATE files SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`, params);
     }
 
-    const updatedFile = db.getFile(req.params.id);
+    const updatedFile = db.getFile(req.params.id, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_updated', { file: updatedFile, folderId: updatedFile.folder_id });
@@ -1188,6 +1237,10 @@ async function permanentlyDeleteFile(file, options = {}) {
   // 5. Remove file record from database
   db.run('DELETE FROM files WHERE id = ?', [file.id]);
 
+  if (file.user_id) {
+    db.recalculateUserStorage(file.user_id);
+  }
+
   return { success: true, fileId: file.id, telegramDeleted: !telegramError };
 }
 
@@ -1236,7 +1289,7 @@ async function purgeExpiredUploadSessions() {
               await telegram.deleteFiles(msgIds).catch(() => {});
             }
           }
-          db.deleteUploadSession(session.id);
+          db.deleteUploadSession(session.id, session.user_id);
         } catch (e) {}
       }
     }
@@ -1250,11 +1303,12 @@ setInterval(purgeExpiredUploadSessions, 6 * 3600 * 1000).unref();
 setTimeout(purgeExpiredUploadSessions, 60 * 1000).unref();
 
 /**
- * DELETE /trash/empty — Empty all files currently in Trash
+ * DELETE /trash/empty — Empty all files currently in Trash for this user
  */
 router.delete('/trash/empty', async (req, res) => {
   try {
-    const trashedFiles = db.getTrashedFiles();
+    const userId = req.user.id;
+    const trashedFiles = db.getTrashedFiles(userId);
     let deletedCount = 0;
     const errors = [];
 
@@ -1267,13 +1321,15 @@ router.delete('/trash/empty', async (req, res) => {
       }
     }
 
+    if (userId) db.recalculateUserStorage(userId);
+
     if (errors.length > 0 && deletedCount === 0) {
       return res.status(500).json({ error: 'Failed to delete from Telegram: ' + errors.join('; ') });
     }
 
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('trash_emptied', {});
+      eventBroadcaster.broadcast('trash_emptied', { userId });
     } catch (e) {}
 
     res.json({
@@ -1292,11 +1348,14 @@ router.delete('/trash/empty', async (req, res) => {
  */
 router.delete('/:id', (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
-    db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ?', [new Date().toISOString(), req.params.id]);
+    const userId = req.user.id;
+    const file = db.getFile(req.params.id, userId);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ? AND user_id = ?', [new Date().toISOString(), req.params.id, userId]);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId: file ? file.folder_id : null });
+      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId: file.folder_id, userId });
     } catch (e) {}
     res.json({ success: true });
   } catch (error) {
@@ -1310,14 +1369,15 @@ router.delete('/:id', (req, res) => {
  */
 router.delete('/:id/permanent', async (req, res) => {
   try {
-    const file = db.getFile(req.params.id);
+    const userId = req.user.id;
+    const file = db.getFile(req.params.id, userId);
     if (!file) return res.status(404).json({ error: 'File not found' });
     const folderId = file.folder_id;
 
     await permanentlyDeleteFile(file, { throwOnError: true });
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId });
+      eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId, userId });
     } catch (e) {}
     res.json({ success: true });
   } catch (error) {
@@ -1331,11 +1391,15 @@ router.delete('/:id/permanent', async (req, res) => {
  */
 router.post('/:id/restore', (req, res) => {
   try {
-    db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ?', [req.params.id]);
-    const restoredFile = db.getFile(req.params.id);
+    const userId = req.user.id;
+    const file = db.getFile(req.params.id, userId);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ? AND user_id = ?', [req.params.id, userId]);
+    const restoredFile = db.getFile(req.params.id, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_uploaded', { file: restoredFile, folderId: restoredFile ? restoredFile.folder_id : null });
+      eventBroadcaster.broadcast('file_uploaded', { file: restoredFile, folderId: restoredFile ? restoredFile.folder_id : null, userId });
     } catch (e) {}
     res.json({ success: true });
   } catch (error) {
@@ -1349,6 +1413,7 @@ router.post('/:id/restore', (req, res) => {
  */
 router.post('/batch-trash', async (req, res) => {
   try {
+    const userId = req.user.id;
     const { fileIds = [], folderIds = [] } = req.body;
     const now = new Date().toISOString();
     let trashedFilesCount = 0;
@@ -1357,7 +1422,7 @@ router.post('/batch-trash', async (req, res) => {
     // Trash files
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
-        db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ?', [now, id]);
+        db.run('UPDATE files SET is_trashed = 1, trashed_at = ? WHERE id = ? AND user_id = ?', [now, id, userId]);
         trashedFilesCount++;
       }
     }
@@ -1367,7 +1432,7 @@ router.post('/batch-trash', async (req, res) => {
       const foldersRouter = require('./folders');
       for (const folderId of folderIds) {
         if (foldersRouter.deleteFolderRecursive) {
-          const r = await foldersRouter.deleteFolderRecursive(folderId);
+          const r = await foldersRouter.deleteFolderRecursive(folderId, userId);
           trashedFilesCount += r.deletedFiles || 0;
           trashedFoldersCount += r.deletedFolders || 0;
         }
@@ -1386,12 +1451,13 @@ router.post('/batch-trash', async (req, res) => {
  */
 router.post('/batch-restore', (req, res) => {
   try {
+    const userId = req.user.id;
     const { fileIds = [] } = req.body;
     let restoredCount = 0;
 
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
-        db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ?', [id]);
+        db.run('UPDATE files SET is_trashed = 0, trashed_at = NULL WHERE id = ? AND user_id = ?', [id, userId]);
         restoredCount++;
       }
     }
@@ -1408,6 +1474,7 @@ router.post('/batch-restore', (req, res) => {
  */
 router.post('/batch-delete', async (req, res) => {
   try {
+    const userId = req.user.id;
     const { fileIds = [], folderIds = [] } = req.body;
     let deletedFilesCount = 0;
     let deletedFoldersCount = 0;
@@ -1416,7 +1483,7 @@ router.post('/batch-delete', async (req, res) => {
     // 1. Permanently delete files
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
-        const file = db.getFile(id);
+        const file = db.getFile(id, userId);
         if (file) {
           try {
             await permanentlyDeleteFile(file, { throwOnError: true });
@@ -1434,7 +1501,7 @@ router.post('/batch-delete', async (req, res) => {
       for (const folderId of folderIds) {
         try {
           if (foldersRouter.permanentlyDeleteFolderRecursive) {
-            const r = await foldersRouter.permanentlyDeleteFolderRecursive(folderId);
+            const r = await foldersRouter.permanentlyDeleteFolderRecursive(folderId, userId);
             deletedFilesCount += r.deletedFiles || 0;
             deletedFoldersCount += r.deletedFolders || 0;
           }
@@ -1443,6 +1510,8 @@ router.post('/batch-delete', async (req, res) => {
         }
       }
     }
+
+    if (userId) db.recalculateUserStorage(userId);
 
     if (errors.length > 0 && deletedFilesCount === 0 && deletedFoldersCount === 0) {
       return res.status(500).json({ error: 'Failed to delete from Telegram: ' + errors.join('; ') });
@@ -1465,6 +1534,7 @@ router.post('/batch-delete', async (req, res) => {
  */
 router.post('/batch-star', (req, res) => {
   try {
+    const userId = req.user.id;
     const { fileIds = [], isStarred = true } = req.body;
     const now = new Date().toISOString();
     const starVal = isStarred ? 1 : 0;
@@ -1472,7 +1542,7 @@ router.post('/batch-star', (req, res) => {
 
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
-        db.run('UPDATE files SET is_starred = ?, updated_at = ? WHERE id = ?', [starVal, now, id]);
+        db.run('UPDATE files SET is_starred = ?, updated_at = ? WHERE id = ? AND user_id = ?', [starVal, now, id, userId]);
         updatedCount++;
       }
     }
@@ -1489,6 +1559,7 @@ router.post('/batch-star', (req, res) => {
  */
 router.post('/batch-move', async (req, res) => {
   try {
+    const userId = req.user.id;
     const { fileIds = [], folderIds = [], targetFolderId = null } = req.body;
     const destination = (targetFolderId && targetFolderId !== 'null') ? targetFolderId : null;
     const now = new Date().toISOString();
@@ -1498,7 +1569,7 @@ router.post('/batch-move', async (req, res) => {
     // Move files
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
-        db.run('UPDATE files SET folder_id = ?, updated_at = ? WHERE id = ?', [destination, now, id]);
+        db.run('UPDATE files SET folder_id = ?, updated_at = ? WHERE id = ? AND user_id = ?', [destination, now, id, userId]);
         movedFilesCount++;
       }
     }
@@ -1507,7 +1578,7 @@ router.post('/batch-move', async (req, res) => {
     if (Array.isArray(folderIds) && folderIds.length > 0) {
       for (const id of folderIds) {
         if (destination !== id) {
-          db.run('UPDATE folders SET parent_id = ?, updated_at = ? WHERE id = ?', [destination, now, id]);
+          db.run('UPDATE folders SET parent_id = ?, updated_at = ? WHERE id = ? AND user_id = ?', [destination, now, id, userId]);
           movedFoldersCount++;
         }
       }

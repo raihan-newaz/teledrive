@@ -273,6 +273,54 @@ function decryptBackupFile(inputPath, outputPath, passphrase) {
   });
 }
 
+/**
+ * Generates a random 32-byte user encryption key as base64 string
+ */
+function generateUserEncryptionKey() {
+  return crypto.randomBytes(32).toString('base64');
+}
+
+/**
+ * Wraps (encrypts) a user's encryption key with the server's Master Key
+ * Output payload format: base64(salt[16] + iv[12] + authTag[16] + ciphertext[var])
+ */
+function wrapUserKey(userKeyString, masterPassphrase) {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(masterPassphrase, salt, 310000, 32, 'sha512');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  
+  const userKeyBuf = Buffer.from(String(userKeyString), 'utf8');
+  const ciphertext = Buffer.concat([cipher.update(userKeyBuf), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  
+  const wrappedBuf = Buffer.concat([salt, iv, authTag, ciphertext]);
+  return wrappedBuf.toString('base64');
+}
+
+/**
+ * Unwraps (decrypts) a wrapped user encryption key using the server's Master Key
+ * @returns {string} Raw user encryption key string
+ */
+function unwrapUserKey(wrappedKeyBase64, masterPassphrase) {
+  const wrappedBuf = Buffer.from(wrappedKeyBase64, 'base64');
+  if (wrappedBuf.length < 16 + 12 + 16 + 1) {
+    throw new Error('Invalid wrapped key: payload too short');
+  }
+  
+  const salt = wrappedBuf.subarray(0, 16);
+  const iv = wrappedBuf.subarray(16, 28);
+  const authTag = wrappedBuf.subarray(28, 44);
+  const ciphertext = wrappedBuf.subarray(44);
+  
+  const key = crypto.pbkdf2Sync(masterPassphrase, salt, 310000, 32, 'sha512');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
 module.exports = {
   BACKUP_MAGIC,
   generateSalt,
@@ -283,5 +331,8 @@ module.exports = {
   encryptBackupFile,
   decryptBackupFile,
   encryptStream,
-  decryptStream
+  decryptStream,
+  generateUserEncryptionKey,
+  wrapUserKey,
+  unwrapUserKey
 };

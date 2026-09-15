@@ -36,6 +36,7 @@ const settingsRouter = require('./src/routes/settings');
 const shareRouter = require('./src/routes/share');
 const webdavRouter = require('./src/routes/webdav');
 const realtimeRouter = require('./src/routes/realtime');
+const adminRouter = require('./src/routes/admin');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -123,6 +124,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/folders', foldersRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/realtime', realtimeRouter);
 

@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsPromises = require('fs/promises');
 const path = require('path');
 const authMiddleware = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/auth');
 const telegram = require('../telegram');
 const db = require('../db');
 
@@ -92,8 +93,10 @@ async function updateEnvVariables(updates) {
  */
 router.get('/', async (req, res) => {
   try {
-    // 1. Storage statistics from SQLite
-    const stats = db.getStorageStats();
+    const userId = req.user ? req.user.id : null;
+
+    // 1. Storage statistics from SQLite (scoped to user)
+    const stats = db.getStorageStats(userId);
 
     // 2. Cache disk usage
     const cacheStats = getDirectorySize(cacheDir);
@@ -150,7 +153,7 @@ router.get('/', async (req, res) => {
         maxCacheLimitGb: 3,
         plaintextCacheEnabled: process.env.PLAINTEXT_CACHE_ENABLED === 'true'
       },
-      preferences: db.getAllSettings(),
+      preferences: db.getAllSettings(userId),
       encryption: {
         algorithm: 'AES-256-GCM',
         enabled: true,
@@ -172,7 +175,8 @@ router.get('/', async (req, res) => {
  */
 router.get('/preferences', async (req, res) => {
   try {
-    const preferences = db.getAllSettings();
+    const userId = req.user ? req.user.id : null;
+    const preferences = db.getAllSettings(userId);
     return res.json({ success: true, preferences });
   } catch (error) {
     console.error('Error fetching user preferences:', error);
@@ -186,6 +190,7 @@ router.get('/preferences', async (req, res) => {
  */
 router.put('/preferences', async (req, res) => {
   try {
+    const userId = req.user ? req.user.id : null;
     const { preferences } = req.body;
     if (!preferences || typeof preferences !== 'object') {
       return res.status(400).json({ error: 'Invalid preferences object' });
@@ -199,8 +204,8 @@ router.put('/preferences', async (req, res) => {
       }
     }
 
-    db.setMultipleSettings(filtered);
-    return res.json({ success: true, preferences: db.getAllSettings() });
+    db.setMultipleSettings(filtered, userId);
+    return res.json({ success: true, preferences: db.getAllSettings(userId) });
   } catch (error) {
     console.error('Error updating user preferences:', error);
     return res.status(500).json({ error: 'Failed to update preferences' });
@@ -211,7 +216,7 @@ router.put('/preferences', async (req, res) => {
  * POST /api/settings/telegram/test
  * Validates Telegram credentials on the fly
  */
-router.post('/telegram/test', async (req, res) => {
+router.post('/telegram/test', requireAdmin, async (req, res) => {
   try {
     let { apiId, apiHash, botToken, channelId } = req.body;
     if (apiHash && apiHash.includes('••••')) apiHash = process.env.API_HASH;
@@ -244,7 +249,7 @@ router.post('/telegram/test', async (req, res) => {
  * PUT /api/settings/telegram
  * Updates Telegram settings, writes to .env, and reconnects the client
  */
-router.put('/telegram', async (req, res) => {
+router.put('/telegram', requireAdmin, async (req, res) => {
   try {
     let { apiId, apiHash, botToken, channelId } = req.body;
     if (apiHash && apiHash.includes('••••')) apiHash = process.env.API_HASH;
@@ -305,7 +310,7 @@ router.put('/telegram', async (req, res) => {
  * POST /api/settings/clear-cache
  * Clears local decrypted media cache to free disk space
  */
-router.post('/clear-cache', async (req, res) => {
+router.post('/clear-cache', requireAdmin, async (req, res) => {
   try {
     let deletedCount = 0;
     let freedBytes = 0;
@@ -339,7 +344,7 @@ router.post('/clear-cache', async (req, res) => {
  * GET /api/settings/webdav
  * Retrieve WebDAV configuration and status
  */
-router.get('/webdav', async (req, res) => {
+router.get('/webdav', requireAdmin, async (req, res) => {
   try {
     const enabled = process.env.WEBDAV_ENABLED !== 'false';
     const permissionMode = process.env.WEBDAV_PERMISSION_MODE || 'full';
@@ -362,7 +367,7 @@ router.get('/webdav', async (req, res) => {
  * POST /api/settings/webdav
  * Update WebDAV configuration, permission mode, and credentials
  */
-router.post('/webdav', async (req, res) => {
+router.post('/webdav', requireAdmin, async (req, res) => {
   try {
     const { enabled, permissionMode, username, password } = req.body;
 
@@ -414,7 +419,7 @@ router.post('/webdav', async (req, res) => {
  * GET /api/settings/webdav/sessions
  * List all real-time connected WebDAV devices & sessions
  */
-router.get('/webdav/sessions', (req, res) => {
+router.get('/webdav/sessions', requireAdmin, (req, res) => {
   try {
     const sessionTracker = require('../services/sessionTracker');
     const sessions = sessionTracker.getActiveSessions();
@@ -429,7 +434,7 @@ router.get('/webdav/sessions', (req, res) => {
  * POST /api/settings/webdav/sessions/revoke
  * Disconnect / Block a specific device session
  */
-router.post('/webdav/sessions/revoke', (req, res) => {
+router.post('/webdav/sessions/revoke', requireAdmin, (req, res) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId) {
@@ -447,7 +452,7 @@ router.post('/webdav/sessions/revoke', (req, res) => {
  * POST /api/settings/webdav/sessions/unrevoke
  * Re-allow a previously disconnected device session
  */
-router.post('/webdav/sessions/unrevoke', (req, res) => {
+router.post('/webdav/sessions/unrevoke', requireAdmin, (req, res) => {
   try {
     const { sessionId } = req.body;
     if (!sessionId) {
@@ -472,7 +477,7 @@ const uploadDb = multer({ dest: tmpDbDir });
  * GET /api/settings/export-db
  * Download teledrive.db backup file
  */
-router.get('/export-db', async (req, res) => {
+router.get('/export-db', requireAdmin, async (req, res) => {
   try {
     const dbPath = path.join(__dirname, '../../data/teledrive.db');
     if (!fs.existsSync(dbPath)) {
@@ -491,7 +496,7 @@ router.get('/export-db', async (req, res) => {
  * POST /api/settings/import-db
  * Upload and restore database backup (.enc.db or .db) with automatic decryption and integrity check
  */
-router.post('/import-db', uploadDb.single('database'), async (req, res) => {
+router.post('/import-db', requireAdmin, uploadDb.single('database'), async (req, res) => {
   let uploadedPath = null;
   try {
     if (!req.file) {
@@ -514,7 +519,7 @@ router.post('/import-db', uploadDb.single('database'), async (req, res) => {
  * POST /api/settings/restore-cloud-backup
  * 1-Click Restore database directly from Telegram Cloud backup
  */
-router.post('/restore-cloud-backup', async (req, res) => {
+router.post('/restore-cloud-backup', requireAdmin, async (req, res) => {
   try {
     const { telegramMessageId } = req.body;
     if (!telegramMessageId) {
@@ -533,7 +538,7 @@ router.post('/restore-cloud-backup', async (req, res) => {
  * GET /api/settings/backup-status
  * Get status of automated cloud backups and history
  */
-router.get('/backup-status', async (req, res) => {
+router.get('/backup-status', requireAdmin, async (req, res) => {
   try {
     const backupService = require('../services/backup');
     const status = backupService.getBackupStatus();
@@ -547,7 +552,7 @@ router.get('/backup-status', async (req, res) => {
  * POST /api/settings/backup-now
  * Trigger immediate encrypted database backup to Telegram
  */
-router.post('/backup-now', async (req, res) => {
+router.post('/backup-now', requireAdmin, async (req, res) => {
   try {
     const backupService = require('../services/backup');
     const result = await backupService.createEncryptedBackup();

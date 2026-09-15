@@ -91,7 +91,8 @@ const App = {
       // Check auth
       if (API.token) {
         try {
-          await API.verifyAuth();
+          const authRes = await API.verifyAuth();
+          this.user = authRes?.user || null;
           this.showScreen('app');
           // Load synced user preferences across devices
           await this.loadUserPreferences();
@@ -159,7 +160,11 @@ const App = {
         loginEl.removeAttribute('aria-hidden');
         loginEl.querySelectorAll('input, button').forEach(el => el.disabled = false);
         setTimeout(() => {
+          const emailInput = document.getElementById('login-email');
           const pwdInput = document.getElementById('login-password');
+          if (emailInput && !emailInput.value) {
+            emailInput.value = localStorage.getItem('teledrive_last_email') || 'admin@teledrive.local';
+          }
           if (pwdInput) pwdInput.focus();
         }, 50);
       } else {
@@ -399,8 +404,18 @@ const App = {
     try {
       const stats = await API.getStorageStats();
       const storageText = document.getElementById('storage-text');
+      const storageFill = document.getElementById('storage-fill');
       if (storageText && stats) {
-        storageText.textContent = `${stats.totalFiles || 0} files · ${UI.formatFileSize(stats.totalSize || 0)} used`;
+        const usedFormatted = UI.formatFileSize(stats.used || stats.totalSize || 0);
+        if (stats.limit && stats.limit > 0) {
+          const limitFormatted = UI.formatFileSize(stats.limit);
+          const percent = Math.min(100, Math.round(((stats.used || stats.totalSize || 0) / stats.limit) * 100));
+          storageText.textContent = `${stats.totalFiles || stats.fileCount || 0} files · ${usedFormatted} / ${limitFormatted} (${percent}%)`;
+          if (storageFill) storageFill.style.width = `${Math.max(4, percent)}%`;
+        } else {
+          storageText.textContent = `${stats.totalFiles || stats.fileCount || 0} files · ${usedFormatted} used`;
+          if (storageFill) storageFill.style.width = '15%';
+        }
       }
     } catch (e) {
       // Ignore
@@ -1481,7 +1496,9 @@ const App = {
     if (loginForm) {
       loginForm.onsubmit = async (e) => {
         e.preventDefault();
+        const emailInput = document.getElementById('login-email');
         const pwdInput = document.getElementById('login-password');
+        const email = emailInput ? emailInput.value.trim() : '';
         const pwd = pwdInput ? pwdInput.value : '';
         const spinner = document.getElementById('login-spinner');
         const btn = document.getElementById('login-btn');
@@ -1496,7 +1513,9 @@ const App = {
         if (btn) btn.disabled = true;
 
         try {
-          await API.login(pwd);
+          const authData = await API.login(email, pwd);
+          if (email) localStorage.setItem('teledrive_last_email', email);
+          this.user = authData?.user || null;
           UI.showToast('Login successful!', 'success');
           if (pwdInput) pwdInput.value = '';
           this.showScreen('app');
@@ -1514,7 +1533,7 @@ const App = {
           }
           this.loadStorageStats();
         } catch (err) {
-          UI.showToast(err.message || 'Invalid master password', 'error');
+          UI.showToast(err.message || 'Invalid email or password', 'error');
           if (pwdInput) {
             pwdInput.focus();
             pwdInput.select();
@@ -2649,9 +2668,163 @@ const App = {
           this.loadWebDavSettings();
         } else if (tab === 'backup') {
           this.loadBackupStatus();
+        } else if (tab === 'users') {
+          this.loadAdminUsers();
         }
       };
     });
+
+    // Save Profile Action
+    const btnSaveProfile = document.getElementById('btn-save-profile');
+    if (btnSaveProfile) {
+      btnSaveProfile.onclick = async () => {
+        const name = document.getElementById('profile-name-input')?.value.trim() || '';
+        const email = document.getElementById('profile-email-input')?.value.trim() || '';
+
+        if (!email) {
+          UI.showToast('Email address is required', 'warning');
+          return;
+        }
+
+        btnSaveProfile.disabled = true;
+        btnSaveProfile.innerHTML = '<span>Saving...</span>';
+
+        try {
+          const res = await API.updateProfile({ name, email });
+          if (res?.user) {
+            this.user = res.user;
+            const emailDisp = document.getElementById('profile-email-display');
+            if (emailDisp) emailDisp.textContent = this.user.email;
+          }
+          UI.showToast('Profile updated successfully!', 'success');
+        } catch (err) {
+          UI.showToast(err.message || 'Failed to update profile', 'error');
+        } finally {
+          btnSaveProfile.disabled = false;
+          btnSaveProfile.innerHTML = '<span>Save Profile</span>';
+        }
+      };
+    }
+
+    // Open Add User Modal
+    const btnOpenCreateUser = document.getElementById('btn-open-create-user');
+    if (btnOpenCreateUser) {
+      btnOpenCreateUser.onclick = () => {
+        const emailInp = document.getElementById('create-user-email');
+        const nameInp = document.getElementById('create-user-name');
+        const pwInp = document.getElementById('create-user-password');
+        const roleSel = document.getElementById('create-user-role');
+        const quotaInp = document.getElementById('create-user-quota');
+
+        if (emailInp) emailInp.value = '';
+        if (nameInp) nameInp.value = '';
+        if (pwInp) pwInp.value = '';
+        if (roleSel) roleSel.value = 'user';
+        if (quotaInp) quotaInp.value = '0';
+
+        UI.showModal('create-user-modal');
+        setTimeout(() => emailInp && emailInp.focus(), 100);
+      };
+    }
+
+    // Submit Create User
+    const btnSubmitCreateUser = document.getElementById('btn-submit-create-user');
+    if (btnSubmitCreateUser) {
+      btnSubmitCreateUser.onclick = async () => {
+        const email = document.getElementById('create-user-email')?.value.trim() || '';
+        const name = document.getElementById('create-user-name')?.value.trim() || '';
+        const password = document.getElementById('create-user-password')?.value || '';
+        const role = document.getElementById('create-user-role')?.value || 'user';
+        const quotaGB = parseFloat(document.getElementById('create-user-quota')?.value) || 0;
+        const storageLimit = Math.round(quotaGB * 1024 * 1024 * 1024);
+
+        if (!email || !password) {
+          UI.showToast('Email and initial password are required', 'warning');
+          return;
+        }
+        if (password.length < 6) {
+          UI.showToast('Password must be at least 6 characters', 'warning');
+          return;
+        }
+
+        btnSubmitCreateUser.disabled = true;
+        btnSubmitCreateUser.innerHTML = '<span>Creating...</span>';
+
+        try {
+          await API.createAdminUser({ email, name, password, role, storageLimit });
+          UI.showToast(`User ${email} created successfully!`, 'success');
+          UI.hideModal('create-user-modal');
+          await this.loadAdminUsers();
+        } catch (err) {
+          UI.showToast(err.message || 'Failed to create user', 'error');
+        } finally {
+          btnSubmitCreateUser.disabled = false;
+          btnSubmitCreateUser.innerHTML = '<span>Create User Account</span>';
+        }
+      };
+    }
+
+    // Submit Edit User
+    const btnSubmitEditUser = document.getElementById('btn-submit-edit-user');
+    if (btnSubmitEditUser) {
+      btnSubmitEditUser.onclick = async () => {
+        const id = document.getElementById('edit-user-id')?.value;
+        const name = document.getElementById('edit-user-name')?.value.trim() || '';
+        const role = document.getElementById('edit-user-role')?.value || 'user';
+        const status = document.getElementById('edit-user-status')?.value || 'active';
+        const quotaGB = parseFloat(document.getElementById('edit-user-quota')?.value) || 0;
+        const storageLimit = Math.round(quotaGB * 1024 * 1024 * 1024);
+
+        if (!id) return;
+
+        btnSubmitEditUser.disabled = true;
+        btnSubmitEditUser.innerHTML = '<span>Saving...</span>';
+
+        try {
+          await API.updateAdminUser(id, { name, role, status, storageLimit });
+          UI.showToast('User updated successfully!', 'success');
+          UI.hideModal('edit-user-modal');
+          await this.loadAdminUsers();
+        } catch (err) {
+          UI.showToast(err.message || 'Failed to update user', 'error');
+        } finally {
+          btnSubmitEditUser.disabled = false;
+          btnSubmitEditUser.innerHTML = '<span>Save Changes</span>';
+        }
+      };
+    }
+
+    // Submit Reset User Password
+    const btnSubmitResetUserPw = document.getElementById('btn-submit-reset-user-pw');
+    if (btnSubmitResetUserPw) {
+      btnSubmitResetUserPw.onclick = async () => {
+        const id = document.getElementById('reset-pw-user-id')?.value;
+        const password = document.getElementById('reset-user-new-pw')?.value || '';
+
+        if (!id || !password) {
+          UI.showToast('Please enter a new password', 'warning');
+          return;
+        }
+        if (password.length < 6) {
+          UI.showToast('Password must be at least 6 characters', 'warning');
+          return;
+        }
+
+        btnSubmitResetUserPw.disabled = true;
+        btnSubmitResetUserPw.innerHTML = '<span>Setting...</span>';
+
+        try {
+          await API.resetAdminUserPassword(id, password);
+          UI.showToast('Password reset successfully!', 'success');
+          UI.hideModal('reset-user-password-modal');
+        } catch (err) {
+          UI.showToast(err.message || 'Failed to reset password', 'error');
+        } finally {
+          btnSubmitResetUserPw.disabled = false;
+          btnSubmitResetUserPw.innerHTML = '<span>Set Password</span>';
+        }
+      };
+    }
 
     // Password Eye Toggles
     document.querySelectorAll('.btn-toggle-pass').forEach(btn => {
@@ -2672,7 +2845,7 @@ const App = {
       };
     });
 
-    // Change Master Password Action
+    // Change Account Password Action
     const btnSavePass = document.getElementById('btn-save-password');
     if (btnSavePass) {
       btnSavePass.onclick = async () => {
@@ -2688,8 +2861,8 @@ const App = {
           UI.showToast('New passwords do not match!', 'error');
           return;
         }
-        if (next.length < 4) {
-          UI.showToast('New password must be at least 4 characters long', 'warning');
+        if (next.length < 6) {
+          UI.showToast('New password must be at least 6 characters long', 'warning');
           return;
         }
 
@@ -2698,7 +2871,7 @@ const App = {
 
         try {
           await API.changePassword(curr, next);
-          UI.showToast('Master password changed successfully!', 'success');
+          UI.showToast('Password changed successfully!', 'success');
           document.getElementById('settings-current-pass').value = '';
           document.getElementById('settings-new-pass').value = '';
           document.getElementById('settings-confirm-pass').value = '';
@@ -3128,12 +3301,44 @@ const App = {
     this.initSettings();
     UI.showModal('settings-modal');
 
-    // Default to security tab or keep selected
+    // Default to account tab or keep selected
     const activeTabBtn = document.querySelector('.settings-tab-btn.active');
-    const tabName = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'security';
+    const tabName = activeTabBtn ? activeTabBtn.getAttribute('data-tab') : 'account';
     document.querySelectorAll('.settings-tab-pane').forEach(p => {
       p.style.display = p.id === `pane-${tabName}` ? 'flex' : 'none';
     });
+
+    // Populate user profile info
+    if (this.user) {
+      const emailDisp = document.getElementById('profile-email-display');
+      const roleBadge = document.getElementById('profile-role-badge');
+      const storageText = document.getElementById('profile-storage-text');
+      const nameInput = document.getElementById('profile-name-input');
+      const emailInput = document.getElementById('profile-email-input');
+
+      if (emailDisp) emailDisp.textContent = this.user.email || '';
+      if (roleBadge) {
+        roleBadge.textContent = this.user.role === 'admin' ? 'Admin' : 'User';
+        roleBadge.className = this.user.role === 'admin' ? 'badge-secure' : 'badge-count';
+      }
+      if (storageText) {
+        const used = UI.formatFileSize(this.user.storage_used || 0);
+        const limit = this.user.storage_limit > 0 ? UI.formatFileSize(this.user.storage_limit) : 'Unlimited';
+        storageText.textContent = `${used} / ${limit}`;
+      }
+      if (nameInput) nameInput.value = this.user.name || '';
+      if (emailInput) emailInput.value = this.user.email || '';
+    }
+
+    // Toggle Admin-only Users tab
+    const tabUsersNav = document.getElementById('tab-users-nav');
+    if (tabUsersNav) {
+      tabUsersNav.style.display = (this.user?.role === 'admin') ? 'inline-flex' : 'none';
+    }
+
+    if (tabName === 'users' && this.user?.role === 'admin') {
+      await this.loadAdminUsers();
+    }
 
     // Sync theme buttons
     const curTheme = document.documentElement.getAttribute('data-theme') || 'light';
@@ -3222,6 +3427,177 @@ const App = {
       await this.loadWebDavSettings();
     } catch (e) {
       console.warn('Could not fetch settings details:', e);
+    }
+  },
+
+  async loadAdminUsers() {
+    const listEl = document.getElementById('admin-users-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 13px;">Loading users...</div>';
+
+    try {
+      const res = await API.getAdminUsers();
+      const users = (res && res.users) || [];
+
+      if (users.length === 0) {
+        listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 13px;">No users found.</div>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      users.forEach(u => {
+        const isSelf = this.user && this.user.id === u.id;
+        const usedBytes = u.storage_used || 0;
+        const limitBytes = u.storage_limit || 0;
+        const isUnlimited = limitBytes === 0;
+        const pct = isUnlimited ? 0 : Math.min(100, Math.round((usedBytes / limitBytes) * 100));
+
+        const userCard = document.createElement('div');
+        userCard.className = 'admin-user-card';
+        userCard.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;';
+
+        const lastLoginText = u.last_login ? UI.formatDate(u.last_login) : 'Never';
+        const roleLabel = u.role === 'admin' ? 'Admin' : 'User';
+        const statusClass = u.status === 'active' ? 'background: rgba(16, 185, 129, 0.15); color: #10b981;' : 'background: rgba(239, 68, 68, 0.15); color: #ef4444;';
+        const roleClass = u.role === 'admin' ? 'background: rgba(99, 102, 241, 0.15); color: #6366f1;' : 'background: rgba(100, 116, 139, 0.15); color: var(--text-secondary);';
+
+        userCard.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; text-transform: uppercase; flex-shrink: 0;">
+                ${(u.name || u.email || 'U')[0]}
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <strong style="font-size: 14px; color: var(--text-primary);">${u.name || u.email}</strong>
+                  ${isSelf ? '<span style="font-size: 10px; padding: 1px 6px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-weight: 600;">You</span>' : ''}
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary);">${u.email}</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; ${roleClass}">${roleLabel}</span>
+              <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: capitalize; ${statusClass}">${u.status}</span>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; gap: 6px;">
+            <div>
+              <span>Storage: <strong>${UI.formatFileSize(usedBytes)}</strong> / ${isUnlimited ? 'Unlimited' : UI.formatFileSize(limitBytes)}</span>
+              ${!isUnlimited ? ` <span style="font-size: 11px;">(${pct}%)</span>` : ''}
+            </div>
+            <div>Last login: <span>${lastLoginText}</span></div>
+          </div>
+
+          ${!isUnlimited ? `
+          <div style="width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
+            <div style="height: 100%; width: ${pct}%; background: ${pct > 90 ? '#ef4444' : 'var(--accent-color)'}; border-radius: 2px;"></div>
+          </div>` : ''}
+
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; border-top: 1px solid var(--border-color); padding-top: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary icon-btn-sm btn-edit-user" title="Edit User" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              <span>Edit</span>
+            </button>
+            <button type="button" class="btn-secondary icon-btn-sm btn-reset-pw" title="Reset Password" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+              <span>Reset PW</span>
+            </button>
+            ${!isSelf ? `
+            <button type="button" class="btn-secondary icon-btn-sm btn-toggle-status" title="${u.status === 'active' ? 'Suspend User' : 'Activate User'}" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; ${u.status === 'active' ? 'color: #f59e0b;' : 'color: #10b981;'}">
+              <span>${u.status === 'active' ? 'Suspend' : 'Activate'}</span>
+            </button>
+            <button type="button" class="btn-danger icon-btn-sm btn-delete-user" title="Delete User" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              <span>Delete</span>
+            </button>` : ''}
+          </div>
+        `;
+
+        userCard.querySelector('.btn-edit-user')?.addEventListener('click', () => this.openEditUserModal(u));
+        userCard.querySelector('.btn-reset-pw')?.addEventListener('click', () => this.openResetUserPwModal(u));
+        userCard.querySelector('.btn-toggle-status')?.addEventListener('click', () => this.toggleUserStatus(u));
+        userCard.querySelector('.btn-delete-user')?.addEventListener('click', () => this.deleteUser(u));
+
+        listEl.appendChild(userCard);
+      });
+    } catch (err) {
+      listEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444; font-size: 13px;">Failed to load users: ${err.message}</div>`;
+    }
+  },
+
+  openEditUserModal(user) {
+    const idInp = document.getElementById('edit-user-id');
+    const nameInp = document.getElementById('edit-user-name');
+    const roleSel = document.getElementById('edit-user-role');
+    const statusSel = document.getElementById('edit-user-status');
+    const quotaInp = document.getElementById('edit-user-quota');
+    const titleEl = document.getElementById('edit-user-modal-title');
+
+    if (idInp) idInp.value = user.id;
+    if (nameInp) nameInp.value = user.name || '';
+    if (roleSel) roleSel.value = user.role || 'user';
+    if (statusSel) statusSel.value = user.status || 'active';
+    if (quotaInp) quotaInp.value = user.storage_limit > 0 ? (user.storage_limit / (1024 * 1024 * 1024)).toFixed(1) : 0;
+    if (titleEl) titleEl.textContent = `Edit User: ${user.email}`;
+
+    UI.showModal('edit-user-modal');
+  },
+
+  openResetUserPwModal(user) {
+    const idInp = document.getElementById('reset-pw-user-id');
+    const pwInp = document.getElementById('reset-user-new-pw');
+    const titleEl = document.getElementById('reset-pw-user-title');
+
+    if (idInp) idInp.value = user.id;
+    if (pwInp) pwInp.value = '';
+    if (titleEl) titleEl.textContent = `Reset Password: ${user.email}`;
+
+    UI.showModal('reset-user-password-modal');
+    setTimeout(() => pwInp && pwInp.focus(), 100);
+  },
+
+  async toggleUserStatus(user) {
+    const newStatus = user.status === 'active' ? 'suspended' : 'active';
+    const actionText = newStatus === 'suspended' ? 'Suspend' : 'Activate';
+
+    const confirmed = await UI.confirm({
+      title: `${actionText} User Account`,
+      message: `Are you sure you want to ${actionText.toLowerCase()} user "${user.email}"?${newStatus === 'suspended' ? ' They will be immediately blocked from signing in.' : ''}`,
+      confirmText: actionText,
+      confirmType: newStatus === 'suspended' ? 'danger' : 'primary',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await API.updateAdminUser(user.id, { status: newStatus });
+      UI.showToast(`User ${user.email} is now ${newStatus}`, 'success');
+      await this.loadAdminUsers();
+    } catch (err) {
+      UI.showToast(err.message || `Failed to ${actionText.toLowerCase()} user`, 'error');
+    }
+  },
+
+  async deleteUser(user) {
+    const confirmed = await UI.confirm({
+      title: 'Delete User Account',
+      message: `Are you sure you want to permanently delete user "${user.email}"?\n\nAll their metadata will be removed. This action cannot be undone.`,
+      confirmText: 'Delete User',
+      confirmType: 'danger',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await API.deleteAdminUser(user.id);
+      UI.showToast(`User ${user.email} deleted successfully`, 'success');
+      await this.loadAdminUsers();
+    } catch (err) {
+      UI.showToast(err.message || 'Failed to delete user', 'error');
     }
   },
 

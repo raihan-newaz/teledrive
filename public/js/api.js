@@ -104,8 +104,14 @@ const API = {
   },
 
   // ─── Auth ─────────────────────────────────────────────────────────
-  async login(password) {
-    const data = await this.request('POST', '/api/auth/login', { password });
+  async login(emailOrPassword, maybePassword) {
+    let payload = {};
+    if (maybePassword !== undefined) {
+      payload = { email: emailOrPassword, password: maybePassword };
+    } else {
+      payload = { password: emailOrPassword };
+    }
+    const data = await this.request('POST', '/api/auth/login', payload);
     if (data && data.token) {
       this.setToken(data.token);
     }
@@ -114,6 +120,14 @@ const API = {
 
   async verifyAuth() {
     return this.request('GET', '/api/auth/verify');
+  },
+
+  async getProfile() {
+    return this.request('GET', '/api/auth/me');
+  },
+
+  async updateProfile(data) {
+    return this.request('PUT', '/api/auth/profile', data);
   },
 
   async logout() {
@@ -131,6 +145,31 @@ const API = {
 
   async changePassword(currentPassword, newPassword) {
     return this.request('POST', '/api/auth/change-password', { currentPassword, newPassword });
+  },
+
+  // ─── Admin (Multi-User) ────────────────────────────────────────────
+  async getAdminUsers() {
+    return this.request('GET', '/api/admin/users');
+  },
+
+  async createAdminUser(data) {
+    return this.request('POST', '/api/admin/users', data);
+  },
+
+  async updateAdminUser(id, data) {
+    return this.request('PUT', `/api/admin/users/${id}`, data);
+  },
+
+  async resetAdminUserPassword(id, password) {
+    return this.request('POST', `/api/admin/users/${id}/reset-password`, { password });
+  },
+
+  async deleteAdminUser(id) {
+    return this.request('DELETE', `/api/admin/users/${id}`);
+  },
+
+  async getAdminStats() {
+    return this.request('GET', '/api/admin/stats');
   },
 
   // ─── Folders ──────────────────────────────────────────────────────

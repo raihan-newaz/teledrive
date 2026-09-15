@@ -73,7 +73,7 @@ function getMimeType(filename) {
  * Resolve a WebDAV URL path into database folder and file items
  * e.g., "/FolderA/SubB/myfile.txt" -> { type: 'file', item: fileRecord, parentId: '...' }
  */
-function resolveWebdavPath(requestPath) {
+function resolveWebdavPath(requestPath, userId = null) {
   // Normalize and decode URI path
   let cleanPath = decodeURIComponent(requestPath || '')
     .replace(/^\/DavWWWRoot\/webdav/i, '')
@@ -93,10 +93,15 @@ function resolveWebdavPath(requestPath) {
     const isLast = (i === segments.length - 1);
 
     // Look for a folder with this name under currentParentId
-    const folder = db.get(
-      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-      [segment, currentParentId, currentParentId]
-    );
+    const folder = userId
+      ? db.get(
+        'SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
+        [segment, userId, currentParentId, currentParentId]
+      )
+      : db.get(
+        'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
+        [segment, currentParentId, currentParentId]
+      );
 
     if (folder) {
       if (isLast) {
@@ -108,10 +113,15 @@ function resolveWebdavPath(requestPath) {
 
     if (isLast) {
       // Check if it matches a file under currentParentId
-      const file = db.get(
-        'SELECT * FROM files WHERE name = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))',
-        [segment, currentParentId, currentParentId]
-      );
+      const file = userId
+        ? db.get(
+          'SELECT * FROM files WHERE name = ? AND user_id = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))',
+          [segment, userId, currentParentId, currentParentId]
+        )
+        : db.get(
+          'SELECT * FROM files WHERE name = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))',
+          [segment, currentParentId, currentParentId]
+        );
 
       if (file) {
         return { type: 'file', item: file, parentId: currentParentId };
@@ -200,8 +210,9 @@ router.all('*', async (req, res, next) => {
     return next();
   }
 
+  const userId = req.user ? req.user.id : null;
   const depth = req.headers['depth'] || '1'; // '0', '1', or 'infinity'
-  const resolved = resolveWebdavPath(req.path);
+  const resolved = resolveWebdavPath(req.path, userId);
   
   // Base URL prefix as requested by client (e.g., /webdav or /DavWWWRoot/webdav)
   const reqBase = (req.baseUrl || '/webdav').replace(/\/+$/, '');
@@ -216,13 +227,17 @@ router.all('*', async (req, res, next) => {
 
     if (depth !== '0') {
       // List root folders
-      const rootFolders = db.all('SELECT * FROM folders WHERE parent_id IS NULL ORDER BY name ASC');
+      const rootFolders = userId
+        ? db.all('SELECT * FROM folders WHERE parent_id IS NULL AND user_id = ? ORDER BY name ASC', [userId])
+        : db.all('SELECT * FROM folders WHERE parent_id IS NULL ORDER BY name ASC');
       for (const f of rootFolders) {
         responsesXml += renderFolderXml(`${reqBase}/${encodeURIComponent(f.name)}/`, f.name, f.created_at, f.updated_at);
       }
 
       // List root files
-      const rootFiles = db.all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC');
+      const rootFiles = userId
+        ? db.all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 AND user_id = ? ORDER BY name ASC', [userId])
+        : db.all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC');
       for (const f of rootFiles) {
         responsesXml += renderFileXml(`${reqBase}/${encodeURIComponent(f.name)}`, f);
       }
@@ -234,13 +249,17 @@ router.all('*', async (req, res, next) => {
 
     if (depth !== '0') {
       // Subfolders
-      const subFolders = db.all('SELECT * FROM folders WHERE parent_id = ? ORDER BY name ASC', [folder.id]);
+      const subFolders = userId
+        ? db.all('SELECT * FROM folders WHERE parent_id = ? AND user_id = ? ORDER BY name ASC', [folder.id, userId])
+        : db.all('SELECT * FROM folders WHERE parent_id = ? ORDER BY name ASC', [folder.id]);
       for (const f of subFolders) {
         responsesXml += renderFolderXml(`${basePath}/${encodeURIComponent(f.name)}/`, f.name, f.created_at, f.updated_at);
       }
 
       // Files in folder
-      const files = db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0 ORDER BY name ASC', [folder.id]);
+      const files = userId
+        ? db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0 AND user_id = ? ORDER BY name ASC', [folder.id, userId])
+        : db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0 ORDER BY name ASC', [folder.id]);
       for (const f of files) {
         responsesXml += renderFileXml(`${basePath}/${encodeURIComponent(f.name)}`, f);
       }
@@ -263,15 +282,20 @@ router.all('*', async (req, res, next) => {
 
 // ─── WebDAV GET & HEAD Handler (Stream / Download Files) ───────────────
 router.get('*', async (req, res) => {
-  const resolved = resolveWebdavPath(req.path);
+  const userId = req.user ? req.user.id : null;
+  const resolved = resolveWebdavPath(req.path, userId);
 
   if (resolved.type === 'root' || resolved.type === 'folder') {
     // Return simple directory listing HTML for web browsers
     const folderName = resolved.type === 'root' ? 'TeleDrive Root' : resolved.item.name;
     const folderId = resolved.type === 'root' ? null : resolved.item.id;
 
-    const folders = db.all('SELECT * FROM folders WHERE (parent_id = ? OR (parent_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
-    const files = db.all('SELECT * FROM files WHERE is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
+    const folders = userId
+      ? db.all('SELECT * FROM folders WHERE (parent_id = ? OR (parent_id IS NULL AND ? IS NULL)) AND user_id = ? ORDER BY name ASC', [folderId, folderId, userId])
+      : db.all('SELECT * FROM folders WHERE (parent_id = ? OR (parent_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
+    const files = userId
+      ? db.all('SELECT * FROM files WHERE is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL)) AND user_id = ? ORDER BY name ASC', [folderId, folderId, userId])
+      : db.all('SELECT * FROM files WHERE is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL)) ORDER BY name ASC', [folderId, folderId]);
 
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeXml(folderName)} - TeleDrive WebDAV</title><style>body{font-family:sans-serif;padding:24px;line-height:1.6;}ul{list-style:none;padding:0;}li{padding:6px 0;}a{color:#1a73e8;text-decoration:none;}a:hover{text-decoration:underline;}</style></head><body>`;
     html += `<h2>Index of ${escapeXml(req.path)}</h2><hr><ul>`;
@@ -350,7 +374,13 @@ router.get('*', async (req, res) => {
 
   // 2. Stream from Telegram on-demand
   try {
-    const encryptionKey = process.env.ENCRYPTION_KEY;
+    let encryptionKey = req.user?.encryptionKey || process.env.ENCRYPTION_KEY;
+    if (file.user_id && (!req.user || req.user.id !== file.user_id)) {
+      const owner = db.getUserById(file.user_id);
+      if (owner && owner.encryption_key) {
+        encryptionKey = cryptoModule.unwrapUserKey(owner.encryption_key, process.env.ENCRYPTION_KEY || 'default-encryption-key');
+      }
+    }
     if (!encryptionKey) throw new Error('Encryption key not configured');
 
     const tempDecPath = path.join(tmpDir, `webdav_get_${file.id}_${Date.now()}.dec`);
@@ -399,7 +429,8 @@ router.get('*', async (req, res) => {
 });
 
 router.head('*', async (req, res) => {
-  const resolved = resolveWebdavPath(req.path);
+  const userId = req.user ? req.user.id : null;
+  const resolved = resolveWebdavPath(req.path, userId);
   if (resolved.type === 'file') {
     const file = resolved.item;
     res.status(200).set({
@@ -417,6 +448,7 @@ router.head('*', async (req, res) => {
 
 // ─── WebDAV PUT Handler (Upload & Save/Edit Files) ─────────────────────
 router.put('*', async (req, res) => {
+  const userId = req.user ? req.user.id : null;
   const cleanPath = decodeURIComponent(req.path || '')
     .replace(/^\/DavWWWRoot\/webdav/i, '')
     .replace(/^\/DavWWWRoot/i, '')
@@ -435,14 +467,13 @@ router.put('*', async (req, res) => {
   // Resolve or create parent directory tree
   let parentFolderId = null;
   for (const dir of dirSegments) {
-    let folder = db.get(
-      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-      [dir, parentFolderId, parentFolderId]
-    );
+    let folder = userId
+      ? db.get('SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, userId, parentFolderId, parentFolderId])
+      : db.get('SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, parentFolderId, parentFolderId]);
     if (!folder) {
       const newFolderId = uuidv4();
       const now = new Date().toISOString();
-      db.run('INSERT INTO folders (id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [newFolderId, dir, parentFolderId, now, now]);
+      db.run('INSERT INTO folders (id, user_id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [newFolderId, userId, dir, parentFolderId, now, now]);
       folder = { id: newFolderId };
     }
     parentFolderId = folder.id;
@@ -463,8 +494,16 @@ router.put('*', async (req, res) => {
 
     const fileSize = fs.statSync(tempUploadPath).size;
 
-    // Encrypt file using AES-256-GCM
-    const encryptionKey = process.env.ENCRYPTION_KEY;
+    // Check user storage quota
+    if (req.user && req.user.storageLimit > 0) {
+      const currentUsed = db.recalculateUserStorage(req.user.id);
+      if (currentUsed + fileSize > req.user.storageLimit) {
+        return res.status(413).set('Content-Type', 'text/plain').send('Storage quota exceeded.');
+      }
+    }
+
+    // Encrypt file using user's encryption key
+    const encryptionKey = req.user?.encryptionKey || process.env.ENCRYPTION_KEY;
     if (!encryptionKey) throw new Error('Encryption key not configured in environment');
 
     const { iv, salt } = await cryptoModule.encryptFile(tempUploadPath, tempEncPath, encryptionKey);
@@ -476,10 +515,9 @@ router.put('*', async (req, res) => {
     }
 
     // Check if file already exists in this folder (File Edit / Overwrite scenario)
-    const existing = db.get(
-      'SELECT * FROM files WHERE name = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))',
-      [filename, parentFolderId, parentFolderId]
-    );
+    const existing = userId
+      ? db.get('SELECT * FROM files WHERE name = ? AND user_id = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))', [filename, userId, parentFolderId, parentFolderId])
+      : db.get('SELECT * FROM files WHERE name = ? AND is_trashed = 0 AND (folder_id = ? OR (folder_id IS NULL AND ? IS NULL))', [filename, parentFolderId, parentFolderId]);
 
     const now = new Date().toISOString();
     let fileId;
@@ -504,10 +542,14 @@ router.put('*', async (req, res) => {
       fileId = uuidv4();
       isCreated = true;
       db.run(
-        `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
-        [fileId, filename, getMimeType(filename), fileSize, parentFolderId, message.id, iv, salt, now, now]
+        `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
+        [fileId, userId, filename, getMimeType(filename), fileSize, parentFolderId, message.id, iv, salt, now, now]
       );
+    }
+
+    if (userId) {
+      db.recalculateUserStorage(userId);
     }
 
     // Place into local cache for instant playback
@@ -535,6 +577,7 @@ router.put('*', async (req, res) => {
 router.all('*', async (req, res, next) => {
   if (req.method.toUpperCase() !== 'MKCOL') return next();
 
+  const userId = req.user ? req.user.id : null;
   const cleanPath = decodeURIComponent(req.path || '')
     .replace(/^\/DavWWWRoot\/webdav/i, '')
     .replace(/^\/DavWWWRoot/i, '')
@@ -552,10 +595,9 @@ router.all('*', async (req, res, next) => {
   // Resolve parent folder
   let parentFolderId = null;
   for (const dir of dirSegments) {
-    const folder = db.get(
-      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-      [dir, parentFolderId, parentFolderId]
-    );
+    const folder = userId
+      ? db.get('SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, userId, parentFolderId, parentFolderId])
+      : db.get('SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, parentFolderId, parentFolderId]);
     if (!folder) {
       return res.status(409).set('Content-Type', 'text/plain').send('Parent directory does not exist.');
     }
@@ -563,19 +605,18 @@ router.all('*', async (req, res, next) => {
   }
 
   // Check if folder already exists
-  const existing = db.get(
-    'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-    [folderName, parentFolderId, parentFolderId]
-  );
+  const existing = userId
+    ? db.get('SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [folderName, userId, parentFolderId, parentFolderId])
+    : db.get('SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [folderName, parentFolderId, parentFolderId]);
   if (existing) {
     return res.status(405).set('Content-Type', 'text/plain').send('Folder already exists.');
   }
 
   const newId = uuidv4();
   const now = new Date().toISOString();
-  db.run('INSERT INTO folders (id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [newId, folderName, parentFolderId, now, now]);
+  db.run('INSERT INTO folders (id, user_id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [newId, userId, folderName, parentFolderId, now, now]);
 
-  const createdFolder = { id: newId, name: folderName, parent_id: parentFolderId, created_at: now, updated_at: now };
+  const createdFolder = { id: newId, user_id: userId, name: folderName, parent_id: parentFolderId, created_at: now, updated_at: now };
   try {
     const eventBroadcaster = require('../services/eventBroadcaster');
     eventBroadcaster.broadcast('folder_created', { folder: createdFolder, parentId: parentFolderId });
@@ -587,7 +628,8 @@ router.all('*', async (req, res, next) => {
 
 // ─── WebDAV DELETE Handler (Delete Files & Folders) ────────────────────
 router.delete('*', async (req, res) => {
-  const resolved = resolveWebdavPath(req.path);
+  const userId = req.user ? req.user.id : null;
+  const resolved = resolveWebdavPath(req.path, userId);
 
   if (resolved.type === 'root') {
     return res.status(405).set('Content-Type', 'text/plain').send('Cannot delete root folder.');
@@ -609,6 +651,10 @@ router.delete('*', async (req, res) => {
       try { if (fs.existsSync(cached)) fs.unlinkSync(cached); } catch (e) {}
       // Delete from DB
       db.run('DELETE FROM files WHERE id = ?', [file.id]);
+
+      if (file.user_id || userId) {
+        db.recalculateUserStorage(file.user_id || userId);
+      }
 
       try {
         const eventBroadcaster = require('../services/eventBroadcaster');
@@ -643,6 +689,10 @@ router.delete('*', async (req, res) => {
         db.run('DELETE FROM folders WHERE id = ?', [fId]);
       }
 
+      if (userId) {
+        db.recalculateUserStorage(userId);
+      }
+
       try {
         const eventBroadcaster = require('../services/eventBroadcaster');
         eventBroadcaster.broadcast('folder_deleted', { folderId: folder.id });
@@ -662,12 +712,13 @@ router.delete('*', async (req, res) => {
 router.all('*', async (req, res, next) => {
   if (req.method.toUpperCase() !== 'MOVE') return next();
 
+  const userId = req.user ? req.user.id : null;
   const destHeader = req.headers['destination'];
   if (!destHeader) {
     return res.status(400).set('Content-Type', 'text/plain').send('Missing Destination header.');
   }
 
-  const srcResolved = resolveWebdavPath(req.path);
+  const srcResolved = resolveWebdavPath(req.path, userId);
   if (srcResolved.type === 'not_found' || srcResolved.type === 'root') {
     return res.status(404).set('Content-Type', 'text/plain').send('Source resource not found.');
   }
@@ -699,10 +750,9 @@ router.all('*', async (req, res, next) => {
   // Resolve destination parent folder
   let targetParentId = null;
   for (const dir of destDirSegments) {
-    const folder = db.get(
-      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-      [dir, targetParentId, targetParentId]
-    );
+    const folder = userId
+      ? db.get('SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, userId, targetParentId, targetParentId])
+      : db.get('SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, targetParentId, targetParentId]);
     if (!folder) {
       return res.status(409).set('Content-Type', 'text/plain').send('Destination parent directory does not exist.');
     }
@@ -730,12 +780,13 @@ router.all('*', async (req, res, next) => {
 router.all('*', async (req, res, next) => {
   if (req.method.toUpperCase() !== 'COPY') return next();
 
+  const userId = req.user ? req.user.id : null;
   const destHeader = req.headers['destination'];
   if (!destHeader) {
     return res.status(400).set('Content-Type', 'text/plain').send('Missing Destination header.');
   }
 
-  const srcResolved = resolveWebdavPath(req.path);
+  const srcResolved = resolveWebdavPath(req.path, userId);
   if (srcResolved.type === 'not_found' || srcResolved.type === 'root') {
     return res.status(404).set('Content-Type', 'text/plain').send('Source resource not found.');
   }
@@ -764,10 +815,9 @@ router.all('*', async (req, res, next) => {
 
   let targetParentId = null;
   for (const dir of destDirSegments) {
-    const folder = db.get(
-      'SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))',
-      [dir, targetParentId, targetParentId]
-    );
+    const folder = userId
+      ? db.get('SELECT * FROM folders WHERE name = ? AND user_id = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, userId, targetParentId, targetParentId])
+      : db.get('SELECT * FROM folders WHERE name = ? AND (parent_id = ? OR (parent_id IS NULL AND ? IS NULL))', [dir, targetParentId, targetParentId]);
     if (!folder) {
       return res.status(409).set('Content-Type', 'text/plain').send('Destination parent directory does not exist.');
     }
@@ -780,9 +830,9 @@ router.all('*', async (req, res, next) => {
       const srcFile = srcResolved.item;
       const newFileId = uuidv4();
       db.run(
-        `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-        [newFileId, targetName, srcFile.mime_type, srcFile.size, targetParentId, srcFile.telegram_message_id, srcFile.iv, srcFile.salt, srcFile.is_chunked || 0, srcFile.total_chunks || 1, now, now]
+        `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+        [newFileId, userId, targetName, srcFile.mime_type, srcFile.size, targetParentId, srcFile.telegram_message_id, srcFile.iv, srcFile.salt, srcFile.is_chunked || 0, srcFile.total_chunks || 1, now, now]
       );
       // Also duplicate chunks if chunked
       if (srcFile.is_chunked) {
@@ -799,32 +849,42 @@ router.all('*', async (req, res, next) => {
           });
         }
       }
+      if (userId) {
+        db.recalculateUserStorage(userId);
+      }
       res.status(201).end();
     } else if (srcResolved.type === 'folder') {
       const copyFolderRecursive = (srcF, destParentId, newFolderName) => {
         const newFId = uuidv4();
         const fNow = new Date().toISOString();
-        db.run('INSERT INTO folders (id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [newFId, newFolderName, destParentId, fNow, fNow]);
+        db.run('INSERT INTO folders (id, user_id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [newFId, userId, newFolderName, destParentId, fNow, fNow]);
         
         // Copy files in folder
-        const childFiles = db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0', [srcF.id]);
+        const childFiles = userId
+          ? db.all('SELECT * FROM files WHERE folder_id = ? AND user_id = ? AND is_trashed = 0', [srcF.id, userId])
+          : db.all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0', [srcF.id]);
         for (const cf of childFiles) {
           const nFileId = uuidv4();
           db.run(
-            `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-            [nFileId, cf.name, cf.mime_type, cf.size, newFId, cf.telegram_message_id, cf.iv, cf.salt, cf.is_chunked || 0, cf.total_chunks || 1, fNow, fNow]
+            `INSERT INTO files (id, user_id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+            [nFileId, userId, cf.name, cf.mime_type, cf.size, newFId, cf.telegram_message_id, cf.iv, cf.salt, cf.is_chunked || 0, cf.total_chunks || 1, fNow, fNow]
           );
         }
 
         // Copy subfolders
-        const childFolders = db.all('SELECT * FROM folders WHERE parent_id = ?', [srcF.id]);
+        const childFolders = userId
+          ? db.all('SELECT * FROM folders WHERE parent_id = ? AND user_id = ?', [srcF.id, userId])
+          : db.all('SELECT * FROM folders WHERE parent_id = ?', [srcF.id]);
         for (const chF of childFolders) {
           copyFolderRecursive(chF, newFId, chF.name);
         }
       };
 
       copyFolderRecursive(srcResolved.item, targetParentId, targetName);
+      if (userId) {
+        db.recalculateUserStorage(userId);
+      }
       res.status(201).end();
     }
   } catch (err) {
