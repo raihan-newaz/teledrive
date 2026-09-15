@@ -747,6 +747,8 @@ router.post('/check-duplicate', (req, res) => {
  * POST /upload — Upload single file with AES-256-GCM encryption + Instant Local Cache
  */
 router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) => {
+  req.setTimeout(0);
+  res.setTimeout(0);
   let originalPath = null;
   let encryptedPath = null;
 
@@ -807,7 +809,7 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const fileRecord = db.getFile(fileId, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId, userId }, userId);
     } catch (e) {}
 
     res.json({ success: true, file: fileRecord });
@@ -827,7 +829,19 @@ const assemblyLocks = new Set();
  */
 function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res, userKey = null, sha256 = null) {
   if (assemblyLocks.has(uploadId)) {
-    return res.json({ success: true, message: 'Assembly in progress' });
+    let attempts = 0;
+    const checkInterval = setInterval(() => {
+      attempts++;
+      const existing = db.getFile(uploadId, userId);
+      if (existing || !assemblyLocks.has(uploadId) || attempts > 30) {
+        clearInterval(checkInterval);
+        if (existing) {
+          return res.json({ success: true, done: true, file: existing });
+        }
+        return res.json({ success: true, done: false, message: 'Assembly in progress' });
+      }
+    }, 150);
+    return;
   }
   assemblyLocks.add(uploadId);
 
@@ -877,7 +891,7 @@ function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, 
     const fileRecord = db.getFile(fileId, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId, userId }, userId);
     } catch (e) {}
 
     return res.json({ success: true, done: true, file: fileRecord });
@@ -950,6 +964,8 @@ router.delete('/upload-session/:uploadId', async (req, res) => {
  * POST /upload-chunk — Auto-Chunked Resumable Upload
  */
 router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, res) => {
+  req.setTimeout(0);
+  res.setTimeout(0);
   let originalPath = null;
   let encryptedPath = null;
 
@@ -1311,7 +1327,7 @@ router.patch('/:id', (req, res) => {
     const updatedFile = db.getFile(req.params.id, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_updated', { file: updatedFile, folderId: updatedFile.folder_id });
+      eventBroadcaster.broadcast('file_updated', { file: updatedFile, folderId: updatedFile.folder_id, userId }, userId);
     } catch (e) {}
     res.json(updatedFile);
   } catch (error) {

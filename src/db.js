@@ -314,6 +314,20 @@ async function initialize() {
       run('UPDATE files SET user_id = ? WHERE user_id IS NULL OR user_id = ""', [primaryAdmin.id]);
       run('UPDATE folders SET user_id = ? WHERE user_id IS NULL OR user_id = ""', [primaryAdmin.id]);
     }
+
+    // MAXIMUM SECURITY: Ensure every existing user has their own unique 32-byte AES-256 encryption key
+    const cryptoModule = require('./crypto');
+    const masterKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+    const allExistingUsers = all('SELECT id, encryption_key FROM users');
+    if (Array.isArray(allExistingUsers)) {
+      for (const u of allExistingUsers) {
+        if (!u.encryption_key || u.encryption_key === 'default-encryption-key' || u.encryption_key === process.env.ENCRYPTION_KEY) {
+          const rawKey = cryptoModule.generateUserEncryptionKey();
+          const wrapped = cryptoModule.wrapUserKey(rawKey, masterKey);
+          run('UPDATE users SET encryption_key = ? WHERE id = ?', [wrapped, u.id]);
+        }
+      }
+    }
   } catch (migErr) {
     console.warn('[DB] User auto-migration notice:', migErr.message);
   }
@@ -455,28 +469,16 @@ function unlockFolderPermanently(id) {
  * @returns {Object} { folders: [...], files: [...] }
  */
 function getFolderContents(folderId, userId = null) {
-  if (userId) {
-    if (folderId) {
-      return {
-        folders: all('SELECT * FROM folders WHERE parent_id = ? AND user_id = ? ORDER BY name ASC', [folderId, userId]),
-        files: all('SELECT * FROM files WHERE folder_id = ? AND user_id = ? AND is_trashed = 0 ORDER BY name ASC', [folderId, userId])
-      };
-    } else {
-      return {
-        folders: all('SELECT * FROM folders WHERE parent_id IS NULL AND user_id = ? ORDER BY name ASC', [userId]),
-        files: all('SELECT * FROM files WHERE folder_id IS NULL AND user_id = ? AND is_trashed = 0 ORDER BY name ASC', [userId])
-      };
-    }
-  }
+  if (!userId) return { folders: [], files: [] };
   if (folderId) {
     return {
-      folders: all('SELECT * FROM folders WHERE parent_id = ? ORDER BY name ASC', [folderId]),
-      files: all('SELECT * FROM files WHERE folder_id = ? AND is_trashed = 0 ORDER BY name ASC', [folderId])
+      folders: all('SELECT * FROM folders WHERE parent_id = ? AND user_id = ? ORDER BY name ASC', [folderId, userId]),
+      files: all('SELECT * FROM files WHERE folder_id = ? AND user_id = ? AND is_trashed = 0 ORDER BY name ASC', [folderId, userId])
     };
   } else {
     return {
-      folders: all('SELECT * FROM folders WHERE parent_id IS NULL ORDER BY name ASC'),
-      files: all('SELECT * FROM files WHERE folder_id IS NULL AND is_trashed = 0 ORDER BY name ASC')
+      folders: all('SELECT * FROM folders WHERE parent_id IS NULL AND user_id = ? ORDER BY name ASC', [userId]),
+      files: all('SELECT * FROM files WHERE folder_id IS NULL AND user_id = ? AND is_trashed = 0 ORDER BY name ASC', [userId])
     };
   }
 }
@@ -484,98 +486,71 @@ function getFolderContents(folderId, userId = null) {
 /**
  * Searches for files by name (excluding files in locked folders for privacy)
  * @param {string} query - The search query
- * @param {string|null} userId - User ID
+ * @param {string} userId - User ID
  * @returns {Array} Array of matching files
  */
 function searchFiles(query, userId = null) {
-  if (userId) {
-    return all(
-      `SELECT f.* FROM files f
-       LEFT JOIN folders fo ON f.folder_id = fo.id
-       WHERE f.name LIKE ? AND f.user_id = ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
-       ORDER BY f.name ASC`,
-      ['%' + query + '%', userId]
-    );
-  }
+  if (!userId || !query) return [];
   return all(
     `SELECT f.* FROM files f
      LEFT JOIN folders fo ON f.folder_id = fo.id
-     WHERE f.name LIKE ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     WHERE f.name LIKE ? AND f.user_id = ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
      ORDER BY f.name ASC`,
-    ['%' + query + '%']
+    ['%' + query + '%', userId]
   );
 }
 
 /**
  * Searches for folders by name
  * @param {string} query - The search query
- * @param {string|null} userId - User ID
+ * @param {string} userId - User ID
  * @returns {Array} Array of matching folders
  */
 function searchFolders(query, userId = null) {
-  if (userId) {
-    return all('SELECT * FROM folders WHERE name LIKE ? AND user_id = ? ORDER BY name ASC', ['%' + query + '%', userId]);
-  }
-  return all('SELECT * FROM folders WHERE name LIKE ? ORDER BY name ASC', ['%' + query + '%']);
+  if (!userId || !query) return [];
+  return all('SELECT * FROM folders WHERE name LIKE ? AND user_id = ? ORDER BY name ASC', ['%' + query + '%', userId]);
 }
 
 /**
  * Gets all starred files (excluding files in locked folders for privacy)
- * @param {string|null} userId - User ID
+ * @param {string} userId - User ID
  * @returns {Array} Array of starred files
  */
 function getStarredFiles(userId = null) {
-  if (userId) {
-    return all(
-      `SELECT f.* FROM files f
-       LEFT JOIN folders fo ON f.folder_id = fo.id
-       WHERE f.is_starred = 1 AND f.user_id = ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
-       ORDER BY f.updated_at DESC`,
-      [userId]
-    );
-  }
+  if (!userId) return [];
   return all(
     `SELECT f.* FROM files f
      LEFT JOIN folders fo ON f.folder_id = fo.id
-     WHERE f.is_starred = 1 AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
-     ORDER BY f.updated_at DESC`
+     WHERE f.is_starred = 1 AND f.user_id = ? AND f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     ORDER BY f.updated_at DESC`,
+    [userId]
   );
 }
 
 /**
  * Gets all trashed files
- * @param {string|null} userId - User ID
+ * @param {string} userId - User ID
  * @returns {Array} Array of trashed files
  */
 function getTrashedFiles(userId = null) {
-  if (userId) {
-    return all('SELECT * FROM files WHERE is_trashed = 1 AND user_id = ? ORDER BY trashed_at DESC', [userId]);
-  }
-  return all('SELECT * FROM files WHERE is_trashed = 1 ORDER BY trashed_at DESC');
+  if (!userId) return [];
+  return all('SELECT * FROM files WHERE is_trashed = 1 AND user_id = ? ORDER BY trashed_at DESC', [userId]);
 }
 
 /**
  * Gets recent files (excluding files in locked folders for privacy)
  * @param {number} limit - Max number of files to return
- * @param {string|null} userId - User ID
+ * @param {string} userId - User ID
  * @returns {Array} Array of recent files
  */
 function getRecentFiles(limit = 20, userId = null) {
-  if (userId) {
-    return all(
-      `SELECT f.* FROM files f
-       LEFT JOIN folders fo ON f.folder_id = fo.id
-       WHERE f.is_trashed = 0 AND f.user_id = ? AND (fo.is_locked IS NULL OR fo.is_locked = 0)
-       ORDER BY f.created_at DESC LIMIT ?`,
-      [userId, limit]
-    );
-  }
+  if (!userId) return [];
   return all(
     `SELECT f.* FROM files f
      LEFT JOIN folders fo ON f.folder_id = fo.id
-     WHERE f.is_trashed = 0 AND (fo.is_locked IS NULL OR fo.is_locked = 0)
+     WHERE f.is_trashed = 0 AND f.user_id = ? AND (fo.is_locked IS NULL OR fo.is_locked = 0)
      ORDER BY f.created_at DESC LIMIT ?`,
-    [limit]
+    [userId, limit]
   );
 }
 
@@ -858,10 +833,18 @@ function createUser(user) {
   const filePrefix = user.filePrefix !== undefined ? user.filePrefix : (user.file_prefix || null);
   const now = new Date().toISOString();
 
+  let encKey = user.encryptionKey || user.encryption_key;
+  if (!encKey) {
+    const cryptoModule = require('./crypto');
+    const masterKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+    const rawKey = cryptoModule.generateUserEncryptionKey();
+    encKey = cryptoModule.wrapUserKey(rawKey, masterKey);
+  }
+
   run(`
     INSERT INTO users (id, email, password_hash, name, role, status, encryption_key, storage_limit, storage_used, file_prefix, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-  `, [id, user.email.toLowerCase().trim(), user.passwordHash || user.password_hash, user.name, role, status, user.encryptionKey || user.encryption_key, storageLimit, filePrefix, now, now]);
+  `, [id, user.email.toLowerCase().trim(), user.passwordHash || user.password_hash, user.name, role, status, encKey, storageLimit, filePrefix, now, now]);
 
   save(true);
   return getUserById(id);

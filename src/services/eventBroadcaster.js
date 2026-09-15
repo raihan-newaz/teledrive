@@ -1,4 +1,4 @@
-﻿const EventEmitter = require('events');
+const EventEmitter = require('events');
 
 /**
  * Real-Time Event Broadcaster using Server-Sent Events (SSE)
@@ -16,7 +16,7 @@ class EventBroadcaster extends EventEmitter {
   }
 
   /**
-   * Register a new SSE client connection
+   * Register a new SSE client connection (scoped to authenticated user)
    */
   addClient(res, req) {
     res.writeHead(200, {
@@ -29,7 +29,8 @@ class EventBroadcaster extends EventEmitter {
 
     res.write(':connected\n\n');
 
-    const client = { res, req, connectedAt: Date.now() };
+    const userId = req.user ? String(req.user.id) : null;
+    const client = { res, req, userId, connectedAt: Date.now() };
     this.clients.add(client);
 
     req.on('close', () => {
@@ -51,13 +52,29 @@ class EventBroadcaster extends EventEmitter {
   }
 
   /**
-   * Broadcast an event to all connected clients
+   * Broadcast an event strictly to authorized client(s)
+   * If targetUserId or payload.userId/payload.file.user_id is present, NEVER deliver to other users!
    */
-  broadcast(eventType, payload = {}) {
+  broadcast(eventType, payload = {}, targetUserId = null) {
+    const rawTargetUserId = targetUserId ||
+      payload.userId ||
+      (payload.file && payload.file.user_id) ||
+      (payload.folder && payload.folder.user_id) ||
+      null;
+
+    const resolvedUserId = rawTargetUserId ? String(rawTargetUserId) : null;
+
     const data = JSON.stringify(payload);
     const message = `event: ${eventType}\ndata: ${data}\n\n`;
 
     for (const client of this.clients) {
+      // MAXIMUM SECURITY: If this event is scoped to a specific user, NEVER send to other users!
+      if (resolvedUserId) {
+        if (!client.userId || client.userId !== resolvedUserId) {
+          continue;
+        }
+      }
+
       try {
         client.res.write(message);
       } catch (e) {

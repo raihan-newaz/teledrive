@@ -178,7 +178,7 @@ async function uploadFile(filePath, fileName, progressCallback) {
   return await withTelegramRetry(() => tClient.sendFile(channelEntity, {
     file: filePath,
     forceDocument: true,
-    workers: 16,
+    workers: 4,
     progressCallback: progressCallback,
     attributes: [
       new Api.DocumentAttributeFilename({

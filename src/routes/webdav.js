@@ -558,10 +558,10 @@ router.put('*', async (req, res) => {
     const cachedPath = path.join(cacheDir, `${fileId}.dec`);
     try { fs.copyFileSync(tempUploadPath, cachedPath); } catch (e) {}
 
-    const fileRecord = db.getFile(fileId);
+    const fileRecord = db.getFile(fileId, userId);
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
-      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId: parentFolderId });
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId: parentFolderId, userId }, userId);
     } catch (e) {}
 
     console.log(`[WebDAV PUT] "${filename}" (${fileSize} bytes) saved to folder: ${parentFolderId || 'root'}`);
@@ -621,7 +621,7 @@ router.all('*', async (req, res, next) => {
   const createdFolder = { id: newId, user_id: userId, name: folderName, parent_id: parentFolderId, created_at: now, updated_at: now };
   try {
     const eventBroadcaster = require('../services/eventBroadcaster');
-    eventBroadcaster.broadcast('folder_created', { folder: createdFolder, parentId: parentFolderId });
+    eventBroadcaster.broadcast('folder_created', { folder: createdFolder, parentId: parentFolderId, userId }, userId);
   } catch (e) {}
 
   console.log(`[WebDAV MKCOL] Created folder "${folderName}" under parent ${parentFolderId || 'root'}`);
@@ -660,7 +660,7 @@ router.delete('*', async (req, res) => {
 
       try {
         const eventBroadcaster = require('../services/eventBroadcaster');
-        eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id });
+        eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id, userId: file.user_id || userId }, file.user_id || userId);
       } catch (e) {}
 
       console.log(`[WebDAV DELETE] Deleted file "${file.name}" (ID: ${file.id})`);
@@ -697,7 +697,7 @@ router.delete('*', async (req, res) => {
 
       try {
         const eventBroadcaster = require('../services/eventBroadcaster');
-        eventBroadcaster.broadcast('folder_deleted', { folderId: folder.id });
+        eventBroadcaster.broadcast('folder_deleted', { folderId: folder.id, userId: folder.user_id || userId }, folder.user_id || userId);
       } catch (e) {}
 
       console.log(`[WebDAV DELETE] Deleted folder "${folder.name}" and ${folderIdsToDelete.length} subfolders`);

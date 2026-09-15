@@ -71,39 +71,43 @@ function deriveKeyAsync(passphrase, saltBase64) {
  * @returns {Promise<Object>} Resolves with { iv, salt, authTag } as base64
  */
 function encryptFile(inputPath, outputPath, passphrase) {
-  return new Promise((resolve, reject) => {
-    const salt = generateSalt();
-    const iv = generateIV();
-    
-    const key = deriveKey(passphrase, salt);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
-    const sha256Hash = crypto.createHash('sha256');
-    
-    const readStream = fs.createReadStream(inputPath);
-    const writeStream = fs.createWriteStream(outputPath);
-    
-    readStream.on('error', reject);
-    writeStream.on('error', reject);
-    cipher.on('error', reject);
-    
-    readStream.on('data', (chunk) => {
-      sha256Hash.update(chunk);
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      const salt = generateSalt();
+      const iv = generateIV();
+      
+      const key = await deriveKeyAsync(passphrase, salt);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
+      const sha256Hash = crypto.createHash('sha256');
+      
+      const readStream = fs.createReadStream(inputPath);
+      const writeStream = fs.createWriteStream(outputPath);
+      
+      readStream.on('error', reject);
+      writeStream.on('error', reject);
+      cipher.on('error', reject);
+      
+      readStream.on('data', (chunk) => {
+        sha256Hash.update(chunk);
+      });
 
-    readStream.pipe(cipher).pipe(writeStream, { end: false });
-    
-    cipher.on('end', () => {
-      const authTag = cipher.getAuthTag();
-      const sha256 = sha256Hash.digest('hex');
-      writeStream.end(authTag, () => {
-        resolve({
-          iv,
-          salt,
-          authTag: authTag.toString('base64'),
-          sha256
+      readStream.pipe(cipher).pipe(writeStream, { end: false });
+      
+      cipher.on('end', () => {
+        const authTag = cipher.getAuthTag();
+        const sha256 = sha256Hash.digest('hex');
+        writeStream.end(authTag, () => {
+          resolve({
+            iv,
+            salt,
+            authTag: authTag.toString('base64'),
+            sha256
+          });
         });
       });
-    });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -118,24 +122,25 @@ function encryptFile(inputPath, outputPath, passphrase) {
  */
 function decryptFile(inputPath, outputPath, passphrase, ivBase64, saltBase64) {
   return new Promise((resolve, reject) => {
-    fs.stat(inputPath, (err, stats) => {
+    fs.stat(inputPath, async (err, stats) => {
       if (err) return reject(err);
       
-      const fileSize = stats.size;
-      if (fileSize < 16) return reject(new Error('File is too small to contain an auth tag'));
-      
-      const encryptedDataSize = fileSize - 16;
-      
-      const authTagBuffer = Buffer.alloc(16);
-      const fd = fs.openSync(inputPath, 'r');
-      fs.readSync(fd, authTagBuffer, 0, 16, encryptedDataSize);
-      fs.closeSync(fd);
-      
-      const key = deriveKey(passphrase, saltBase64);
-      const iv = Buffer.from(ivBase64, 'base64');
-      
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTagBuffer);
+      try {
+        const fileSize = stats.size;
+        if (fileSize < 16) return reject(new Error('File is too small to contain an auth tag'));
+        
+        const encryptedDataSize = fileSize - 16;
+        
+        const authTagBuffer = Buffer.alloc(16);
+        const fd = fs.openSync(inputPath, 'r');
+        fs.readSync(fd, authTagBuffer, 0, 16, encryptedDataSize);
+        fs.closeSync(fd);
+        
+        const key = await deriveKeyAsync(passphrase, saltBase64);
+        const iv = Buffer.from(ivBase64, 'base64');
+        
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTagBuffer);
       
       if (encryptedDataSize === 0) {
         try {
@@ -157,6 +162,9 @@ function decryptFile(inputPath, outputPath, passphrase, ivBase64, saltBase64) {
       readStream.pipe(decipher).pipe(writeStream);
       
       writeStream.on('finish', resolve);
+      } catch (err) {
+        reject(err);
+      }
     });
   });
 }

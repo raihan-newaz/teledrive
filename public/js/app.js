@@ -4249,6 +4249,9 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.file) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
+          if (data.file.user_id && currentUserId && data.file.user_id !== currentUserId) return;
           this.addUploadedFileLocally(data.file);
         } catch (err) {
           console.warn('[Realtime] file_uploaded error:', err);
@@ -4258,6 +4261,8 @@ const App = {
       es.addEventListener('remote_upload_progress', (e) => {
         try {
           const data = JSON.parse(e.data);
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data && data.userId && currentUserId && data.userId !== currentUserId) return;
           if (data && data.taskId && window.Upload && typeof window.Upload.handleRemoteProgress === 'function') {
             window.Upload.handleRemoteProgress(data);
           }
@@ -4269,6 +4274,8 @@ const App = {
       es.addEventListener('remote_upload_completed', (e) => {
         try {
           const data = JSON.parse(e.data);
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data && data.userId && currentUserId && data.userId !== currentUserId) return;
           if (data && data.taskId && window.Upload && typeof window.Upload.handleRemoteCompleted === 'function') {
             window.Upload.handleRemoteCompleted(data);
           }
@@ -4281,6 +4288,8 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.fileId) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
           this.removeFileLocally(data.fileId);
         } catch (err) {
           console.warn('[Realtime] file_deleted error:', err);
@@ -4291,6 +4300,9 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.file) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
+          if (data.file.user_id && currentUserId && data.file.user_id !== currentUserId) return;
           this.updateFileLocally(data.file);
         } catch (err) {
           console.warn('[Realtime] file_updated error:', err);
@@ -4301,6 +4313,9 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folder) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
+          if (data.folder.user_id && currentUserId && data.folder.user_id !== currentUserId) return;
           this.addUploadedFolderLocally(data.folder);
         } catch (err) {
           console.warn('[Realtime] folder_created error:', err);
@@ -4311,6 +4326,8 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folderId) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
           this.removeFolderLocally(data.folderId);
         } catch (err) {
           console.warn('[Realtime] folder_deleted error:', err);
@@ -4321,19 +4338,27 @@ const App = {
         try {
           const data = JSON.parse(e.data);
           if (!data || !data.folder) return;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data.userId && currentUserId && data.userId !== currentUserId) return;
+          if (data.folder.user_id && currentUserId && data.folder.user_id !== currentUserId) return;
           this.updateFolderLocally(data.folder);
         } catch (err) {
           console.warn('[Realtime] folder_updated error:', err);
         }
       });
 
-      es.addEventListener('trash_emptied', () => {
-        if (this.currentView === 'trash') {
-          this.files = [];
-          this.folders = [];
-          this.renderContents();
-        }
-        this.loadStorageStats();
+      es.addEventListener('trash_emptied', (e) => {
+        try {
+          const data = e.data ? JSON.parse(e.data) : null;
+          const currentUserId = window.Auth && window.Auth.currentUser ? window.Auth.currentUser.id : null;
+          if (data && data.userId && currentUserId && data.userId !== currentUserId) return;
+          if (this.currentView === 'trash') {
+            this.files = [];
+            this.folders = [];
+            this.renderContents();
+          }
+          this.loadStorageStats();
+        } catch (err) {}
       });
 
       es.onerror = () => {

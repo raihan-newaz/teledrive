@@ -574,8 +574,8 @@ class RemoteDownloader {
     const fileRecord = db.getFile(fileId, userId);
 
     try {
-      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
-      eventBroadcaster.broadcast('remote_upload_completed', { taskId: jobId, file: fileRecord });
+      eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId, userId }, userId);
+      eventBroadcaster.broadcast('remote_upload_completed', { taskId: jobId, file: fileRecord, userId }, userId);
     } catch (e) {}
 
     this.broadcastJobEvent(completedJob);
@@ -625,7 +625,7 @@ class RemoteDownloader {
         speedText: job.speedText || (job.status === 'completed' ? 'Completed' : (job.status === 'queued' ? 'In queue...' : '')),
         etaText: job.etaText || '',
         error: job.error_message || null
-      });
+      }, job.user_id);
     } catch (e) {}
   }
 }

@@ -551,8 +551,10 @@ const Upload = {
     }
 
     // Auto-chunking for files > CHUNK_SIZE
-    const totalChunks = Math.ceil(totalSize / this.CHUNK_SIZE);
+    const chunkSize = this.CHUNK_SIZE;
+    const totalChunks = Math.ceil(totalSize / chunkSize);
     const uploadId = item.id;
+    item.chunkSize = chunkSize;
     item.totalParts = totalChunks;
     item.activeXHRs = new Set();
 
@@ -602,15 +604,33 @@ const Upload = {
         }
 
         const chunkIndex = pendingIndices[nextIndexPtr++];
-        const start = chunkIndex * this.CHUNK_SIZE;
-        const end = Math.min(start + this.CHUNK_SIZE, totalSize);
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(start + chunkSize, totalSize);
         const chunkBlob = file.slice(start, end);
 
-        const res = await this.uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap);
-        if (res && res.done) {
+        // Upload with auto-retry (up to 3 attempts with exponential backoff)
+        let res = null;
+        let attempt = 0;
+        const maxAttempts = 3;
+        while (attempt < maxAttempts) {
+          attempt++;
+          try {
+            res = await this.uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap, chunkSize);
+            break;
+          } catch (chunkErr) {
+            if (item.status === 'cancelled') throw chunkErr;
+            console.warn(`[Upload] Chunk ${chunkIndex + 1}/${totalChunks} attempt ${attempt} failed:`, chunkErr.message);
+            if (attempt >= maxAttempts) throw chunkErr;
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+          }
+        }
+
+        if (res && res.done && res.file) {
           finalResult = res;
         }
-        uploadedIndices.push(chunkIndex);
+        if (!uploadedIndices.includes(chunkIndex)) {
+          uploadedIndices.push(chunkIndex);
+        }
         chunkLoadedMap.delete(chunkIndex);
       }
     };
@@ -632,6 +652,22 @@ const Upload = {
       }
       throw err;
     }
+
+    // If all chunks uploaded but final file object wasn't captured in response, poll session once
+    if (!finalResult || !finalResult.file) {
+      try {
+        const checkRes = await fetch(`/api/files/upload-session?uploadId=${encodeURIComponent(uploadId)}`, {
+          headers: API.token ? { 'Authorization': `Bearer ${API.token}` } : {}
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.file) {
+            finalResult = { success: true, done: true, file: checkData.file };
+          }
+        }
+      } catch (e) {}
+    }
+
     return finalResult;
   },
 
@@ -703,12 +739,13 @@ const Upload = {
     });
   },
 
-  uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap) {
+  uploadChunk(item, chunkBlob, uploadId, chunkIndex, totalChunks, start, end, totalSize, chunkLoadedMap, chunkSize) {
     return new Promise((resolve, reject) => {
       if (item.status === 'cancelled') {
         return reject(new Error('Upload cancelled'));
       }
 
+      const effectiveChunkSize = chunkSize || this.CHUNK_SIZE;
       const xhr = new XMLHttpRequest();
       if (!item.activeXHRs) item.activeXHRs = new Set();
       item.activeXHRs.add(xhr);
@@ -734,9 +771,9 @@ const Upload = {
           let overallLoaded = 0;
           if (item.uploadedIndices) {
             for (const idx of item.uploadedIndices) {
-              const isLast = idx === totalChunks - 1;
-              const chunkBytes = isLast ? (totalSize - (totalChunks - 1) * this.CHUNK_SIZE) : this.CHUNK_SIZE;
-              overallLoaded += chunkBytes;
+              const chStart = idx * effectiveChunkSize;
+              const chEnd = Math.min(chStart + effectiveChunkSize, totalSize);
+              overallLoaded += (chEnd - chStart);
             }
           }
           if (chunkLoadedMap) {

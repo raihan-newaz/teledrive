@@ -348,7 +348,7 @@ router.post('/', async (req, res) => {
         );
 
         const eventBroadcaster = require('../services/eventBroadcaster');
-        eventBroadcaster.broadcast('folder_created', { folder, parentId: folder.parent_id });
+        eventBroadcaster.broadcast('folder_created', { folder, parentId: folder.parent_id, userId }, userId);
 
         res.json(folder);
     } catch (error) {
@@ -398,7 +398,7 @@ router.patch('/:id', async (req, res) => {
 
         const updatedFolder = await db.getFolder(folderId, userId);
         const eventBroadcaster = require('../services/eventBroadcaster');
-        eventBroadcaster.broadcast('folder_updated', { folder: sanitizeFolder(updatedFolder) });
+        eventBroadcaster.broadcast('folder_updated', { folder: sanitizeFolder(updatedFolder), userId }, userId);
 
         res.json(updatedFolder);
     } catch (error) {
@@ -423,7 +423,7 @@ router.delete('/:id', async (req, res) => {
             await deleteFolderRecursive(folderId, userId);
 
         const eventBroadcaster = require('../services/eventBroadcaster');
-        eventBroadcaster.broadcast('folder_deleted', { folderId });
+        eventBroadcaster.broadcast('folder_deleted', { folderId, userId }, userId);
         
         res.json({ success: true, ...result });
     } catch (error) {
