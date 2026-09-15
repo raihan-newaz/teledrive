@@ -313,13 +313,36 @@ input:focus, select:focus, textarea:focus {
   100% { transform: translateX(200%); }
 }
 
-/* Auth Screen & Modern Card */
+/* Auth Screen & Modern Card with Tech Grid */
 #login-screen {
   position: relative;
   overflow: hidden;
-  background: var(--bg-primary);
+  background-color: var(--bg-primary);
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+#login-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 25%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000 25%, transparent 100%);
+}
+
+[data-theme="light"] #login-screen::before {
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.045) 1px, transparent 1px);
+}
+
+[data-theme="dark"] #login-screen::before {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
 }
 
 .auth-ambient-orb {
