@@ -93,6 +93,9 @@ const App = {
         try {
           const authRes = await API.verifyAuth();
           this.user = authRes?.user || null;
+          if (authRes?.preferences) {
+            this.applyPreferences(authRes.preferences);
+          }
           this.showScreen('app');
           // Load synced user preferences across devices
           await this.loadUserPreferences();
@@ -1748,6 +1751,9 @@ const App = {
           const authData = await API.login(email, pwd);
           if (email) localStorage.setItem('teledrive_last_email', email);
           this.user = authData?.user || null;
+          if (authData?.preferences) {
+            this.applyPreferences(authData.preferences);
+          }
           UI.showToast('Login successful!', 'success');
           if (pwdInput) pwdInput.value = '';
           this.showScreen('app');
@@ -4546,6 +4552,20 @@ const App = {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('teledrive_theme', theme);
     this.updateThemeToggleIcon(theme);
+
+    // Sync Appearance buttons in settings modal if open/rendered
+    const themeBtnLight = document.getElementById('theme-btn-light');
+    const themeBtnDark = document.getElementById('theme-btn-dark');
+    if (themeBtnLight && themeBtnDark) {
+      if (theme === 'dark') {
+        themeBtnDark.classList.add('active');
+        themeBtnLight.classList.remove('active');
+      } else {
+        themeBtnLight.classList.add('active');
+        themeBtnDark.classList.remove('active');
+      }
+    }
+
     if (sync) {
       this.saveUserPreference('theme', theme);
     }
@@ -4578,37 +4598,51 @@ const App = {
     this.setTheme(next);
   },
 
+  applyPreferences(p) {
+    if (!p || typeof p !== 'object') return;
+    if (p.theme && (p.theme === 'light' || p.theme === 'dark')) {
+      this.setTheme(p.theme, false);
+    }
+    if (p.view_mode && (p.view_mode === 'grid' || p.view_mode === 'list')) {
+      this.viewMode = p.view_mode;
+      localStorage.setItem('teledrive_view_mode', p.view_mode);
+      const viewModeBtn = document.getElementById('view-mode-btn');
+      if (viewModeBtn) {
+        viewModeBtn.title = this.viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View';
+      }
+    }
+    if (p.sort_by) {
+      this.sortBy = p.sort_by;
+      localStorage.setItem('teledrive_sort_by', p.sort_by);
+    }
+    if (p.sort_order) {
+      this.sortOrder = p.sort_order;
+      localStorage.setItem('teledrive_sort_order', p.sort_order);
+    }
+    if (p.chunk_size) {
+      localStorage.setItem('teledrive_chunk_size', p.chunk_size);
+      const chunkSizeSelect = document.getElementById('setting-chunk-size');
+      if (chunkSizeSelect) chunkSizeSelect.value = p.chunk_size;
+    }
+    if (p.concurrent_chunks) {
+      localStorage.setItem('teledrive_concurrent_chunks', p.concurrent_chunks);
+      const concSelect = document.getElementById('setting-concurrent-chunks');
+      if (concSelect) concSelect.value = p.concurrent_chunks;
+    }
+    if (p.wake_lock !== undefined && p.wake_lock !== null) {
+      localStorage.setItem('teledrive_wake_lock', p.wake_lock);
+      const wakeLockCheckbox = document.getElementById('setting-wake-lock');
+      if (wakeLockCheckbox) wakeLockCheckbox.checked = p.wake_lock === 'true' || p.wake_lock === true;
+    }
+
+    this.updateSortButtonsUI();
+  },
+
   async loadUserPreferences() {
     try {
       const data = await API.getPreferences();
       if (data && data.preferences) {
-        const p = data.preferences;
-        if (p.theme && (p.theme === 'light' || p.theme === 'dark')) {
-          this.setTheme(p.theme, false);
-        }
-        if (p.view_mode && (p.view_mode === 'grid' || p.view_mode === 'list')) {
-          this.viewMode = p.view_mode;
-          localStorage.setItem('teledrive_view_mode', p.view_mode);
-        }
-        if (p.sort_by) {
-          this.sortBy = p.sort_by;
-          localStorage.setItem('teledrive_sort_by', p.sort_by);
-        }
-        if (p.sort_order) {
-          this.sortOrder = p.sort_order;
-          localStorage.setItem('teledrive_sort_order', p.sort_order);
-        }
-        if (p.chunk_size) {
-          localStorage.setItem('teledrive_chunk_size', p.chunk_size);
-        }
-        if (p.concurrent_chunks) {
-          localStorage.setItem('teledrive_concurrent_chunks', p.concurrent_chunks);
-        }
-        if (p.wake_lock !== undefined && p.wake_lock !== null) {
-          localStorage.setItem('teledrive_wake_lock', p.wake_lock);
-        }
-
-        this.updateSortButtonsUI();
+        this.applyPreferences(data.preferences);
       }
     } catch (e) {
       console.warn('[Preferences] Could not load preferences from server:', e.message);

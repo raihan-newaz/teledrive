@@ -108,6 +108,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
         // Recalculate and return fresh storage info
         const storageUsed = db.recalculateUserStorage(user.id);
+        const preferences = db.getAllSettings(user.id);
 
         return res.json({
             token,
@@ -120,7 +121,8 @@ router.post('/login', authLimiter, async (req, res) => {
                 status: user.status,
                 storageLimit: user.storage_limit || 0,
                 storageUsed
-            }
+            },
+            preferences
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -137,6 +139,7 @@ router.get('/me', authMiddleware, (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const storageUsed = db.recalculateUserStorage(user.id);
+    const preferences = db.getAllSettings(user.id);
 
     return res.json({
         user: {
@@ -149,7 +152,8 @@ router.get('/me', authMiddleware, (req, res) => {
             storageUsed,
             lastLoginAt: user.last_login_at,
             createdAt: user.created_at
-        }
+        },
+        preferences
     });
 });
 
@@ -158,6 +162,7 @@ router.get('/me', authMiddleware, (req, res) => {
  * Verifies if the current token is valid
  */
 router.get('/verify', authMiddleware, (req, res) => {
+    const preferences = db.getAllSettings(req.user.id);
     return res.json({
         valid: true,
         user: {
@@ -168,6 +173,7 @@ router.get('/verify', authMiddleware, (req, res) => {
             storageLimit: req.user.storageLimit,
             storageUsed: req.user.storageUsed
         },
+        preferences,
         expiresAt: req.user.tokenExp
     });
 });

@@ -775,9 +775,15 @@ function getSetting(key, defaultValue = null, userId = null) {
  */
 function getAllSettings(userId = null) {
   if (!db) return {};
-  const rows = userId
-    ? all('SELECT key, value FROM app_settings WHERE user_id = ? OR user_id IS NULL', [String(userId)])
-    : all('SELECT key, value FROM app_settings WHERE user_id IS NULL OR user_id = ""');
+  const uid = userId ? String(userId).trim() : '';
+  const rows = uid
+    ? all(`
+        SELECT key, value, user_id 
+        FROM app_settings 
+        WHERE user_id = ? OR user_id IS NULL OR user_id = ''
+        ORDER BY CASE WHEN user_id = ? THEN 1 ELSE 0 END ASC
+      `, [uid, uid])
+    : all('SELECT key, value, user_id FROM app_settings WHERE user_id IS NULL OR user_id = ""');
   const result = {};
   if (Array.isArray(rows)) {
     for (const r of rows) {
@@ -792,7 +798,14 @@ function getAllSettings(userId = null) {
  */
 function setSetting(key, value, userId = null) {
   if (!db) return;
-  run('INSERT OR REPLACE INTO app_settings (key, user_id, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [key, userId || null, String(value)]);
+  const uid = userId ? String(userId).trim() : null;
+  if (uid) {
+    run('DELETE FROM app_settings WHERE key = ? AND user_id = ?', [key, uid]);
+    run('INSERT INTO app_settings (key, user_id, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [key, uid, String(value)]);
+  } else {
+    run('DELETE FROM app_settings WHERE key = ? AND (user_id IS NULL OR user_id = "")', [key]);
+    run('INSERT INTO app_settings (key, user_id, value, updated_at) VALUES (?, NULL, ?, CURRENT_TIMESTAMP)', [key, String(value)]);
+  }
   save();
 }
 
@@ -801,9 +814,16 @@ function setSetting(key, value, userId = null) {
  */
 function setMultipleSettings(settingsObj, userId = null) {
   if (!db || !settingsObj || typeof settingsObj !== 'object') return;
+  const uid = userId ? String(userId).trim() : null;
   for (const [key, value] of Object.entries(settingsObj)) {
     if (value !== undefined && value !== null) {
-      run('INSERT OR REPLACE INTO app_settings (key, user_id, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [key, userId || null, String(value)]);
+      if (uid) {
+        run('DELETE FROM app_settings WHERE key = ? AND user_id = ?', [key, uid]);
+        run('INSERT INTO app_settings (key, user_id, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', [key, uid, String(value)]);
+      } else {
+        run('DELETE FROM app_settings WHERE key = ? AND (user_id IS NULL OR user_id = "")', [key]);
+        run('INSERT INTO app_settings (key, user_id, value, updated_at) VALUES (?, NULL, ?, CURRENT_TIMESTAMP)', [key, String(value)]);
+      }
     }
   }
   save();
