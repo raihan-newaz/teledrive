@@ -350,8 +350,12 @@ class GDriveCrawler {
       }
     });
 
+    if (statusCode === 404 || statusCode === 403) {
+      throw new Error(`Google Drive folder is private or not accessible (HTTP ${statusCode}). Please open the folder on Google Drive, click "Share", set General access to "Anyone with the link (Viewer)", and copy the link again.`);
+    }
+
     if (statusCode < 200 || statusCode >= 400) {
-      throw new Error(`Google Drive returned status ${statusCode}. Make sure the folder is shared publicly with "Anyone with the link".`);
+      throw new Error(`Google Drive returned status ${statusCode}. Make sure the folder is shared with "Anyone with the link".`);
     }
 
     let folderName = 'Google Drive Folder';
@@ -364,9 +368,8 @@ class GDriveCrawler {
       folderName = titleMatch[1].replace(' - Google Drive', '').trim() || folderName;
     }
 
-    const itemsMap = new Map(); // id -> item
-
-    // Extract items from _DRIVE_ivd or window['_DRIVE_ivd'] or embedded JSON
+    // Multi-strategy item extraction
+    // 1. Array parsing from _DRIVE_ivd or data-initial-data
     const ivdMatches = [
       ...html.matchAll(/_DRIVE_ivd\s*=\s*(\[[^;]+\]);/g),
       ...html.matchAll(/window\['_DRIVE_ivd'\]\s*=\s*(\[[^;]+\]);/g),
@@ -384,7 +387,7 @@ class GDriveCrawler {
       } catch (e) {}
     }
 
-    // Secondary extraction: AF_initDataCallback blobs
+    // 2. AF_initDataCallback blobs
     const callbackRegex = /AF_initDataCallback\(\s*\{[\s\S]*?data:\s*([\s\S]*?)\s*\}\s*\);/g;
     let cbMatch;
     while ((cbMatch = callbackRegex.exec(html)) !== null) {
@@ -394,18 +397,48 @@ class GDriveCrawler {
       } catch (e) {}
     }
 
-    // Fallback item pattern match if JS objects were obfuscated
-    if (itemsMap.size === 0) {
-      // Regex search for standard Google Drive resource arrays: ["FILE_ID", ["FILENAME", ...], "MIME_TYPE"]
-      const itemPattern = /\["([a-zA-Z0-9_-]{25,45})",\s*\["([^"\\]+)"[^\]]*\],\s*"([^"]+)"/g;
-      let patMatch;
-      while ((patMatch = itemPattern.exec(html)) !== null) {
-        const id = patMatch[1];
-        const name = patMatch[2];
-        const mimeType = patMatch[3];
-        if (id && name && id !== folderId) {
-          itemsMap.set(id, { id, name, mimeType, size: 0 });
-        }
+    // 3. Fallback regex engine A: Resource array with array name [id, [name], ...]
+    const patternA = /\["([a-zA-Z0-9_-]{25,45})",\s*\["([^"\\]+)"[^\]]*\],\s*"([^"]+)"/g;
+    let matchA;
+    while ((matchA = patternA.exec(html)) !== null) {
+      const id = matchA[1];
+      const name = matchA[2];
+      const mimeType = matchA[3];
+      if (id && name && id !== folderId) {
+        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size: 0 });
+      }
+    }
+
+    // 4. Fallback regex engine B: [id, "name", "mimeType"]
+    const patternB = /\["([a-zA-Z0-9_-]{25,45})",\s*"([^"\\]{1,150})",\s*"([a-zA-Z0-9_\-\.\/]+)"/g;
+    let matchB;
+    while ((matchB = patternB.exec(html)) !== null) {
+      const id = matchB[1];
+      const name = matchB[2];
+      const mimeType = matchB[3];
+      if (id && name && id !== folderId && (mimeType.includes('/') || mimeType.startsWith('application/'))) {
+        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size: 0 });
+      }
+    }
+
+    // 5. Fallback regex engine C: File IDs with obvious file extensions
+    const patternC = /"([a-zA-Z0-9_-]{25,45})"[^"]{1,100}"([^"\\]+\.(?:mp4|mkv|avi|mov|mp3|wav|flac|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|7z|tar|gz|apk|exe|iso|jpg|jpeg|png|webp|gif|txt|csv|json|py|js|html))"/gi;
+    let matchC;
+    while ((matchC = patternC.exec(html)) !== null) {
+      const id = matchC[1];
+      const name = matchC[2];
+      if (id && name && id !== folderId && !itemsMap.has(id)) {
+        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType: 'application/octet-stream', size: 0 });
+      }
+    }
+
+    // 6. Fallback regex engine D: /file/d/{id} hyperlinks inside the page
+    const patternD = /\/file\/d\/([a-zA-Z0-9_-]{25,45})[^\w-]/g;
+    let matchD;
+    while ((matchD = patternD.exec(html)) !== null) {
+      const id = matchD[1];
+      if (id && id !== folderId && !itemsMap.has(id)) {
+        itemsMap.set(id, { id, name: `gdrive_file_${id}`, mimeType: 'application/octet-stream', size: 0 });
       }
     }
 

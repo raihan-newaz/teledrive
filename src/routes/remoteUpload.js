@@ -104,8 +104,34 @@ const handleStartJob = async (req, res) => {
       await processNode(folderTree, teleDriveRootFolderId);
 
       if (queuedJobs.length === 0) {
+        // Fallback: check if the link/ID is actually a direct file
+        try {
+          const testRes = await gdriveCrawler.openDownloadStream(gdriveInfo.id);
+          if (testRes && testRes.stream) {
+            testRes.stream.destroy();
+            const singleJob = await remoteDownloader.createJob({
+              userId,
+              userKey,
+              url: `https://drive.google.com/uc?export=download&id=${gdriveInfo.id}`,
+              customFileName: resolvedName || testRes.filename,
+              folderId: targetParentFolderId,
+              chunkSize: effectiveChunkSize
+            });
+            return res.json({
+              success: true,
+              message: 'Google Drive file queued for cloud download',
+              job: singleJob,
+              task: {
+                taskId: singleJob.id,
+                fileName: singleJob.filename,
+                status: singleJob.status
+              }
+            });
+          }
+        } catch (singleErr) {}
+
         return res.status(400).json({
-          error: 'No downloadable files were found in this Google Drive folder. Please ensure the folder is shared with "Anyone with the link".'
+          error: 'No downloadable files were found in this Google Drive folder. Please ensure the folder is set to "Anyone with the link (Viewer)".'
         });
       }
 
