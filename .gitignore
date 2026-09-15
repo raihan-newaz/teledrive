@@ -30,3 +30,5 @@ test_*.js
 Thumbs.db
 .vscode/
 .idea/
+*.apk
+

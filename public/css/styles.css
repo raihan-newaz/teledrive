@@ -3563,3 +3563,68 @@ input:focus, select:focus, textarea:focus {
   color: #ea4335;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* PWA INSTALL UI & MODALS                                                    */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.btn-install-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-color, #1a73e8);
+  color: #ffffff !important;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.25);
+}
+.btn-install-app:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.pwa-modal-card {
+  max-width: 420px !important;
+  text-align: center;
+  padding: 24px 20px !important;
+}
+.pwa-app-icon-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  margin: 0 auto 16px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  display: block;
+}
+.ios-instruction-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.ios-step-number {
+  background: var(--accent-color, #1a73e8);
+  color: #ffffff;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+body.is-pwa-standalone .pwa-install-btn {
+  display: none !important;
+}
+
+

@@ -6,6 +6,17 @@
   <title>TeleDrive — Unlimited Secure Cloud Storage</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/svg+xml" href="/favicon.svg">
+  <!-- PWA Manifest & App Icons -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1e293b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TeleDrive">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png">
   <!-- Google Fonts: Google Sans & Roboto (Exact Google Drive typography) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -240,6 +251,12 @@
       </div>
 
       <div class="toolbar-right">
+        <button class="pwa-install-btn btn-install-app" id="btn-install-pwa" onclick="window.PWA && window.PWA.promptInstall()" title="Install TeleDrive App" style="display:none;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+          </svg>
+          <span>Install App</span>
+        </button>
         <button class="icon-btn" id="view-toggle" title="Toggle Grid / List View" aria-label="Toggle View">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/>
@@ -308,6 +325,12 @@
               <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
             </svg>
             <span>Settings</span>
+          </a>
+          <a class="nav-item pwa-install-btn" id="sidebar-install-link" href="#" onclick="window.PWA && window.PWA.promptInstall(); return false;" style="display:none;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+            </svg>
+            <span>Install App</span>
           </a>
         </nav>
 
@@ -1444,6 +1467,51 @@
     </button>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- PWA INSTALL MODALS (iOS GUIDED & GENERAL)                                 -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="ios-pwa-modal" style="display:none;" onclick="if(event.target===this) window.PWA && window.PWA.closeIOSInstallModal();">
+    <div class="modal custom-confirm-modal pwa-modal-card" style="opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1);">
+      <img src="/icons/icon-192.png" alt="TeleDrive" class="pwa-app-icon-preview">
+      <h3 style="margin-bottom: 8px; font-size: 19px;">Install TeleDrive on iPhone</h3>
+      <p style="font-size: 13.5px; margin-bottom: 18px; color: var(--text-secondary);">
+        Install TeleDrive to your Home Screen for a fullscreen, native app experience without browser bars.
+      </p>
+
+      <div style="margin-bottom: 20px;">
+        <div class="ios-instruction-step">
+          <div class="ios-step-number">1</div>
+          <div>Tap the <strong>Share</strong> icon <span style="display:inline-block; font-size:16px;">⎋</span> / <svg style="display:inline-block; vertical-align:-2px;" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L4.5 9.5l1.41 1.41L11 5.83V16h2V5.83l5.09 5.08 1.41-1.41L12 2zM4 18h16v2H4v-2z"/></svg> in Safari's bottom toolbar.</div>
+        </div>
+        <div class="ios-instruction-step">
+          <div class="ios-step-number">2</div>
+          <div>Scroll down and select <strong>"Add to Home Screen"</strong> <span style="display:inline-block; font-size:16px;">⊞</span>.</div>
+        </div>
+        <div class="ios-instruction-step">
+          <div class="ios-step-number">3</div>
+          <div>Tap <strong>"Add"</strong> in the top-right corner to finish.</div>
+        </div>
+      </div>
+
+      <button class="btn-primary" style="width: 100%; justify-content: center; padding: 10px;" onclick="window.PWA && window.PWA.closeIOSInstallModal();">
+        Got it!
+      </button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="general-pwa-modal" style="display:none;" onclick="if(event.target===this) window.PWA && window.PWA.closeGeneralInstallModal();">
+    <div class="modal custom-confirm-modal pwa-modal-card" style="opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1);">
+      <img src="/icons/icon-192.png" alt="TeleDrive" class="pwa-app-icon-preview">
+      <h3 style="margin-bottom: 8px; font-size: 19px;">Install TeleDrive App</h3>
+      <p style="font-size: 13.5px; margin-bottom: 18px; color: var(--text-secondary);">
+        To install TeleDrive on your desktop or mobile browser, click your browser's menu (⋮ or ⚙) and choose <strong>"Install TeleDrive"</strong> or <strong>"Add to Home Screen"</strong>.
+      </p>
+      <button class="btn-primary" style="width: 100%; justify-content: center; padding: 10px;" onclick="window.PWA && window.PWA.closeGeneralInstallModal();">
+        Close
+      </button>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -1457,6 +1525,7 @@
   <script src="/js/upload.js?v=20260911_03"></script>
   <script src="/js/preview.js?v=20260911_03"></script>
   <script src="/js/setup.js?v=20260911_03"></script>
+  <script src="/js/pwa.js?v=20260915_01"></script>
   <script src="/js/app.js?v=20260911_03"></script>
 </body>
 </html>
