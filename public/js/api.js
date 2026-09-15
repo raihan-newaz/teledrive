@@ -161,7 +161,7 @@ const API = {
   },
 
   async resetAdminUserPassword(id, password) {
-    return this.request('POST', `/api/admin/users/${id}/reset-password`, { password });
+    return this.request('POST', `/api/admin/users/${id}/reset-password`, { newPassword: password, password });
   },
 
   async deleteAdminUser(id) {
