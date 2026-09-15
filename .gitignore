@@ -34,6 +34,9 @@ Thumbs.db
 
 # Temporary maintenance scripts
 src/scripts/*clear-channel.js
+src/scripts/*cleaner*
+*cleaner*
 data/user_session.txt
+
 
 
