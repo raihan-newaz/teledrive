@@ -180,10 +180,39 @@ class GDriveCrawler {
   }
 
   /**
-   * Resolves direct download stream for a Google Drive file,
+   * Resolves direct download stream for a Google Drive file or Google Doc,
    * bypassing Google's virus scan confirmation warning (>100MB files).
    */
   async openDownloadStream(urlOrFileId, signal = null) {
+    // Case A: Google Docs/Sheets/Slides Export URL
+    if (typeof urlOrFileId === 'string' && (urlOrFileId.includes('docs.google.com/') || urlOrFileId.includes('/export'))) {
+      const { res, finalUrl } = await requestWithCookies(urlOrFileId, {
+        signal,
+        headers: {
+          'Accept': '*/*',
+          'User-Agent': USER_AGENT
+        }
+      });
+
+      if (res.statusCode >= 400) {
+        res.resume();
+        throw new Error(`Google Docs export failed with HTTP ${res.statusCode}`);
+      }
+
+      const disposition = res.headers['content-disposition'];
+      const contentType = res.headers['content-type'] || 'application/octet-stream';
+      const contentLength = parseInt(res.headers['content-length'], 10);
+      const filename = this.extractFilenameFromDisposition(disposition) || 'exported_document';
+
+      return {
+        stream: res,
+        filename,
+        totalSize: !isNaN(contentLength) && contentLength > 0 ? contentLength : 0,
+        contentType
+      };
+    }
+
+    // Case B: Standard Google Drive File
     let fileId = urlOrFileId;
     const parsed = this.parseUrl(urlOrFileId);
     if (parsed && parsed.type === 'file') {
@@ -204,6 +233,11 @@ class GDriveCrawler {
         'Upgrade-Insecure-Requests': '1'
       }
     }, cookieJar);
+
+    if (firstRes.statusCode >= 400) {
+      firstRes.resume();
+      throw new Error(`Google Drive returned HTTP ${firstRes.statusCode}`);
+    }
 
     const contentType = firstRes.headers['content-type'] || '';
     const disposition = firstRes.headers['content-disposition'];
@@ -228,6 +262,11 @@ class GDriveCrawler {
       if (bodyChunks.reduce((acc, c) => acc + c.length, 0) > 2 * 1024 * 1024) break;
     }
     const html = Buffer.concat(bodyChunks).toString('utf8');
+
+    // Check if it's an error page (e.g. 404 Not Found or Access Denied)
+    if (html.includes('404 (Not Found)') || html.includes('This file does not exist') || html.includes('Access Denied')) {
+      throw new Error('Google Drive file not found or private. Ensure sharing is set to "Anyone with the link".');
+    }
 
     // Extract filename from HTML title or metadata if available
     let detectedFilename = null;
@@ -293,6 +332,11 @@ class GDriveCrawler {
         'Accept': '*/*'
       }
     }, updatedJar);
+
+    if (secondRes.statusCode >= 400) {
+      secondRes.resume();
+      throw new Error(`Google Drive download failed with HTTP ${secondRes.statusCode}`);
+    }
 
     const secondContentType = secondRes.headers['content-type'] || '';
     const secondDisposition = secondRes.headers['content-disposition'];
