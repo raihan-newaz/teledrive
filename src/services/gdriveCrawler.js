@@ -368,6 +368,8 @@ class GDriveCrawler {
       folderName = titleMatch[1].replace(' - Google Drive', '').trim() || folderName;
     }
 
+    const itemsMap = new Map();
+
     // Multi-strategy item extraction
     // 1. Array parsing from _DRIVE_ivd or data-initial-data
     const ivdMatches = [
