@@ -13,7 +13,6 @@ const { uploadLimiter } = require('../middleware/rateLimiter');
 const telegram = require('../telegram');
 const db = require('../db');
 const cryptoModule = require('../crypto');
-const videoTranscode = require('../services/videoTranscode');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -26,6 +25,63 @@ const thumbnailsDir = path.join(dataDir, 'thumbnails');
 if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 if (!existsSync(thumbnailsDir)) mkdirSync(thumbnailsDir, { recursive: true });
+
+let resolvedFfmpegPath = null;
+function resolveFfmpeg() {
+  if (resolvedFfmpegPath) return resolvedFfmpegPath;
+  if (process.env.FFMPEG_PATH && existsSync(process.env.FFMPEG_PATH)) {
+    resolvedFfmpegPath = process.env.FFMPEG_PATH;
+    return resolvedFfmpegPath;
+  }
+  const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
+  if (localAppData) {
+    const candidateDirs = [
+      path.join(localAppData, 'Microsoft', 'WinGet', 'Links'),
+      'C:\\ffmpeg\\bin',
+      'C:\\Program Files\\ffmpeg\\bin'
+    ];
+    for (const dir of candidateDirs) {
+      const p = path.join(dir, 'ffmpeg.exe');
+      if (existsSync(p)) {
+        resolvedFfmpegPath = p;
+        return resolvedFfmpegPath;
+      }
+    }
+    const wingetPackages = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+    if (existsSync(wingetPackages)) {
+      try {
+        const entries = fs.readdirSync(wingetPackages);
+        for (const entry of entries) {
+          if (entry.toLowerCase().includes('ffmpeg')) {
+            const fullPkgDir = path.join(wingetPackages, entry);
+            const checkFfmpeg = (currDir, depth = 0) => {
+              if (depth > 4) return null;
+              const exePath = path.join(currDir, 'ffmpeg.exe');
+              if (existsSync(exePath)) return exePath;
+              try {
+                const subDirs = fs.readdirSync(currDir, { withFileTypes: true });
+                for (const sub of subDirs) {
+                  if (sub.isDirectory()) {
+                    const found = checkFfmpeg(path.join(currDir, sub.name), depth + 1);
+                    if (found) return found;
+                  }
+                }
+              } catch (e) {}
+              return null;
+            };
+            const found = checkFfmpeg(fullPkgDir);
+            if (found) {
+              resolvedFfmpegPath = found;
+              return resolvedFfmpegPath;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+  resolvedFfmpegPath = 'ffmpeg';
+  return resolvedFfmpegPath;
+}
 
 // Worker pool for thumbnail generation (balanced concurrency for smooth playback & fast thumbnails)
 let activeThumbnailJobs = 0;
@@ -40,21 +96,20 @@ function runThumbnailTask(taskFn) {
 }
 
 function processThumbnailJobQueue() {
-  while (activeThumbnailJobs < MAX_CONCURRENT_THUMBNAIL_JOBS && thumbnailJobQueue.length > 0) {
-    const { taskFn, resolve, reject } = thumbnailJobQueue.shift();
-    activeThumbnailJobs++;
-    (async () => {
-      try {
-        const res = await taskFn();
-        resolve(res);
-      } catch (err) {
-        reject(err);
-      } finally {
-        activeThumbnailJobs--;
-        processThumbnailJobQueue();
-      }
-    })();
+  if (activeThumbnailJobs >= MAX_CONCURRENT_THUMBNAIL_JOBS || thumbnailJobQueue.length === 0) {
+    return;
   }
+
+  const { taskFn, resolve, reject } = thumbnailJobQueue.shift();
+  activeThumbnailJobs++;
+
+  taskFn()
+    .then(resolve)
+    .catch(reject)
+    .finally(() => {
+      activeThumbnailJobs--;
+      processThumbnailJobQueue();
+    });
 }
 
 function generateVideoThumbnailServer(videoPath, outputPath) {
@@ -62,7 +117,7 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
     const isUrl = typeof videoPath === 'string' && (videoPath.startsWith('http://') || videoPath.startsWith('https://'));
     if (!isUrl && !existsSync(videoPath)) return resolve(false);
 
-    const { ffmpeg } = videoTranscode.resolveFfmpegBinaries();
+    const ffmpeg = resolveFfmpeg();
     execFile(ffmpeg, [
       '-ss', '00:00:02',
       '-i', videoPath,
@@ -107,7 +162,7 @@ function generateVideoThumbnailServer(videoPath, outputPath) {
 function generateImageThumbnailServer(imagePath, outputPath) {
   return new Promise((resolve) => {
     if (!existsSync(imagePath)) return resolve(false);
-    const { ffmpeg } = videoTranscode.resolveFfmpegBinaries();
+    const ffmpeg = resolveFfmpeg();
     execFile(ffmpeg, [
       '-i', imagePath,
       '-vf', 'scale=240:-1',
@@ -399,7 +454,7 @@ function getMimeType(filename) {
     '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
     '.avif': 'image/avif', '.tiff': 'image/tiff', '.tif': 'image/tiff', '.heic': 'image/heic', '.heif': 'image/heif',
     '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo',
-    '.mov': 'video/quicktime', '.wmv': 'video/x-ms-wmv', '.flv': 'video/x-flv', '.f4v': 'video/mp4',
+    '.mov': 'video/mp4', '.wmv': 'video/x-ms-wmv', '.flv': 'video/x-flv', '.f4v': 'video/mp4',
     '.ts': 'video/mp2t', '.mts': 'video/mp2t', '.m2ts': 'video/mp2t', '.vob': 'video/x-ms-vob', '.ogv': 'video/ogg',
     '.divx': 'video/divx', '.xvid': 'video/x-msvideo', '.rm': 'video/vnd.rn-realvideo', '.rmvb': 'video/vnd.rn-realvideo',
     '.asf': 'video/x-ms-asf', '.mpg': 'video/mpeg', '.mpeg': 'video/mpeg', '.m2v': 'video/mpeg',
@@ -697,10 +752,6 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
     } catch (e) {}
-    // Auto-trigger background HLS ABR transcode for videos so playback is instant
-    if (mimeType.startsWith('video/')) {
-      videoTranscode.requestHlsTranscode(fileRecord, userId, encryptionKey).catch(() => {});
-    }
 
     res.json({ success: true, file: fileRecord });
   } catch (error) {
@@ -769,11 +820,6 @@ function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, 
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
     } catch (e) {}
-
-    // Auto-trigger background HLS ABR transcode for chunked videos
-    if (mimeType.startsWith('video/')) {
-      videoTranscode.requestHlsTranscode(fileRecord, userId, userKey).catch(() => {});
-    }
 
     return res.json({ success: true, done: true, file: fileRecord });
   } finally {
@@ -978,184 +1024,6 @@ router.get('/:id/stream', async (req, res) => {
   } catch (error) {
     console.error('Stream handler error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Streaming error: ' + error.message });
-  }
-});
-
-/**
- * GET /:id/hls/status — Check HLS ABR readiness, transcode progress, and metadata
- */
-router.get('/:id/hls/status', async (req, res) => {
-  try {
-    const file = db.getFile(req.params.id, req.user.id);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-    if (!checkFileFolderAccess(file, req)) {
-      return res.status(403).json({ error: 'Folder is locked.' });
-    }
-
-    const mime = (file.mime_type || '').toLowerCase();
-    if (!mime.startsWith('video/') && !file.name.match(/\.(mp4|mkv|mov|webm|avi|flv|m4v|ts|3gp)$/i)) {
-      return res.status(400).json({ error: 'File is not a video' });
-    }
-
-    const isReady = videoTranscode.isHlsReady(req.user.id, file.id);
-    const job = db.getTranscodeJob(file.id);
-    const meta = db.getVideoMetadata(file.id);
-    const token = generatePlaybackToken(file.id, req.user.id);
-
-    res.json({
-      ready: isReady,
-      status: isReady ? 'ready' : (job?.status || 'idle'),
-      progress: isReady ? 100 : (job?.progress || 0),
-      error: job?.error || null,
-      token,
-      metadata: meta || null
-    });
-  } catch (err) {
-    console.error('[HLS Status] Error:', err);
-    res.status(500).json({ error: 'Failed to retrieve HLS status: ' + err.message });
-  }
-});
-
-/**
- * POST /:id/hls/transcode — Trigger background ABR HLS transcoding job
- */
-router.post('/:id/hls/transcode', async (req, res) => {
-  try {
-    const file = db.getFile(req.params.id, req.user.id);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-    if (!checkFileFolderAccess(file, req)) {
-      return res.status(403).json({ error: 'Folder is locked.' });
-    }
-
-    const mime = (file.mime_type || '').toLowerCase();
-    if (!mime.startsWith('video/') && !file.name.match(/\.(mp4|mkv|mov|webm|avi|flv|m4v|ts|3gp)$/i)) {
-      return res.status(400).json({ error: 'File is not a video' });
-    }
-
-    const result = await videoTranscode.requestHlsTranscode(file, req.user.id, req.user.encryptionKey);
-    const token = generatePlaybackToken(file.id, req.user.id);
-
-    res.json({
-      success: true,
-      ...result,
-      token
-    });
-  } catch (err) {
-    console.error('[HLS Transcode] Error:', err);
-    res.status(500).json({ error: 'Transcoding request failed: ' + err.message });
-  }
-});
-
-/**
- * GET /:id/hls/master.m3u8 — Master HLS Playlist
- */
-router.get('/:id/hls/master.m3u8', (req, res) => {
-  try {
-    const file = db.getFile(req.params.id, req.user.id);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-    if (!checkFileFolderAccess(file, req)) {
-      return res.status(403).json({ error: 'Folder is locked.' });
-    }
-
-    const hlsDir = videoTranscode.getFileHlsDir(req.user.id, file.id);
-    const masterPath = path.join(hlsDir, 'master.m3u8');
-
-    if (!existsSync(masterPath)) {
-      return res.status(404).json({ error: 'HLS master playlist not ready' });
-    }
-
-    let masterContent = fs.readFileSync(masterPath, 'utf8');
-    const token = req.query.token || generatePlaybackToken(file.id, req.user.id);
-
-    // Append token to variant index playlist URLs
-    masterContent = masterContent.replace(/([0-9a-zA-Z_/-]+\/index\.m3u8)/g, `$1?token=${encodeURIComponent(token)}`);
-
-    res.writeHead(200, {
-      'Content-Type': 'application/vnd.apple.mpegurl',
-      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
-      'Access-Control-Allow-Origin': '*'
-    });
-    res.end(masterContent);
-  } catch (err) {
-    console.error('[HLS Master] Error:', err);
-    res.status(500).json({ error: 'Failed to serve master playlist: ' + err.message });
-  }
-});
-
-/**
- * GET /:id/hls/:rendition/index.m3u8 — Variant Rendition Playlist (e.g. 1080p, 720p)
- */
-router.get('/:id/hls/:rendition/index.m3u8', (req, res) => {
-  try {
-    const file = db.getFile(req.params.id, req.user.id);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-
-    const rendition = path.basename(req.params.rendition);
-    if (!rendition.match(/^[0-9]+p$/)) {
-      return res.status(400).json({ error: 'Invalid rendition' });
-    }
-
-    const hlsDir = videoTranscode.getFileHlsDir(req.user.id, file.id);
-    const variantPath = path.join(hlsDir, rendition, 'index.m3u8');
-
-    if (!existsSync(variantPath)) {
-      return res.status(404).json({ error: 'Rendition playlist not found' });
-    }
-
-    let variantContent = fs.readFileSync(variantPath, 'utf8');
-    const token = req.query.token || generatePlaybackToken(file.id, req.user.id);
-
-    // Append token to .ts segment references
-    variantContent = variantContent.replace(/^(seg_\d+\.ts)$/gm, `$1?token=${encodeURIComponent(token)}`);
-
-    res.writeHead(200, {
-      'Content-Type': 'application/vnd.apple.mpegurl',
-      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
-      'Access-Control-Allow-Origin': '*'
-    });
-    res.end(variantContent);
-  } catch (err) {
-    console.error('[HLS Variant] Error:', err);
-    res.status(500).json({ error: 'Failed to serve variant playlist: ' + err.message });
-  }
-});
-
-/**
- * GET /:id/hls/:rendition/:segment — HLS TS/fMP4 Video Segment
- */
-router.get('/:id/hls/:rendition/:segment', (req, res) => {
-  try {
-    const file = db.getFile(req.params.id, req.user.id);
-    if (!file) return res.status(404).json({ error: 'File not found' });
-
-    const rendition = path.basename(req.params.rendition);
-    const segment = path.basename(req.params.segment);
-
-    if (!rendition.match(/^[0-9]+p$/) || !segment.match(/^seg_\d+\.ts$/)) {
-      return res.status(400).json({ error: 'Invalid segment request' });
-    }
-
-    const hlsDir = videoTranscode.getFileHlsDir(req.user.id, file.id);
-    const segPath = path.join(hlsDir, rendition, segment);
-
-    if (!existsSync(segPath)) {
-      return res.status(404).json({ error: 'Segment not found' });
-    }
-
-    const stats = statSync(segPath);
-    res.writeHead(200, {
-      'Content-Type': 'video/MP2T',
-      'Content-Length': stats.size,
-      'Cache-Control': 'private, max-age=86400, immutable',
-      'Access-Control-Allow-Origin': '*'
-    });
-
-    const stream = createReadStream(segPath);
-    stream.pipe(res);
-    req.on('close', () => stream.destroy());
-  } catch (err) {
-    console.error('[HLS Segment] Error:', err);
-    if (!res.headersSent) res.status(500).json({ error: 'Failed to stream segment: ' + err.message });
   }
 });
 
