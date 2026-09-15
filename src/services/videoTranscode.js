@@ -362,7 +362,11 @@ function transcodeToHls(sourcePath, outputDir, renditions, totalDuration, onProg
       if (!fs.existsSync(rendDir)) fs.mkdirSync(rendDir, { recursive: true });
     });
 
-    const args = ['-y', '-i', sourcePath];
+    const args = [
+      '-y',
+      '-threads', '0',
+      '-i', sourcePath
+    ];
 
     // Build filter_complex and map arguments for multiple renditions
     const filterComplex = [];
@@ -383,16 +387,19 @@ function transcodeToHls(sourcePath, outputDir, renditions, totalDuration, onProg
         '-map', `[v${idx}]`,
         '-map', '0:a?',
         `-c:v:${idx}`, 'libx264',
-        `-preset:v:${idx}`, 'veryfast',
+        `-preset:v:${idx}`, 'superfast',
         `-b:v:${idx}`, r.videoBitrate,
         `-maxrate:v:${idx}`, r.maxRate,
         `-bufsize:v:${idx}`, r.bufSize,
         `-pix_fmt:v:${idx}`, 'yuv420p',
+        `-g:${idx}`, '60',
+        `-keyint_min:${idx}`, '60',
+        `-sc_threshold:${idx}`, '0',
         `-c:a:${idx}`, 'aac',
         `-b:a:${idx}`, r.audioBitrate,
         `-ac:${idx}`, '2',
         '-f', 'hls',
-        '-hls_time', String(HLS_SEGMENT_SECONDS),
+        '-hls_time', String(HLS_SEGMENT_SECONDS || 4),
         '-hls_list_size', '0',
         '-hls_segment_type', 'mpegts',
         '-hls_segment_filename', segPattern,

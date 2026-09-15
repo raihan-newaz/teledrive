@@ -763,6 +763,10 @@ const Preview = {
           </div>
           <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
             <span class="yt-check-icon"></span>
+            <span>1440p (2K)</span>
+          </div>
+          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
+            <span class="yt-check-icon"></span>
             <span>1080p (FHD)</span>
           </div>
           <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
