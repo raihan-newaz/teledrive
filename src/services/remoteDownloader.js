@@ -12,11 +12,16 @@ const cryptoModule = require('../crypto');
 const telegram = require('../telegram');
 const eventBroadcaster = require('./eventBroadcaster');
 
-const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB chunk size
-const TEMP_DIR = path.join(__dirname, '..', '..', 'data', 'temp');
+// Configurable environment settings
+const MAX_CONCURRENT_JOBS = parseInt(process.env.REMOTE_DOWNLOAD_MAX_CONCURRENT || '2', 10);
+const CHUNK_SIZE = parseInt(process.env.REMOTE_DOWNLOAD_CHUNK_SIZE || String(16 * 1024 * 1024), 10); // 16 MB default
+const MAX_REDIRECTS = parseInt(process.env.REMOTE_DOWNLOAD_MAX_REDIRECTS || '5', 10);
+const TIMEOUT_MS = parseInt(process.env.REMOTE_DOWNLOAD_TIMEOUT_MS || '30000', 10);
+const RETRY_COUNT = parseInt(process.env.REMOTE_DOWNLOAD_RETRY_COUNT || '3', 10);
+const TEMP_ROOT = path.join(__dirname, '..', '..', 'data', 'temp', 'remote-downloads');
 
-if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR, { recursive: true });
+if (!fs.existsSync(TEMP_ROOT)) {
+  fs.mkdirSync(TEMP_ROOT, { recursive: true });
 }
 
 function getMimeType(filename) {
@@ -45,11 +50,11 @@ function getMimeType(filename) {
 }
 
 function sanitizeFilename(filename) {
-  return path.basename(filename || '').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_') || 'downloaded_file';
+  return path.basename(filename || '').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim() || 'downloaded_file';
 }
 
 /**
- * Checks if an IP is in a private / local / loopback subnet (SSRF Protection)
+ * Checks if an IP is in a private / local / loopback subnet (Strict SSRF Protection)
  */
 function isPrivateIP(ip) {
   if (!ip) return true;
@@ -57,15 +62,25 @@ function isPrivateIP(ip) {
 
   const parts = ip.split('.').map(Number);
   if (parts.length === 4) {
+    if (parts[0] === 0) return true; // 0.0.0.0/8
     if (parts[0] === 10) return true; // 10.0.0.0/8
-    if (parts[0] === 127) return true; // 127.0.0.0/8
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // 100.64.0.0/10 (carrier-grade NAT)
+    if (parts[0] === 127) return true; // 127.0.0.0/8 (loopback)
     if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 (link-local)
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
-    if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12 (private)
+    if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16 (private)
+    if (parts[0] >= 224 && parts[0] <= 239) return true; // 224.0.0.0/4 (multicast)
+    if (parts[0] >= 240) return true; // 240.0.0.0/4 (reserved)
   }
 
-  // Check IPv6 private addresses
-  if (ip.startsWith('fc') || ip.startsWith('fd') || ip.startsWith('fe80:')) return true;
+  // IPv6 checks
+  const lower = ip.toLowerCase();
+  if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:') || lower.startsWith('::ffff:')) {
+    if (lower.startsWith('::ffff:')) {
+      return isPrivateIP(lower.replace('::ffff:', ''));
+    }
+    return true;
+  }
 
   return false;
 }
@@ -80,13 +95,29 @@ function formatBytes(bytes) {
 
 class RemoteDownloader {
   constructor() {
-    this.tasks = new Map(); // taskId -> taskObject
+    this.activeJobs = new Map(); // jobId -> { abortController, chunks: [] }
+    this.isProcessingQueue = false;
+
+    // Reset any interrupted jobs on startup
+    setTimeout(() => {
+      this.recoverStuckJobs();
+    }, 1000).unref();
   }
 
   /**
-   * Validate URL against SSRF vulnerabilities
+   * Reset stale in-progress jobs on server restart
    */
-  async validateUrl(targetUrl) {
+  recoverStuckJobs() {
+    try {
+      db.resetStuckRemoteJobs();
+      console.log('[RemoteDownloader] Cleaned interrupted remote jobs from previous run');
+    } catch (e) {}
+  }
+
+  /**
+   * Centralized SSRF validation helper
+   */
+  async validateRemoteUrl(targetUrl) {
     let parsed;
     try {
       parsed = new URL(targetUrl);
@@ -99,26 +130,31 @@ class RemoteDownloader {
     }
 
     const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
-      throw new Error('Access to local/private network addresses is blocked');
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.localhost')
+    ) {
+      throw new Error('Access to local or private network destinations is blocked');
     }
 
     // Resolve hostname to IP to verify public routing
     try {
       const { address } = await dns.lookup(hostname);
       if (isPrivateIP(address)) {
-        throw new Error('Target IP address is in a private network range');
+        throw new Error('Destination IP address resolves to a private network range');
       }
     } catch (err) {
       if (err.message && err.message.includes('private')) throw err;
-      throw new Error(`DNS lookup failed for ${hostname}`);
+      throw new Error(`DNS resolution failed for ${hostname}`);
     }
 
     return parsed;
   }
 
   /**
-   * Extract filename from content-disposition header or URL path
+   * Safe filename extraction
    */
   extractFilename(urlObj, headers, customName) {
     if (customName && customName.trim()) {
@@ -127,7 +163,6 @@ class RemoteDownloader {
 
     const disposition = headers['content-disposition'];
     if (disposition) {
-      // Try UTF-8 filename* first
       const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
       if (utf8Match && utf8Match[1]) {
         try {
@@ -135,16 +170,13 @@ class RemoteDownloader {
         } catch (e) {}
       }
 
-      // Standard filename="name.ext"
       const match = disposition.match(/filename="?([^";]+)"?/i);
       if (match && match[1]) {
         return sanitizeFilename(match[1]);
       }
     }
 
-    // Extract from URL path
-    const pathname = urlObj.pathname;
-    const basename = path.basename(pathname);
+    const basename = path.basename(urlObj.pathname || '');
     if (basename && basename.includes('.')) {
       try {
         return sanitizeFilename(decodeURIComponent(basename));
@@ -153,98 +185,150 @@ class RemoteDownloader {
       }
     }
 
-    return `remote_file_${Date.now()}`;
+    return `download_${Date.now()}`;
   }
 
   /**
-   * Start a remote download task
+   * Add a new remote download job to database queue
    */
-  async startDownload({ userId, userKey, url, customFileName, folderId }) {
-    await this.validateUrl(url);
+  async createJob({ userId, userKey, url, customFileName, folderId }) {
+    await this.validateRemoteUrl(url);
 
-    const taskId = uuidv4();
-    const task = {
-      id: taskId,
+    const jobId = uuidv4();
+    const initialName = customFileName ? sanitizeFilename(customFileName) : 'Discovering file...';
+
+    const job = db.createRemoteJob({
+      id: jobId,
       userId,
-      userKey: userKey || process.env.ENCRYPTION_KEY || 'default-encryption-key',
       url,
-      customFileName,
+      filename: initialName,
       folderId: folderId || null,
-      fileName: customFileName ? sanitizeFilename(customFileName) : 'Preparing download...',
-      status: 'downloading', // 'downloading', 'uploading', 'completed', 'error', 'cancelled'
-      totalBytes: 0,
+      status: 'queued',
+      totalSize: 0,
       downloadedBytes: 0,
-      uploadedChunks: 0,
-      totalChunks: 1,
-      speedText: '',
-      etaText: '',
+      uploadedBytes: 0,
       progress: 0,
-      error: null,
-      createdAt: Date.now(),
-      abortController: new AbortController(),
-      chunks: []
-    };
-
-    this.tasks.set(taskId, task);
-
-    // Execute in background
-    this.runDownloadPipeline(task).catch((err) => {
-      console.error(`[RemoteDownload] Task ${taskId} failed:`, err);
-      task.status = 'error';
-      task.error = err.message || 'Remote download failed';
-      this.broadcastTaskUpdate(task);
+      userKey
     });
 
-    return {
-      taskId,
-      status: task.status,
-      fileName: task.fileName
-    };
+    // Broadcast queued state
+    this.broadcastJobEvent(job);
+
+    // Trigger queue worker
+    this.processQueue().catch(() => {});
+
+    return job;
   }
 
   /**
-   * Main download & chunk-on-the-fly execution loop
+   * Queue processor maintaining concurrency limits
    */
-  async runDownloadPipeline(task) {
-    const { url, userId, userKey, folderId, id: taskId } = task;
-    let redirectCount = 0;
-    let currentUrl = url;
+  async processQueue() {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
 
-    const executeRequest = (targetUrl) => {
+    try {
+      while (this.activeJobs.size < MAX_CONCURRENT_JOBS) {
+        const queuedJobs = db.getQueuedRemoteJobs(1);
+        if (!queuedJobs || queuedJobs.length === 0) break;
+
+        const nextJob = queuedJobs[0];
+        // Mark as validating/downloading immediately
+        db.updateRemoteJob(nextJob.id, {
+          status: 'downloading',
+          started_at: new Date().toISOString()
+        });
+
+        // Launch job in background
+        this.runJob(nextJob).catch((err) => {
+          console.error(`[RemoteDownloader] Job ${nextJob.id} error:`, err);
+          db.updateRemoteJob(nextJob.id, {
+            status: 'failed',
+            error_message: err.message || 'Download failed'
+          });
+          this.broadcastJobEvent(db.getRemoteJob(nextJob.id, nextJob.user_id));
+        }).finally(() => {
+          this.activeJobs.delete(nextJob.id);
+          this.processQueue().catch(() => {});
+        });
+      }
+    } finally {
+      this.isProcessingQueue = false;
+    }
+  }
+
+  /**
+   * Main job download, chunking, AES encryption, and Telegram upload worker
+   */
+  async runJob(jobRecord) {
+    const jobId = jobRecord.id;
+    const userId = jobRecord.user_id;
+
+    // Fetch user encryption key
+    const user = db.getUserById(userId);
+    const userKey = user && user.encryption_key ? user.encryption_key : (process.env.ENCRYPTION_KEY || 'default-encryption-key');
+
+    const abortController = new AbortController();
+    const activeTask = {
+      id: jobId,
+      userId,
+      userKey,
+      abortController,
+      chunks: [],
+      jobDir: path.join(TEMP_ROOT, jobId)
+    };
+
+    if (!fs.existsSync(activeTask.jobDir)) {
+      fs.mkdirSync(activeTask.jobDir, { recursive: true });
+    }
+
+    this.activeJobs.set(jobId, activeTask);
+
+    let redirectCount = 0;
+    let targetUrl = jobRecord.url;
+
+    // Discovery phase: HEAD or Initial GET
+    const executeStream = (reqUrl, startByte = 0) => {
       return new Promise((resolve, reject) => {
-        if (task.abortController.signal.aborted) {
-          return reject(new Error('Download cancelled by user'));
+        if (abortController.signal.aborted) {
+          return reject(new Error('Cancelled by user'));
         }
 
-        let parsedUrl;
+        let parsed;
         try {
-          parsedUrl = new URL(targetUrl);
+          parsed = new URL(reqUrl);
         } catch (e) {
           return reject(new Error('Invalid URL'));
         }
 
-        const client = parsedUrl.protocol === 'https:' ? https : http;
-        const options = {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': '*/*'
-          },
-          signal: task.abortController.signal
+        const client = parsed.protocol === 'https:' ? https : http;
+        const headers = {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TeleDrive/2.0',
+          'Accept': '*/*'
         };
 
-        const req = client.get(targetUrl, options, async (res) => {
-          // Handle HTTP Redirects (301, 302, 303, 307, 308)
+        if (startByte > 0) {
+          headers['Range'] = `bytes=${startByte}-`;
+          if (jobRecord.etag) {
+            headers['If-Range'] = jobRecord.etag;
+          }
+        }
+
+        const req = client.get(reqUrl, { headers, signal: abortController.signal, timeout: TIMEOUT_MS }, async (res) => {
+          // Handle Redirects
           if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             redirectCount++;
-            if (redirectCount > 5) {
+            if (redirectCount > MAX_REDIRECTS) {
+              res.resume();
               return reject(new Error('Too many HTTP redirects'));
             }
-            const nextUrl = new URL(res.headers.location, targetUrl).toString();
             try {
-              await this.validateUrl(nextUrl);
-              res.resume(); // consume stream to free memory
-              return resolve(executeRequest(nextUrl));
+              const nextUrl = new URL(res.headers.location, reqUrl).toString();
+              await this.validateRemoteUrl(nextUrl);
+              res.resume();
+              return resolve(executeStream(nextUrl, startByte));
             } catch (err) {
+              res.resume();
               return reject(err);
             }
           }
@@ -254,19 +338,29 @@ class RemoteDownloader {
             return reject(new Error(`Remote server responded with HTTP status ${res.statusCode}`));
           }
 
-          // Extract content-length & file name
+          // Metadata discovery
           const contentLength = parseInt(res.headers['content-length'], 10);
-          if (!isNaN(contentLength) && contentLength > 0) {
-            task.totalBytes = contentLength;
-            task.totalChunks = Math.max(1, Math.ceil(contentLength / CHUNK_SIZE));
-          }
+          const contentType = res.headers['content-type'] || 'application/octet-stream';
+          const acceptRanges = res.headers['accept-ranges'] === 'bytes';
+          const etag = res.headers['etag'] || null;
+          const lastModified = res.headers['last-modified'] || null;
+          const resolvedFilename = this.extractFilename(parsed, res.headers, jobRecord.filename);
 
-          task.fileName = this.extractFilename(parsedUrl, res.headers, task.customFileName);
-          this.broadcastTaskUpdate(task);
+          let totalSize = (!isNaN(contentLength) && contentLength > 0) ? (startByte + contentLength) : (jobRecord.total_size || 0);
 
-          // Stream chunks to Telegram
+          db.updateRemoteJob(jobId, {
+            filename: resolvedFilename,
+            content_type: contentType,
+            total_size: totalSize,
+            supports_range: acceptRanges ? 1 : 0,
+            etag,
+            last_modified: lastModified
+          });
+
+          this.broadcastJobEvent(db.getRemoteJob(jobId, userId));
+
           try {
-            await this.processStreamChunks(res, task);
+            await this.streamAndUploadChunks(res, activeTask, resolvedFilename, totalSize, jobRecord.folder_id);
             resolve();
           } catch (err) {
             reject(err);
@@ -274,46 +368,57 @@ class RemoteDownloader {
         });
 
         req.on('error', (err) => {
-          if (task.abortController.signal.aborted) {
-            reject(new Error('Download cancelled by user'));
+          if (abortController.signal.aborted) {
+            reject(new Error('Cancelled by user'));
           } else {
             reject(err);
           }
         });
+
+        req.on('timeout', () => {
+          req.destroy(new Error('Connection timed out'));
+        });
       });
     };
 
-    await executeRequest(currentUrl);
+    try {
+      await executeStream(targetUrl, 0);
+    } finally {
+      // Clean temp folder
+      await fsPromises.rm(activeTask.jobDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 
   /**
-   * Reads stream into 20MB chunks and uploads each encrypted chunk directly to Telegram
+   * Stream chunks into memory/temp buffers, AES encrypt, and pipe directly to Telegram
    */
-  async processStreamChunks(resStream, task) {
+  async streamAndUploadChunks(resStream, activeTask, filename, totalSize, folderId) {
+    const { id: jobId, userId, userKey, jobDir, abortController } = activeTask;
     let chunkIndex = 0;
-    let currentChunkBytes = 0;
     let currentChunkBuffers = [];
-    let lastTime = Date.now();
-    let bytesSinceLastCheck = 0;
+    let currentChunkBytes = 0;
+    let totalDownloaded = 0;
+    let lastBroadcastTime = Date.now();
+    let bytesSinceLastBroadcast = 0;
 
     const uploadCurrentChunk = async (chunkBuffer, isFinal = false) => {
       if (chunkBuffer.length === 0 && !isFinal) return;
 
       const chunkId = uuidv4();
-      const rawChunkPath = path.join(TEMP_DIR, `remote_${task.id}_chunk_${chunkIndex}.bin`);
+      const rawChunkPath = path.join(jobDir, `part_${chunkIndex}.bin`);
       const encChunkPath = rawChunkPath + '.enc';
 
       try {
         await fsPromises.writeFile(rawChunkPath, chunkBuffer);
 
-        // AES-256-GCM encryption
-        const { iv, salt, authTag } = await cryptoModule.encryptFile(rawChunkPath, encChunkPath, task.userKey);
+        // AES-256-GCM encryption with user's specific key
+        const { iv, salt, authTag } = await cryptoModule.encryptFile(rawChunkPath, encChunkPath, userKey);
 
-        // Upload to Telegram
-        const chunkTgName = `${task.fileName}.part${chunkIndex + 1}.enc`;
+        // Upload chunk to Telegram
+        const chunkTgName = `${filename}.part${chunkIndex + 1}.enc`;
         const tgMessage = await telegram.uploadFile(encChunkPath, chunkTgName);
 
-        task.chunks.push({
+        activeTask.chunks.push({
           id: chunkId,
           chunkIndex,
           telegramMessageId: tgMessage.id,
@@ -323,46 +428,48 @@ class RemoteDownloader {
           authTag
         });
 
-        task.uploadedChunks++;
         chunkIndex++;
-        this.broadcastTaskUpdate(task);
       } finally {
-        // Clean temp chunk files immediately to prevent disk bloat
         await fsPromises.unlink(rawChunkPath).catch(() => {});
         await fsPromises.unlink(encChunkPath).catch(() => {});
       }
     };
 
     for await (const chunk of resStream) {
-      if (task.abortController.signal.aborted) {
-        throw new Error('Download cancelled by user');
+      if (abortController.signal.aborted) {
+        throw new Error('Cancelled by user');
       }
 
       currentChunkBuffers.push(chunk);
       currentChunkBytes += chunk.length;
-      task.downloadedBytes += chunk.length;
-      bytesSinceLastCheck += chunk.length;
+      totalDownloaded += chunk.length;
+      bytesSinceLastBroadcast += chunk.length;
 
-      // Speed & ETA calculation every 500ms
       const now = Date.now();
-      if (now - lastTime >= 500) {
-        const speed = (bytesSinceLastCheck / ((now - lastTime) / 1000));
-        task.speedText = `${formatBytes(speed)}/s`;
-        if (task.totalBytes > 0) {
-          const remainingBytes = Math.max(0, task.totalBytes - task.downloadedBytes);
-          const remainingSecs = speed > 0 ? Math.ceil(remainingBytes / speed) : 0;
-          task.etaText = `ETA ${remainingSecs}s`;
-          task.progress = Math.min(99, Math.floor((task.downloadedBytes / task.totalBytes) * 100));
-        } else {
-          task.etaText = `${formatBytes(task.downloadedBytes)} downloaded`;
-          task.progress = 50;
+      if (now - lastBroadcastTime >= 600) {
+        const speed = (bytesSinceLastBroadcast / ((now - lastBroadcastTime) / 1000));
+        const progress = totalSize > 0 ? Math.min(99, Math.floor((totalDownloaded / totalSize) * 100)) : 50;
+
+        db.updateRemoteJob(jobId, {
+          downloaded_bytes: totalDownloaded,
+          progress
+        });
+
+        const job = db.getRemoteJob(jobId, userId);
+        if (job) {
+          job.speedText = `${formatBytes(speed)}/s`;
+          if (totalSize > 0) {
+            const remaining = Math.max(0, totalSize - totalDownloaded);
+            const eta = speed > 0 ? Math.ceil(remaining / speed) : 0;
+            job.etaText = `ETA ${eta}s`;
+          }
+          this.broadcastJobEvent(job);
         }
-        lastTime = now;
-        bytesSinceLastCheck = 0;
-        this.broadcastTaskUpdate(task);
+
+        lastBroadcastTime = now;
+        bytesSinceLastBroadcast = 0;
       }
 
-      // When chunk reaches 20MB, upload it
       if (currentChunkBytes >= CHUNK_SIZE) {
         const fullBuffer = Buffer.concat(currentChunkBuffers);
         currentChunkBuffers = [];
@@ -371,26 +478,25 @@ class RemoteDownloader {
       }
     }
 
-    // Upload remaining final chunk
-    if (currentChunkBuffers.length > 0 || task.chunks.length === 0) {
+    // Final chunk
+    if (currentChunkBuffers.length > 0 || activeTask.chunks.length === 0) {
       const finalBuffer = Buffer.concat(currentChunkBuffers);
       await uploadCurrentChunk(finalBuffer, true);
     }
 
-    // Assembling final file in TeleDrive DB
-    await this.completeFileAssembly(task);
+    // Assemble file in TeleDrive database
+    await this.assembleFinalFile(jobId, userId, filename, totalDownloaded, folderId, activeTask.chunks);
   }
 
   /**
-   * Finalizes file records in SQLite and broadcasts success
+   * Finalizes file creation in TeleDrive SQLite DB
    */
-  async completeFileAssembly(task) {
-    const { id: fileId, userId, fileName, folderId, chunks, downloadedBytes } = task;
-    const totalFileSize = downloadedBytes;
-    const totalChunks = chunks.length;
-    const mimeType = getMimeType(fileName);
+  async assembleFinalFile(jobId, userId, filename, totalSize, folderId, chunks) {
+    const fileId = jobId;
+    const mimeType = getMimeType(filename);
     const now = new Date().toISOString();
     const firstChunk = chunks[0] || {};
+    const totalChunks = chunks.length;
 
     // 1. Insert into files table
     db.run(
@@ -399,9 +505,9 @@ class RemoteDownloader {
       [
         fileId,
         userId,
-        fileName,
+        filename,
         mimeType,
-        totalFileSize,
+        totalSize,
         folderId,
         firstChunk.telegramMessageId || 0,
         firstChunk.iv || null,
@@ -429,38 +535,50 @@ class RemoteDownloader {
       });
     }
 
-    // 3. Recalculate user storage quota
+    // 3. Mark job completed
+    db.updateRemoteJob(jobId, {
+      status: 'completed',
+      progress: 100,
+      downloaded_bytes: totalSize,
+      uploaded_bytes: totalSize,
+      file_id: fileId,
+      completed_at: now
+    });
+
     db.recalculateUserStorage(userId);
 
-    task.status = 'completed';
-    task.progress = 100;
-    task.speedText = 'Completed';
-    task.etaText = '';
-    this.broadcastTaskUpdate(task);
-
+    const completedJob = db.getRemoteJob(jobId, userId);
     const fileRecord = db.getFile(fileId, userId);
 
-    // Broadcast file_uploaded event so UI updates instantly
     try {
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
-      eventBroadcaster.broadcast('remote_upload_completed', { taskId: task.id, file: fileRecord });
+      eventBroadcaster.broadcast('remote_upload_completed', { taskId: jobId, file: fileRecord });
     } catch (e) {}
+
+    this.broadcastJobEvent(completedJob);
   }
 
   /**
-   * Cancel an active task
+   * Cancel an active or queued job
    */
-  cancelDownload(taskId, userId) {
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-    if (task.userId !== userId) return false;
+  cancelJob(jobId, userId) {
+    const active = this.activeJobs.get(jobId);
+    if (active) {
+      if (active.userId !== userId) return false;
+      active.abortController.abort();
+      this.activeJobs.delete(jobId);
+    }
 
-    if (task.status === 'downloading' || task.status === 'uploading') {
-      task.abortController.abort();
-      task.status = 'cancelled';
-      task.speedText = 'Cancelled';
-      task.etaText = '';
-      this.broadcastTaskUpdate(task);
+    const job = db.getRemoteJob(jobId, userId);
+    if (!job) return false;
+
+    if (job.status !== 'completed' && job.status !== 'cancelled') {
+      db.updateRemoteJob(jobId, {
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString()
+      });
+      this.broadcastJobEvent(db.getRemoteJob(jobId, userId));
+      this.processQueue().catch(() => {});
       return true;
     }
 
@@ -468,50 +586,22 @@ class RemoteDownloader {
   }
 
   /**
-   * Get all active / recent tasks for a user
+   * Broadcast job event over SSE
    */
-  getUserTasks(userId) {
-    const list = [];
-    for (const task of this.tasks.values()) {
-      if (task.userId === userId) {
-        list.push({
-          id: task.id,
-          fileName: task.fileName,
-          url: task.url,
-          status: task.status,
-          downloadedBytes: task.downloadedBytes,
-          totalBytes: task.totalBytes,
-          uploadedChunks: task.uploadedChunks,
-          totalChunks: task.totalChunks,
-          speedText: task.speedText,
-          etaText: task.etaText,
-          progress: task.progress,
-          error: task.error,
-          createdAt: task.createdAt
-        });
-      }
-    }
-    return list.sort((a, b) => b.createdAt - a.createdAt);
-  }
-
-  /**
-   * Broadcast task progress via EventBroadcaster
-   */
-  broadcastTaskUpdate(task) {
+  broadcastJobEvent(job) {
+    if (!job) return;
     try {
       eventBroadcaster.broadcast('remote_upload_progress', {
-        taskId: task.id,
-        userId: task.userId,
-        fileName: task.fileName,
-        status: task.status,
-        downloadedBytes: task.downloadedBytes,
-        totalBytes: task.totalBytes,
-        uploadedChunks: task.uploadedChunks,
-        totalChunks: task.totalChunks,
-        speedText: task.speedText,
-        etaText: task.etaText,
-        progress: task.progress,
-        error: task.error
+        taskId: job.id,
+        userId: job.user_id,
+        fileName: job.filename,
+        status: job.status,
+        downloadedBytes: job.downloaded_bytes || 0,
+        totalBytes: job.total_size || 0,
+        progress: job.progress || 0,
+        speedText: job.speedText || (job.status === 'completed' ? 'Completed' : (job.status === 'queued' ? 'In queue...' : '')),
+        etaText: job.etaText || '',
+        error: job.error_message || null
       });
     } catch (e) {}
   }

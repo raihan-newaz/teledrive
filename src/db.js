@@ -183,11 +183,38 @@ async function initialize() {
       width INTEGER,
       height INTEGER,
       codec TEXT,
-      audio_codec TEXT,
-      bitrate INTEGER,
       fps REAL,
-      is_hdr INTEGER DEFAULT 0,
+      bitrate INTEGER,
+      audio_codec TEXT,
+      audio_channels INTEGER,
+      audio_sample_rate INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS remote_download_jobs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      filename TEXT,
+      folder_id TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      total_size INTEGER DEFAULT 0,
+      downloaded_bytes INTEGER DEFAULT 0,
+      uploaded_bytes INTEGER DEFAULT 0,
+      progress INTEGER DEFAULT 0,
+      content_type TEXT,
+      supports_range INTEGER DEFAULT 0,
+      etag TEXT,
+      last_modified TEXT,
+      error_message TEXT,
+      file_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      started_at DATETIME,
+      completed_at DATETIME,
+      cancelled_at DATETIME,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -966,6 +993,100 @@ function deleteTranscodeJob(fileId) {
   save();
 }
 
+function createRemoteJob(job) {
+  const now = new Date().toISOString();
+  run(
+    `INSERT INTO remote_download_jobs (id, user_id, url, filename, folder_id, status, total_size, downloaded_bytes, uploaded_bytes, progress, content_type, supports_range, etag, last_modified, error_message, file_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      job.id,
+      job.userId,
+      job.url,
+      job.filename || null,
+      job.folderId || null,
+      job.status || 'queued',
+      job.totalSize || 0,
+      job.downloadedBytes || 0,
+      job.uploadedBytes || 0,
+      job.progress || 0,
+      job.contentType || null,
+      job.supportsRange ? 1 : 0,
+      job.etag || null,
+      job.lastModified || null,
+      job.errorMessage || null,
+      job.fileId || null,
+      job.createdAt || now,
+      now
+    ]
+  );
+  save();
+  return getRemoteJob(job.id, job.userId);
+}
+
+function getRemoteJob(id, userId) {
+  if (userId) {
+    return get('SELECT * FROM remote_download_jobs WHERE id = ? AND user_id = ?', [id, userId]);
+  }
+  return get('SELECT * FROM remote_download_jobs WHERE id = ?', [id]);
+}
+
+function updateRemoteJob(id, updates) {
+  const fields = [];
+  const values = [];
+  const allowed = [
+    'filename', 'folder_id', 'status', 'total_size', 'downloaded_bytes',
+    'uploaded_bytes', 'progress', 'content_type', 'supports_range', 'etag',
+    'last_modified', 'error_message', 'file_id', 'started_at', 'completed_at', 'cancelled_at'
+  ];
+
+  for (const [key, val] of Object.entries(updates)) {
+    if (allowed.includes(key)) {
+      fields.push(`${key} = ?`);
+      values.push(val);
+    }
+  }
+
+  if (fields.length === 0) return;
+
+  fields.push('updated_at = ?');
+  values.push(new Date().toISOString());
+  values.push(id);
+
+  run(`UPDATE remote_download_jobs SET ${fields.join(', ')} WHERE id = ?`, values);
+  save();
+}
+
+function getUserRemoteJobs(userId, limit = 50) {
+  return all(
+    'SELECT * FROM remote_download_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+    [userId, limit]
+  );
+}
+
+function getQueuedRemoteJobs(limit = 10) {
+  return all(
+    "SELECT * FROM remote_download_jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT ?",
+    [limit]
+  );
+}
+
+function getActiveRemoteJobCount() {
+  const row = get(
+    "SELECT COUNT(*) as cnt FROM remote_download_jobs WHERE status IN ('validating', 'downloading', 'encrypting', 'uploading')"
+  );
+  return row ? row.cnt : 0;
+}
+
+function resetStuckRemoteJobs() {
+  run(
+    `UPDATE remote_download_jobs 
+     SET status = 'failed', error_message = 'Interrupted by server restart', updated_at = ?
+     WHERE status IN ('validating', 'downloading', 'encrypting', 'uploading')`,
+    [new Date().toISOString()]
+  );
+  save();
+}
+
 /**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
@@ -1026,5 +1147,12 @@ module.exports = {
   saveVideoMetadata,
   getTranscodeJob,
   upsertTranscodeJob,
-  deleteTranscodeJob
+  deleteTranscodeJob,
+  createRemoteJob,
+  getRemoteJob,
+  updateRemoteJob,
+  getUserRemoteJobs,
+  getQueuedRemoteJobs,
+  getActiveRemoteJobCount,
+  resetStuckRemoteJobs
 };

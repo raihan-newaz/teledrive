@@ -1,78 +1,120 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const remoteDownloader = require('../services/remoteDownloader');
+const db = require('../db');
 
 const router = express.Router();
 router.use(authMiddleware);
 
 /**
- * POST /api/remote-upload/start
- * Initiates a server-side remote URL download and Telegram cloud upload
+ * POST /start or POST / — Start Remote Download Job
  */
-router.post('/start', async (req, res) => {
+const handleStartJob = async (req, res) => {
   try {
-    const { url, fileName, folderId } = req.body;
+    const { url, fileName, filename, folderId } = req.body;
+    const targetUrl = url || req.body.link;
 
-    if (!url || typeof url !== 'string' || !url.trim()) {
+    if (!targetUrl || typeof targetUrl !== 'string' || !targetUrl.trim()) {
       return res.status(400).json({ error: 'Direct download URL is required' });
     }
 
-    const trimmedUrl = url.trim();
     const userId = req.user.id;
     const userKey = req.user.encryptionKey;
+    const resolvedName = (fileName || filename || '').trim();
 
-    const result = await remoteDownloader.startDownload({
+    const job = await remoteDownloader.createJob({
       userId,
       userKey,
-      url: trimmedUrl,
-      customFileName: fileName,
+      url: targetUrl.trim(),
+      customFileName: resolvedName,
       folderId: folderId || null
     });
 
     res.json({
       success: true,
-      message: 'Remote download started',
-      task: result
+      message: 'Remote download queued',
+      job,
+      task: {
+        taskId: job.id,
+        fileName: job.filename,
+        status: job.status
+      }
     });
   } catch (error) {
-    console.error('Remote upload start error:', error);
+    console.error('Remote download error:', error);
     res.status(400).json({ error: error.message || 'Failed to start remote download' });
   }
-});
+};
+
+router.post('/start', handleStartJob);
+router.post('/', handleStartJob);
 
 /**
- * GET /api/remote-upload/tasks
- * Returns active and recent remote download tasks for current user
+ * GET /tasks or GET / — List Remote Download Jobs for authenticated user
  */
-router.get('/tasks', (req, res) => {
+const handleListJobs = (req, res) => {
   try {
-    const tasks = remoteDownloader.getUserTasks(req.user.id);
-    res.json({ success: true, tasks });
+    const jobs = db.getUserRemoteJobs(req.user.id, 50);
+    res.json({
+      success: true,
+      jobs,
+      tasks: jobs.map(j => ({
+        id: j.id,
+        fileName: j.filename,
+        url: j.url,
+        status: j.status,
+        downloadedBytes: j.downloaded_bytes,
+        totalBytes: j.total_size,
+        progress: j.progress,
+        error: j.error_message,
+        createdAt: j.created_at
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+router.get('/tasks', handleListJobs);
+router.get('/', handleListJobs);
+
+/**
+ * GET /:id — Get single job detail (Strict user ownership check)
+ */
+router.get('/:id', (req, res) => {
+  try {
+    const job = db.getRemoteJob(req.params.id, req.user.id);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    res.json({ success: true, job });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/remote-upload/cancel
- * Cancels an active remote download task
+ * POST /cancel or POST /:id/cancel — Cancel an active/queued job
  */
-router.post('/cancel', (req, res) => {
+const handleCancelJob = (req, res) => {
   try {
-    const { taskId } = req.body;
-    if (!taskId) {
-      return res.status(400).json({ error: 'taskId is required' });
+    const jobId = req.params.id || req.body.taskId || req.body.jobId;
+    if (!jobId) {
+      return res.status(400).json({ error: 'Job ID is required' });
     }
 
-    const cancelled = remoteDownloader.cancelDownload(taskId, req.user.id);
+    const cancelled = remoteDownloader.cancelJob(jobId, req.user.id);
     if (!cancelled) {
-      return res.status(404).json({ error: 'Task not found or already completed' });
+      return res.status(404).json({ error: 'Job not found or cannot be cancelled' });
     }
 
     res.json({ success: true, message: 'Remote download cancelled' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
+};
+
+router.post('/cancel', handleCancelJob);
+router.post('/:id/cancel', handleCancelJob);
 
 module.exports = router;

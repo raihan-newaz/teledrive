@@ -129,6 +129,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/realtime', realtimeRouter);
 app.use('/api/remote-upload', remoteUploadRouter);
+app.use('/api/remote-download', remoteUploadRouter);
 
 // Public share landing page
 app.get('/share/:token', (req, res) => {
