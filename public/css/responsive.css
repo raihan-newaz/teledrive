@@ -730,8 +730,13 @@
     font-family: 'Google Sans', sans-serif !important;
   }
   .settings-tabs {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    white-space: nowrap !important;
+    flex-wrap: nowrap !important;
     padding: 0 10px !important;
-    gap: 2px !important;
+    gap: 4px !important;
     flex-shrink: 0 !important;
     scrollbar-width: none !important;
   }
@@ -739,7 +744,8 @@
     display: none !important;
   }
   .settings-tab-btn {
-    padding: 10px 10px !important;
+    flex-shrink: 0 !important;
+    padding: 10px 12px !important;
     font-size: 12px !important;
     gap: 6px !important;
     font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
@@ -758,6 +764,7 @@
   }
   .settings-section {
     padding: 14px 14px !important;
+    border-radius: var(--radius-sm) !important;
   }
   .settings-section-title h4 {
     font-size: 14px !important;
@@ -771,77 +778,157 @@
     grid-template-columns: 1fr !important;
     gap: 10px !important;
   }
-
-  /* Single-line Clean Settings Buttons & Action Boxes */
+  .storage-stat-card {
+    padding: 12px 14px !important;
+  }
+  .telegram-status-card {
+    padding: 14px 14px !important;
+  }
+  .telegram-status-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  .telegram-account-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .backup-history-list {
+    max-height: 240px !important;
+  }
+  .backup-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  .backup-item-right {
+    width: 100% !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+  }
+  .backup-item-right button {
+    flex: 1 1 auto !important;
+    height: 32px !important;
+    font-size: 11px !important;
+    padding: 0 8px !important;
+    justify-content: center !important;
+  }
+  .backup-actions-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .backup-action-card {
+    padding: 14px !important;
+  }
+  .admin-header-bar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .admin-header-bar button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  .admin-user-card {
+    padding: 12px 12px !important;
+  }
   .cache-action-box {
     display: flex !important;
-    flex-direction: row !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    gap: 12px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
     padding: 12px 0 !important;
   }
-  .cache-action-box > div {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
-  .cache-action-box strong {
-    font-size: 13px !important;
-    font-family: 'Google Sans', sans-serif !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-  .cache-action-box p {
-    font-size: 11px !important;
-    line-height: 1.4 !important;
-  }
-  .cache-action-box button,
-  .cache-action-box .btn-danger,
-  .cache-action-box .btn-primary,
-  .cache-action-box .btn-secondary {
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-    display: inline-flex !important;
-    align-items: center !important;
+  .cache-action-box button {
+    width: 100% !important;
+    height: 40px !important;
     justify-content: center !important;
-    height: 38px !important;
-    padding: 0 16px !important;
-    font-size: 13px !important;
-    font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
-    font-weight: 500 !important;
-    border-radius: 8px !important;
   }
 
   .settings-actions {
     display: flex !important;
-    flex-wrap: nowrap !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
     gap: 10px !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
+    width: 100% !important;
+    margin-top: 14px !important;
   }
   .settings-actions button {
+    width: 100% !important;
     flex-shrink: 0 !important;
-    white-space: nowrap !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    height: 38px !important;
+    height: 42px !important;
     padding: 0 16px !important;
     font-size: 13px !important;
     font-family: 'Google Sans Text', 'Roboto', sans-serif !important;
     font-weight: 500 !important;
     border-radius: 8px !important;
+    white-space: normal !important;
+    box-sizing: border-box !important;
   }
 
   .pref-row {
-    padding: 10px 0 !important;
-    gap: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px 0 !important;
+    gap: 10px !important;
+  }
+  .pref-row:has(.toggle-switch),
+  .pref-row:has(.theme-switch-btns),
+  .pref-row:has(.view-pref-btns),
+  .pref-row.pref-row-toggle {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+  }
+  .pref-info {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .pref-row:has(.toggle-switch) .pref-info,
+  .pref-row:has(.theme-switch-btns) .pref-info,
+  .pref-row:has(.view-pref-btns) .pref-info,
+  .pref-row.pref-row-toggle .pref-info {
+    width: auto !important;
+    flex: 1 1 auto !important;
   }
   .pref-info strong {
     font-size: 13px !important;
     font-family: 'Google Sans', sans-serif !important;
   }
+  .pref-control {
+    width: 100% !important;
+    align-items: stretch !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .pref-control .settings-select,
+  .settings-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 13px !important;
+    height: 42px !important;
+    padding: 8px 12px !important;
+  }
+  #pref-custom-chunk-wrap {
+    width: 100% !important;
+    justify-content: stretch !important;
+    margin-top: 6px !important;
+  }
+  #pref-custom-chunk-wrap input {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+  }
+
   .theme-switch-btns, .view-pref-btns {
     flex-shrink: 0 !important;
     gap: 6px !important;
@@ -849,32 +936,61 @@
   .theme-btn, .pref-btn {
     white-space: nowrap !important;
     flex-shrink: 0 !important;
-    padding: 6px 12px !important;
+    padding: 6px 14px !important;
     font-size: 12px !important;
     border-radius: 6px !important;
+    height: 34px !important;
   }
 
   .input-with-btn {
     display: flex !important;
+    flex-direction: column !important;
     gap: 8px !important;
-    align-items: center !important;
+    align-items: stretch !important;
     width: 100% !important;
   }
   .input-with-btn input {
-    flex: 1 1 auto !important;
+    width: 100% !important;
+    height: 40px !important;
     min-width: 0 !important;
     font-size: 12px !important;
+    box-sizing: border-box !important;
   }
   .input-with-btn button {
-    flex-shrink: 0 !important;
+    width: 100% !important;
     height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     padding: 0 12px !important;
   }
 
   .webdav-session-card {
-    padding: 10px 12px !important;
-    gap: 10px !important;
+    padding: 12px !important;
+    gap: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
     background: var(--bg-hover) !important;
+    border-radius: var(--radius-sm) !important;
+    border: 1px solid var(--border-color) !important;
+  }
+  .webdav-session-card > div:first-child {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .webdav-session-card > div:last-child {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: stretch !important;
+  }
+  .webdav-session-card .btn-revoke-session,
+  .webdav-session-card .btn-unrevoke-session {
+    width: 100% !important;
+    height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   /* 10b. Share Modal (Mobile Responsive Bottom Sheet) */
