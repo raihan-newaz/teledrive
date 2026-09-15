@@ -117,11 +117,29 @@
     padding: 6px 10px 6px 36px;
   }
   .toolbar-right {
-    gap: 2px;
+    gap: 4px;
+    align-items: center;
   }
   .toolbar-right .icon-btn {
     width: 34px;
     height: 34px;
+  }
+  .toolbar-right .btn-install-app {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+  }
+  .toolbar-right .btn-install-app span {
+    display: none !important;
+  }
+  .toolbar-right .btn-install-app svg {
+    width: 17px !important;
+    height: 17px !important;
   }
 
   /* 4. Sidebar Off-Canvas */

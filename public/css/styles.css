@@ -3693,7 +3693,7 @@ input:focus, select:focus, textarea:focus {
 /* PWA INSTALL UI & MODALS                                                    */
 /* ══════════════════════════════════════════════════════════════════════════ */
 .btn-install-app {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 6px;
   background: var(--accent-color, #1a73e8);
@@ -3706,10 +3706,20 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 6px rgba(26, 115, 232, 0.25);
+  white-space: nowrap;
 }
 .btn-install-app:hover {
   filter: brightness(1.1);
   transform: translateY(-1px);
+}
+.pwa-install-btn {
+  display: none;
+}
+.pwa-install-btn.pwa-ready {
+  display: inline-flex;
+}
+.sidebar-nav .pwa-install-btn.pwa-ready {
+  display: flex;
 }
 .pwa-modal-card {
   max-width: 420px !important;

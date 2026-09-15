@@ -83,13 +83,15 @@ const PWA = {
   showInstallButtons() {
     const buttons = document.querySelectorAll('.pwa-install-btn');
     buttons.forEach((btn) => {
-      btn.style.display = 'inline-flex';
+      btn.classList.add('pwa-ready');
+      btn.style.removeProperty('display');
     });
   },
 
   hideInstallButtons() {
     const buttons = document.querySelectorAll('.pwa-install-btn');
     buttons.forEach((btn) => {
+      btn.classList.remove('pwa-ready');
       btn.style.display = 'none';
     });
   },
