@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { shareVerifyLimiter } = require('../middleware/rateLimiter');
 const filesRouter = require('./files');
 
 const router = express.Router();
@@ -77,9 +78,9 @@ router.get('/public/:token', async (req, res) => {
 });
 
 /**
- * POST /public/:token/verify — Verify password for protected shared file
+ * POST /public/:token/verify — Verify password for protected shared file (with rate limiting against brute-force)
  */
-router.post('/public/:token/verify', async (req, res) => {
+router.post('/public/:token/verify', shareVerifyLimiter, async (req, res) => {
   try {
     const { token } = req.params;
     const { password } = req.body;
@@ -176,20 +177,6 @@ async function checkPublicAccess(req, res, file) {
     const cookieKey = req.cookies[`share_key_${file.share_token}`];
     if (verifyShareAccessToken(file.share_token, cookieKey)) {
       return true;
-    }
-  }
-
-  // 3. Fallback: support ?pw=password directly in URL
-  if (req.query.pw) {
-    try {
-      const inputPw = String(req.query.pw).trim();
-      if (file.share_password.startsWith('$2a$') || file.share_password.startsWith('$2b$')) {
-        return await bcrypt.compare(inputPw, file.share_password);
-      } else {
-        return inputPw === file.share_password.trim();
-      }
-    } catch (e) {
-      return false;
     }
   }
 

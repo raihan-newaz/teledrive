@@ -191,16 +191,7 @@ async function generateServerThumbnailForFile(file, outputPath) {
       return await generateVideoThumbnailServer(cachedPath, outputPath);
     }
 
-    // 1. Fast-path: FFmpeg HTTP stream seeking with internal loopback authentication
-    const port = process.env.PORT || 3000;
-    const internalKey = encodeURIComponent(process.env.ENCRYPTION_KEY || '');
-    const streamUrl = `http://127.0.0.1:${port}/api/files/${file.id}/stream?internalKey=${internalKey}`;
-    try {
-      const ok = await generateVideoThumbnailServer(streamUrl, outputPath);
-      if (ok && existsSync(outputPath)) return true;
-    } catch (e) {}
-
-    // 2. Fallback: Download full video directly to local cache
+    // Download and decrypt required video part directly to generate thumbnail
     let parts = [];
     if (file.is_chunked === 1) {
       parts = db.getFileChunks(file.id);
@@ -485,7 +476,8 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
     });
   }
 
-  const shouldCache = (start === 0);
+  const plaintextCacheEnabled = process.env.PLAINTEXT_CACHE_ENABLED !== 'false';
+  const shouldCache = plaintextCacheEnabled && (start === 0);
   const tempCachedPath = `${cachedPath}.tmp`;
   let cacheWriteStream = null;
   if (shouldCache) {
@@ -529,6 +521,11 @@ async function streamFileToResponse(file, req, res, isDownload = false) {
       const key = cryptoModule.deriveKey(process.env.ENCRYPTION_KEY, part.salt);
       const iv = Buffer.from(part.iv, 'base64');
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      if (part.auth_tag) {
+        try {
+          decipher.setAuthTag(Buffer.from(part.auth_tag, 'base64'));
+        } catch (e) {}
+      }
 
       let totalEncReceived = 0;
       let partDecryptedOffset = 0;
@@ -625,9 +622,11 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     originalPath = req.file.path;
     encryptedPath = originalPath + '.enc';
 
-    // 1. Immediately place in local cache so newly uploaded files play with 0ms delay!
-    const cachedPath = path.join(cacheDir, `${fileId}.dec`);
-    copyFileSync(originalPath, cachedPath);
+    // 1. If plaintext cache is enabled, place in local cache for 0ms instant playback
+    if (process.env.PLAINTEXT_CACHE_ENABLED !== 'false') {
+      const cachedPath = path.join(cacheDir, `${fileId}.dec`);
+      try { copyFileSync(originalPath, cachedPath); } catch (e) {}
+    }
 
     // 2. Encrypt file using AES-256-GCM
     const encryptionKey = process.env.ENCRYPTION_KEY;
@@ -649,9 +648,9 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     }
 
     db.run(
-      `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
-      [fileId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, now, now]
+      `INSERT INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, ?, ?)`,
+      [fileId, safeName, mimeType, req.file.size, folderId, message.id, iv, salt, authTag, now, now]
     );
 
     const fileRecord = db.getFile(fileId);
@@ -697,9 +696,9 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
     const firstChunk = chunksToUse[0] || {};
 
     db.run(
-      `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
-      [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
+      `INSERT OR REPLACE INTO files (id, name, mime_type, size, folder_id, telegram_message_id, iv, salt, auth_tag, is_starred, is_trashed, is_chunked, total_chunks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+      [fileId, safeName, mimeType, totalFileSize, folderId, firstChunk.telegram_message_id, firstChunk.iv, firstChunk.salt, firstChunk.auth_tag || null, totalChunks > 1 ? 1 : 0, totalChunks, now, now]
     );
 
     // Clear any old records for this file ID in file_chunks, then commit all chunks
@@ -712,7 +711,8 @@ function assembleFinalFile(uploadId, safeName, totalFileSize, folderId, totalChu
         telegramMessageId: ch.telegram_message_id,
         size: ch.size,
         iv: ch.iv,
-        salt: ch.salt
+        salt: ch.salt,
+        authTag: ch.auth_tag || null
       });
     }
 
@@ -802,8 +802,14 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const totalFileSize = parseInt(req.body.fileSize, 10) || req.file.size;
     const folderId = req.body.folderId || null;
 
-    if (!uploadId || isNaN(chunkIndex) || isNaN(totalChunks)) {
-      return res.status(400).json({ error: 'Missing chunk metadata' });
+    if (!uploadId || typeof uploadId !== 'string' || uploadId.length > 128 || isNaN(chunkIndex) || isNaN(totalChunks)) {
+      return res.status(400).json({ error: 'Missing or invalid chunk metadata' });
+    }
+    if (chunkIndex < 0 || totalChunks < 1 || chunkIndex >= totalChunks || totalChunks > 10000) {
+      return res.status(400).json({ error: 'Invalid chunk index or total chunks range' });
+    }
+    if (totalFileSize <= 0 || totalFileSize > 500 * 1024 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Invalid total file size' });
     }
 
     const safeName = sanitizeFilename(fileName);
@@ -846,7 +852,8 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       telegramMessageId: message.id,
       size: req.file.size,
       iv,
-      salt
+      salt,
+      authTag
     });
 
     // 6. Check if all chunks have been received

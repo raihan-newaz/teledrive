@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -29,8 +28,10 @@ import com.example.teledrive.services.SyncForegroundService
 import com.example.teledrive.ui.screens.*
 import com.example.teledrive.ui.theme.TeleDriveTheme
 import com.example.teledrive.ui.viewmodel.DriveViewModel
+import com.example.teledrive.ui.viewmodel.UploadState
 import com.example.teledrive.utils.CryptoEngine
 import com.example.teledrive.utils.SessionManager
+import com.example.teledrive.utils.TransferManager
 import com.example.teledrive.webdav.LocalWebDavServer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +50,8 @@ enum class ScreenState {
     DECRYPT_TOOL,
     IMAGE_VIEWER,
     MEDIA_VIEWER,
-    DOCUMENT_VIEWER
+    DOCUMENT_VIEWER,
+    TRANSFERS
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var webDavServer: LocalWebDavServer
     @Inject lateinit var fileRepository: FileRepository
     @Inject lateinit var dbBackupManager: DatabaseBackupManager
+    @Inject lateinit var transferManager: TransferManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,7 +93,6 @@ class MainActivity : ComponentActivity() {
                     val selectedFileIds by viewModel.selectedFileIds.collectAsState()
                     val isGridView by viewModel.isGridView.collectAsState()
                     val searchQuery by viewModel.searchQuery.collectAsState()
-                    val uploadState by viewModel.uploadState.collectAsState()
 
                     // Toast message listener
                     LaunchedEffect(Unit) {
@@ -129,39 +131,31 @@ class MainActivity : ComponentActivity() {
                         contract = ActivityResultContracts.GetMultipleContents()
                     ) { uris: List<Uri> ->
                         if (uris.isNotEmpty()) {
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                val contentResolver = applicationContext.contentResolver
-                                uris.forEach { uri ->
-                                    var fileName = "uploaded_file"
-                                    var fileSize = 0L
-                                    val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+                            SyncForegroundService.start(this@MainActivity, "TeleDrive Uploads", "Queued ${uris.size} files")
+                            uris.forEach { uri ->
+                                var fileName = "uploaded_file"
+                                var fileSize = 0L
+                                val mimeType = applicationContext.contentResolver.getType(uri) ?: "application/octet-stream"
 
-                                    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                                        if (cursor.moveToFirst()) {
-                                            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                                            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                                            if (nameIndex != -1) fileName = cursor.getString(nameIndex)
-                                            if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
-                                        }
-                                    }
-
-                                    try {
-                                        contentResolver.openInputStream(uri)?.use { inputStream ->
-                                            withContext(Dispatchers.Main) {
-                                                SyncForegroundService.start(this@MainActivity, "TeleDrive Upload", "Uploading $fileName")
-                                                viewModel.uploadFileStream(fileName, mimeType, inputStream, fileSize)
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        withContext(Dispatchers.Main) {
-                                            Toast.makeText(this@MainActivity, "Error reading file: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        }
+                                applicationContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                                        if (nameIndex != -1) fileName = cursor.getString(nameIndex)
+                                        if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
                                     }
                                 }
-                                withContext(Dispatchers.Main) {
-                                    SyncForegroundService.stop(this@MainActivity)
+
+                                transferManager.enqueueUpload(
+                                    fileName = fileName,
+                                    mimeType = mimeType,
+                                    fileSize = fileSize,
+                                    folderId = currentFolderId
+                                ) {
+                                    applicationContext.contentResolver.openInputStream(uri)!!
                                 }
                             }
+                            currentScreen = ScreenState.TRANSFERS
                         }
                     }
 
@@ -180,27 +174,29 @@ class MainActivity : ComponentActivity() {
                                 val children = documentFile.listFiles()
                                 val contentResolver = applicationContext.contentResolver
 
+                                withContext(Dispatchers.Main) {
+                                    SyncForegroundService.start(this@MainActivity, "TeleDrive Folder Upload", "Queued ${children.size} files")
+                                }
+
                                 children.filter { it.isFile }.forEach { doc ->
                                     val childUri = doc.uri
                                     val childName = doc.name ?: "file"
                                     val mimeType = doc.type ?: "application/octet-stream"
                                     val fileSize = doc.length()
 
-                                    try {
-                                        contentResolver.openInputStream(childUri)?.use { inputStream ->
-                                            withContext(Dispatchers.Main) {
-                                                SyncForegroundService.start(this@MainActivity, "TeleDrive Folder Upload", "Uploading $childName")
-                                                viewModel.uploadFileStream(childName, mimeType, inputStream, fileSize)
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
+                                    transferManager.enqueueUpload(
+                                        fileName = childName,
+                                        mimeType = mimeType,
+                                        fileSize = fileSize,
+                                        folderId = currentFolderId
+                                    ) {
+                                        contentResolver.openInputStream(childUri)!!
                                     }
                                 }
 
                                 withContext(Dispatchers.Main) {
-                                    SyncForegroundService.stop(this@MainActivity)
-                                    Toast.makeText(this@MainActivity, "Folder '$folderName' uploaded successfully!", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(this@MainActivity, "Folder '$folderName' queued successfully!", Toast.LENGTH_SHORT).show()
+                                    currentScreen = ScreenState.TRANSFERS
                                 }
                             }
                         }
@@ -277,7 +273,7 @@ class MainActivity : ComponentActivity() {
                                 selectedCategory = selectedCategory,
                                 isGridView = isGridView,
                                 searchQuery = searchQuery,
-                                uploadState = uploadState,
+                                uploadState = UploadState(), // Ignored, handled by TransfersScreen now
                                 selectedFileIds = selectedFileIds,
                                 onToggleFileSelection = { viewModel.toggleFileSelection(it) },
                                 onClearSelection = { viewModel.clearSelection() },
@@ -344,10 +340,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onDownloadFile = { file -> viewModel.downloadFileToDevice(file) },
+                                onRetryUpload = { file -> 
+                                    // Since we cannot automatically acquire the InputStream of a failed file,
+                                    // tell user to re-upload it properly, but we clean up the failed entry.
+                                    Toast.makeText(this@MainActivity, "To retry, please select the file again using 'Upload File'.", Toast.LENGTH_LONG).show()
+                                    viewModel.deletePermanently(file)
+                                },
                                 onStarClick = { file -> viewModel.toggleStar(file) },
                                 onTrashClick = { file -> viewModel.moveToTrash(file) },
                                 onRestoreClick = { file -> viewModel.restoreFromTrash(file) },
                                 onDeletePermanentlyClick = { file -> viewModel.deletePermanently(file) },
+                                onOpenTransfers = { currentScreen = ScreenState.TRANSFERS },
                                 onOpenBackupSettings = { currentScreen = ScreenState.BACKUP_SETTINGS },
                                 onOpenSettings = { currentScreen = ScreenState.SETTINGS },
                                 onOpenDecryptTool = { currentScreen = ScreenState.DECRYPT_TOOL },
@@ -357,6 +360,13 @@ class MainActivity : ComponentActivity() {
                                 onRenameFolder = { folder, newName -> viewModel.renameFolder(folder, newName) },
                                 onMoveFolder = { folder, targetParentId -> viewModel.moveFolder(folder, targetParentId) },
                                 onDeleteFolder = { folder -> viewModel.deleteFolder(folder) }
+                            )
+                        }
+
+                        ScreenState.TRANSFERS -> {
+                            TransfersScreen(
+                                transferManager = transferManager,
+                                onBack = { currentScreen = ScreenState.HOME }
                             )
                         }
 

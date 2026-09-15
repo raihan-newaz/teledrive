@@ -41,9 +41,22 @@ const uploadLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+/**
+ * Public Share Password rate limiter: 5 failed attempts per 10 minutes per IP
+ */
+const shareVerifyLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 5,
+    skipSuccessfulRequests: true,
+    message: { error: 'Too many incorrect password attempts. Please try again after 10 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 module.exports = {
     globalLimiter,
     authLimiter,
     loginLimiter,
-    uploadLimiter
+    uploadLimiter,
+    shareVerifyLimiter
 };

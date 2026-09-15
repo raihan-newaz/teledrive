@@ -9,12 +9,6 @@ const jwt = require('jsonwebtoken');
  */
 const authMiddleware = (req, res, next) => {
   try {
-    // 0. Internal loopback authentication for FFmpeg thumbnail generator & server background tasks
-    if (req.query && req.query.internalKey && process.env.ENCRYPTION_KEY && req.query.internalKey === process.env.ENCRYPTION_KEY) {
-      req.user = { id: 'internal', username: 'server' };
-      return next();
-    }
-
     let token = null;
 
     // 1. Check Authorization header
@@ -37,8 +31,8 @@ const authMiddleware = (req, res, next) => {
       return res.status(401).json({ error: 'Unauthorized: No token provided' });
     }
 
-    // Verify token using JWT_SECRET
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Explicitly verify token using JWT_SECRET and whitelist HS256 algorithm
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.user = decoded;
     next();
   } catch (error) {

@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const fsPromises = require('fs/promises');
 const path = require('path');
 
@@ -110,8 +110,13 @@ function startCacheMaintenanceSchedule() {
   console.log(`[Cache] Auto LRU cache management active (Limit: ${(getMaxCacheLimitBytes() / (1024 * 1024 * 1024)).toFixed(1)} GB)`);
 }
 
+function isPlaintextCacheEnabled() {
+  return process.env.PLAINTEXT_CACHE_ENABLED !== 'false';
+}
+
 module.exports = {
   getMaxCacheLimitBytes,
+  isPlaintextCacheEnabled,
   pruneCacheIfNeeded,
   touchCacheFile,
   startCacheMaintenanceSchedule

@@ -97,10 +97,12 @@ fun HomeScreen(
     onNavigateBackFolder: () -> Unit,
     onFileClick: (FileEntity) -> Unit,
     onDownloadFile: (FileEntity) -> Unit,
+    onRetryUpload: (FileEntity) -> Unit,
     onStarClick: (FileEntity) -> Unit,
     onTrashClick: (FileEntity) -> Unit,
     onRestoreClick: (FileEntity) -> Unit,
     onDeletePermanentlyClick: (FileEntity) -> Unit,
+    onOpenTransfers: () -> Unit,
     onOpenBackupSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDecryptTool: () -> Unit,
@@ -197,11 +199,11 @@ fun HomeScreen(
                     )
                     NavigationDrawerItem(
                         icon = { Icon(Icons.Default.CloudUpload, contentDescription = null) },
-                        label = { Text("Uploads") },
+                        label = { Text("Active Transfers") },
                         selected = false,
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
-                            onUploadClick()
+                            onOpenTransfers()
                         }
                     )
                     NavigationDrawerItem(
@@ -632,6 +634,7 @@ fun HomeScreen(
                                     onFileClick = onFileClick,
                                     onToggleSelection = { onToggleFileSelection(file.id) },
                                     onDownloadFile = onDownloadFile,
+                                    onRetryUpload = onRetryUpload,
                                     onStarClick = onStarClick,
                                     onTrashClick = onTrashClick,
                                     onRestoreClick = onRestoreClick,
@@ -660,6 +663,7 @@ fun HomeScreen(
                                     onFileClick = onFileClick,
                                     onToggleSelection = { onToggleFileSelection(file.id) },
                                     onDownloadFile = onDownloadFile,
+                                    onRetryUpload = onRetryUpload,
                                     onStarClick = onStarClick,
                                     onTrashClick = onTrashClick,
                                     onRestoreClick = onRestoreClick,
@@ -927,6 +931,7 @@ fun FileListItem(
     onFileClick: (FileEntity) -> Unit,
     onToggleSelection: () -> Unit = {},
     onDownloadFile: (FileEntity) -> Unit,
+    onRetryUpload: (FileEntity) -> Unit,
     onStarClick: (FileEntity) -> Unit,
     onTrashClick: (FileEntity) -> Unit,
     onRestoreClick: (FileEntity) -> Unit,
@@ -1003,14 +1008,27 @@ fun FileListItem(
                                 onFileClick(file)
                             }
                         )
-                        DropdownMenuItem(
-                            text = { Text("Download to Phone") },
-                            leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-                            onClick = {
-                                menuExpanded = false
-                                onDownloadFile(file)
-                            }
-                        )
+                        
+                        if (file.telegramFileId.startsWith("local_")) {
+                            DropdownMenuItem(
+                                text = { Text("Retry Upload to Cloud", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRetryUpload(file)
+                                }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Download to Phone") },
+                                leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDownloadFile(file)
+                                }
+                            )
+                        }
+                        
                         DropdownMenuItem(
                             text = { Text("Rename") },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
@@ -1063,6 +1081,7 @@ fun FileGridItem(
     onFileClick: (FileEntity) -> Unit,
     onToggleSelection: () -> Unit = {},
     onDownloadFile: (FileEntity) -> Unit,
+    onRetryUpload: (FileEntity) -> Unit,
     onStarClick: (FileEntity) -> Unit,
     onTrashClick: (FileEntity) -> Unit,
     onRestoreClick: (FileEntity) -> Unit,
@@ -1184,14 +1203,27 @@ fun FileGridItem(
                                     onFileClick(file)
                                 }
                             )
-                            DropdownMenuItem(
-                                text = { Text("Download to Phone") },
-                                leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onDownloadFile(file)
-                                }
-                            )
+                            
+                            if (file.telegramFileId.startsWith("local_")) {
+                                DropdownMenuItem(
+                                    text = { Text("Retry Upload to Cloud", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Default.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onRetryUpload(file)
+                                    }
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Download to Phone") },
+                                    leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onDownloadFile(file)
+                                    }
+                                )
+                            }
+                            
                             DropdownMenuItem(
                                 text = { Text("Rename") },
                                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },

@@ -14,13 +14,13 @@ function webdavAuthMiddleware(req, res, next) {
 
   // Handle CORS & Preflight
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
+  res.set('Access-Control-Allow-Methods', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
   res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Depth, Destination, If, Lock-Token, Overwrite, Timeout, X-Requested-With');
   res.set('MS-Author-Via', 'DAV');
   res.set('DAV', '1, 2');
 
   if (req.method === 'OPTIONS') {
-    res.set('Allow', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
+    res.set('Allow', 'OPTIONS, GET, HEAD, POST, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK');
     return res.status(200).end();
   }
 
@@ -49,19 +49,27 @@ function webdavAuthMiddleware(req, res, next) {
 
   // Configured WebDAV credentials (or fall back to admin credentials)
   const configuredWebdavUser = (process.env.WEBDAV_USERNAME || 'admin').trim().toLowerCase();
+  const configuredWebdavPassHash = process.env.WEBDAV_PASSWORD_HASH;
   const configuredWebdavPass = process.env.WEBDAV_PASSWORD;
   const adminPasswordHash = process.env.MASTER_PASSWORD_HASH || process.env.ADMIN_PASSWORD_HASH;
 
   let isAuthenticated = false;
 
-  // 1. If custom WebDAV password is set in settings/.env
-  if (configuredWebdavPass && password) {
+  // 1. If custom WebDAV password hash (bcrypt) is set in settings/.env
+  if (configuredWebdavPassHash && password) {
+    try {
+      isAuthenticated = bcrypt.compareSync(password, configuredWebdavPassHash);
+    } catch (e) {}
+  }
+
+  // 2. Fall back to configuredWebdavPass (legacy/plain)
+  if (!isAuthenticated && configuredWebdavPass && password) {
     if (password === configuredWebdavPass) {
       isAuthenticated = true;
     }
   }
 
-  // 2. Fall back to Master Admin Password verification via bcrypt
+  // 3. Fall back to Master Admin Password verification via bcrypt
   if (!isAuthenticated && adminPasswordHash && password) {
     try {
       isAuthenticated = bcrypt.compareSync(password, adminPasswordHash);

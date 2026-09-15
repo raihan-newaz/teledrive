@@ -121,13 +121,23 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // 4. Return settings (credentials are safely provided for owner's admin control)
+    // 4. Return settings (credentials are safely masked to prevent XSS credential exfiltration)
+    const rawBotToken = process.env.BOT_TOKEN || '';
+    const rawApiHash = process.env.API_HASH || '';
+    const maskedBotToken = rawBotToken.length > 8 
+      ? rawBotToken.slice(0, 4) + '••••••••' + rawBotToken.slice(-4)
+      : (rawBotToken ? '••••••••' : '');
+    const maskedApiHash = rawApiHash.length > 8
+      ? rawApiHash.slice(0, 4) + '••••••••' + rawApiHash.slice(-4)
+      : (rawApiHash ? '••••••••' : '');
+
     return res.json({
       telegram: {
         apiId: process.env.API_ID || '',
-        apiHash: process.env.API_HASH || '',
-        botToken: process.env.BOT_TOKEN || '',
+        apiHash: maskedApiHash,
+        botToken: maskedBotToken,
         channelId: process.env.CHANNEL_ID || '',
+        isConfigured: Boolean(process.env.API_ID && process.env.API_HASH && process.env.BOT_TOKEN),
         connected: telegramConnected,
         botInfo,
       },
@@ -137,7 +147,8 @@ router.get('/', async (req, res) => {
         cacheBytes: cacheStats.totalSize,
         cacheFiles: cacheStats.fileCount,
         maxCacheBytes: require('../services/cacheManager').getMaxCacheLimitBytes(),
-        maxCacheLimitGb: 3
+        maxCacheLimitGb: 3,
+        plaintextCacheEnabled: process.env.PLAINTEXT_CACHE_ENABLED !== 'false'
       },
       encryption: {
         algorithm: 'AES-256-GCM',
@@ -160,7 +171,10 @@ router.get('/', async (req, res) => {
  */
 router.post('/telegram/test', async (req, res) => {
   try {
-    const { apiId, apiHash, botToken, channelId } = req.body;
+    let { apiId, apiHash, botToken, channelId } = req.body;
+    if (apiHash && apiHash.includes('••••')) apiHash = process.env.API_HASH;
+    if (botToken && botToken.includes('••••')) botToken = process.env.BOT_TOKEN;
+
     if (!apiId || !apiHash || !botToken || !channelId) {
       return res.status(400).json({ error: 'All Telegram fields (API ID, API Hash, Bot Token, Channel ID) are required' });
     }
@@ -190,7 +204,10 @@ router.post('/telegram/test', async (req, res) => {
  */
 router.put('/telegram', async (req, res) => {
   try {
-    const { apiId, apiHash, botToken, channelId } = req.body;
+    let { apiId, apiHash, botToken, channelId } = req.body;
+    if (apiHash && apiHash.includes('••••')) apiHash = process.env.API_HASH;
+    if (botToken && botToken.includes('••••')) botToken = process.env.BOT_TOKEN;
+
     if (!apiId || !apiHash || !botToken || !channelId) {
       return res.status(400).json({ error: 'All Telegram fields (API ID, API Hash, Bot Token, Channel ID) are required' });
     }

@@ -51,6 +51,7 @@ async function initialize() {
       telegram_message_id INTEGER,
       iv TEXT,
       salt TEXT,
+      auth_tag TEXT,
       is_starred INTEGER DEFAULT 0,
       is_trashed INTEGER DEFAULT 0,
       is_chunked INTEGER DEFAULT 0,
@@ -76,6 +77,7 @@ async function initialize() {
       size INTEGER NOT NULL,
       iv TEXT NOT NULL,
       salt TEXT NOT NULL,
+      auth_tag TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -89,8 +91,10 @@ async function initialize() {
   try { db.run('ALTER TABLE files ADD COLUMN share_expires_at DATETIME;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_views INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN share_downloads INTEGER DEFAULT 0;'); } catch (e) {}
+  try { db.run('ALTER TABLE files ADD COLUMN auth_tag TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE folders ADD COLUMN is_locked INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE folders ADD COLUMN password_hash TEXT;'); } catch (e) {}
+  try { db.run('ALTER TABLE file_chunks ADD COLUMN auth_tag TEXT;'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS upload_sessions (
@@ -113,10 +117,13 @@ async function initialize() {
       size INTEGER NOT NULL,
       iv TEXT NOT NULL,
       salt TEXT NOT NULL,
+      auth_tag TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(session_id, chunk_index)
     );
   `);
+
+  try { db.run('ALTER TABLE upload_session_chunks ADD COLUMN auth_tag TEXT;'); } catch (e) {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS backups (
@@ -373,13 +380,13 @@ function getFileChunks(fileId) {
 
 /**
  * Adds a chunk record to the database
- * @param {Object} chunk - { id, fileId, chunkIndex, telegramMessageId, size, iv, salt }
+ * @param {Object} chunk - { id, fileId, chunkIndex, telegramMessageId, size, iv, salt, authTag }
  */
 function addFileChunk(chunk) {
   run(
-    `INSERT INTO file_chunks (id, file_id, chunk_index, telegram_message_id, size, iv, salt, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [chunk.id, chunk.fileId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, new Date().toISOString()]
+    `INSERT INTO file_chunks (id, file_id, chunk_index, telegram_message_id, size, iv, salt, auth_tag, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [chunk.id, chunk.fileId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, chunk.authTag || chunk.auth_tag || null, new Date().toISOString()]
   );
 }
 
@@ -423,9 +430,9 @@ function getUploadedSessionChunks(sessionId) {
  */
 function addUploadSessionChunk(chunk) {
   run(
-    `INSERT OR REPLACE INTO upload_session_chunks (id, session_id, chunk_index, telegram_message_id, size, iv, salt, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [chunk.id, chunk.sessionId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, new Date().toISOString()]
+    `INSERT OR REPLACE INTO upload_session_chunks (id, session_id, chunk_index, telegram_message_id, size, iv, salt, auth_tag, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [chunk.id, chunk.sessionId, chunk.chunkIndex, chunk.telegramMessageId, chunk.size, chunk.iv, chunk.salt, chunk.authTag || chunk.auth_tag || null, new Date().toISOString()]
   );
   run('UPDATE upload_sessions SET updated_at = ? WHERE id = ?', [new Date().toISOString(), chunk.sessionId]);
 }
