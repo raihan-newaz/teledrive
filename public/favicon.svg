@@ -1,3 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64">
-  <path fill="#1a73e8" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285f4"/>
+      <stop offset="100%" stop-color="#1a73e8"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#cloudGrad)" d="M412.8 214.2C398.3 140.6 333.7 85.3 256 85.3c-61.6 0-115.2 34.9-141.8 86.2C49.9 178.3 0 232.7 0 298.7c0 70.6 57.4 128 128 128h277.3c58.9 0 106.7-47.8 106.7-106.7 0-56.3-43.7-101.9-99.2-105.8z"/>
 </svg>
