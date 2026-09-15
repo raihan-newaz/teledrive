@@ -97,9 +97,28 @@
 
   /* 3. Navigation & Toolbar */
   .toolbar {
-    padding: 0 12px;
-    height: 56px;
+    padding-top: max(env(safe-area-inset-top, 0px), 0px) !important;
+    height: calc(56px + max(env(safe-area-inset-top, 0px), 0px)) !important;
+    padding-left: max(env(safe-area-inset-left, 0px), 12px) !important;
+    padding-right: max(env(safe-area-inset-right, 0px), 12px) !important;
+    padding-bottom: 0px !important;
     gap: 8px;
+    box-sizing: border-box !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 500 !important;
+    background-color: var(--bg-primary) !important;
+  }
+  .toolbar-left .hamburger-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    z-index: 510 !important;
   }
   .toolbar-left .logo-text {
     display: none;
@@ -121,8 +140,11 @@
     align-items: center;
   }
   .toolbar-right .icon-btn {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
   .toolbar-right .btn-install-app {
     width: 34px !important;
@@ -149,10 +171,15 @@
     left: 0;
     width: 280px;
     height: 100vh;
+    height: 100dvh;
+    padding-top: max(env(safe-area-inset-top, 0px), 0px) !important;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px) !important;
+    padding-left: max(env(safe-area-inset-left, 0px), 0px) !important;
     z-index: 800;
     transform: translateX(-100%);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: var(--shadow-lg);
+    box-sizing: border-box !important;
   }
   .sidebar.open {
     transform: translateX(0);
@@ -469,16 +496,123 @@
     align-items: center !important;
     justify-content: center !important;
     position: fixed !important;
-    bottom: calc(var(--bottom-nav-height, 56px) + max(env(safe-area-inset-bottom, 0px), 6px) + 16px) !important;
-    right: 16px !important;
-    width: 52px !important;
-    height: 52px !important;
+    bottom: calc(var(--bottom-nav-height, 56px) + max(env(safe-area-inset-bottom, 0px), 8px) + 16px) !important;
+    right: max(env(safe-area-inset-right, 0px), 16px) !important;
+    width: 54px !important;
+    height: 54px !important;
     border-radius: 50% !important;
     background: var(--accent-color) !important;
     color: #fff !important;
-    box-shadow: 0 4px 16px rgba(26, 115, 232, 0.4) !important;
+    box-shadow: 0 4px 18px rgba(26, 115, 232, 0.45) !important;
     z-index: 700 !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
+  .fab:active {
+    transform: scale(0.94);
+  }
+
+  /* 8b. Mobile Upload Bottom Action Sheet (Google Drive Style) */
+  .mobile-upload-overlay {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important;
+    background: rgba(0, 0, 0, 0.55) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: 850 !important;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease !important;
+  }
+  .mobile-upload-overlay.open {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .mobile-upload-sheet {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 540px !important;
+    margin: 0 auto !important;
+    background: var(--bg-card) !important;
+    border-top-left-radius: 22px !important;
+    border-top-right-radius: 22px !important;
+    padding: 12px 16px calc(max(env(safe-area-inset-bottom, 0px), 8px) + 20px) !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4) !important;
+    border-top: 1px solid var(--border-color) !important;
+    z-index: 860 !important;
+    transform: translateY(100%) !important;
+    transition: transform 0.26s cubic-bezier(0.33, 1, 0.68, 1) !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .mobile-upload-sheet.open {
+    transform: translateY(0) !important;
+  }
+
+  .mobile-sheet-handle {
+    width: 38px !important;
+    height: 4px !important;
+    background: var(--text-disabled) !important;
+    border-radius: 2px !important;
+    margin: 0 auto 12px !important;
+    opacity: 0.5 !important;
+  }
+
+  .mobile-sheet-title {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    margin-bottom: 14px !important;
+    padding: 0 4px !important;
+  }
+
+  .mobile-sheet-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .mobile-sheet-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+    background: var(--bg-hover) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 14px !important;
+    color: var(--text-primary) !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s, transform 0.1s !important;
+  }
+  .mobile-sheet-item:active {
+    transform: scale(0.96) !important;
+    background: var(--bg-active) !important;
+  }
+
+  .mobile-sheet-icon {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+  .mobile-sheet-icon.upload-icon { background: rgba(26, 115, 232, 0.12) !important; color: var(--accent-color) !important; }
+  .mobile-sheet-icon.folder-icon { background: rgba(249, 171, 0, 0.12) !important; color: #e37400 !important; }
+  .mobile-sheet-icon.remote-icon { background: rgba(16, 185, 129, 0.12) !important; color: #10b981 !important; }
+  .mobile-sheet-icon.folder-up-icon { background: rgba(139, 92, 246, 0.12) !important; color: #8b5cf6 !important; }
 
   /* 9. Action Bar for Selection */
   .action-bar {

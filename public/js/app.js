@@ -2750,16 +2750,91 @@ const App = {
       };
     }
 
+    // Mobile Bottom Sheet Elements
+    const mobileSheet = document.getElementById('mobile-upload-sheet');
+    const mobileOverlay = document.getElementById('mobile-upload-overlay');
+    const mobileBtnUploadFile = document.getElementById('mobile-btn-upload-file');
+    const mobileBtnCreateFolder = document.getElementById('mobile-btn-create-folder');
+    const mobileBtnRemoteUpload = document.getElementById('mobile-btn-remote-upload');
+    const mobileBtnUploadFolder = document.getElementById('mobile-btn-upload-folder');
+
+    const openMobileSheet = () => {
+      if (mobileSheet && mobileOverlay) {
+        mobileSheet.style.display = 'flex';
+        mobileOverlay.style.display = 'block';
+        requestAnimationFrame(() => {
+          mobileSheet.classList.add('open');
+          mobileOverlay.classList.add('open');
+        });
+      } else if (fileInput) {
+        fileInput.click();
+      }
+    };
+
+    const closeMobileSheet = () => {
+      if (mobileSheet && mobileOverlay) {
+        mobileSheet.classList.remove('open');
+        mobileOverlay.classList.remove('open');
+        setTimeout(() => {
+          if (!mobileSheet.classList.contains('open')) {
+            mobileSheet.style.display = 'none';
+            mobileOverlay.style.display = 'none';
+          }
+        }, 280);
+      }
+    };
+
+    if (mobileOverlay) {
+      mobileOverlay.onclick = closeMobileSheet;
+    }
+
     // Mobile FAB button
     if (fabUpload) {
       fabUpload.onclick = (e) => {
         e.stopPropagation();
-        if (dropdownMenu) {
-          const isHidden = dropdownMenu.style.display === 'none' || !dropdownMenu.style.display;
-          dropdownMenu.style.display = isHidden ? 'flex' : 'none';
-        } else if (fileInput) {
-          fileInput.click();
+        openMobileSheet();
+      };
+    }
+
+    if (mobileBtnUploadFile) {
+      mobileBtnUploadFile.onclick = (e) => {
+        e.stopPropagation();
+        closeMobileSheet();
+        if (fileInput) fileInput.click();
+      };
+    }
+
+    if (mobileBtnCreateFolder) {
+      mobileBtnCreateFolder.onclick = (e) => {
+        e.stopPropagation();
+        closeMobileSheet();
+        UI.showModal('create-folder-modal');
+        const folderInputEl = document.getElementById('folder-name-input');
+        if (folderInputEl) {
+          folderInputEl.value = '';
+          setTimeout(() => folderInputEl.focus(), 150);
         }
+      };
+    }
+
+    if (mobileBtnRemoteUpload) {
+      mobileBtnRemoteUpload.onclick = (e) => {
+        e.stopPropagation();
+        closeMobileSheet();
+        UI.showModal('remote-upload-modal');
+        const urlInput = document.getElementById('remote-url-input');
+        if (urlInput) {
+          urlInput.value = '';
+          setTimeout(() => urlInput.focus(), 150);
+        }
+      };
+    }
+
+    if (mobileBtnUploadFolder) {
+      mobileBtnUploadFolder.onclick = (e) => {
+        e.stopPropagation();
+        closeMobileSheet();
+        if (folderInput) folderInput.click();
       };
     }
 

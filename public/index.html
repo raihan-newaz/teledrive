@@ -12,18 +12,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="TeleDrive">
-  <link rel="apple-touch-icon" href="/icons/icon-180.png">
-  <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png?v=20260916">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png?v=20260916">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png?v=20260916">
+  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png?v=20260916">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=20260916">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=20260916">
   <!-- Google Fonts: Google Sans & Roboto (Exact Google Drive typography) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Google+Sans+Text:ital,wght@0,400;0,500;0,700;1,400&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/themes.css?v=20260915_08">
-  <link rel="stylesheet" href="/css/styles.css?v=20260915_08">
-  <link rel="stylesheet" href="/css/responsive.css?v=20260915_08">
+  <link rel="stylesheet" href="/css/themes.css?v=20260916_01">
+  <link rel="stylesheet" href="/css/styles.css?v=20260916_01">
+  <link rel="stylesheet" href="/css/responsive.css?v=20260916_01">
   <script>
     (function() {
       try {
@@ -493,11 +496,52 @@
     </nav>
 
     <!-- MOBILE FAB -->
-    <button class="fab" id="fab-upload" title="Upload">
+    <button class="fab" id="fab-upload" title="Upload" aria-label="Create or Upload">
       <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
       </svg>
     </button>
+
+    <!-- MOBILE UPLOAD BOTTOM ACTION SHEET -->
+    <div class="mobile-upload-overlay" id="mobile-upload-overlay" style="display:none;"></div>
+    <div class="mobile-upload-sheet" id="mobile-upload-sheet" style="display:none;" role="dialog" aria-modal="true" aria-label="Upload Options">
+      <div class="mobile-sheet-handle"></div>
+      <div class="mobile-sheet-title">Create / Upload</div>
+      <div class="mobile-sheet-grid">
+        <button class="mobile-sheet-item" id="mobile-btn-upload-file" type="button">
+          <div class="mobile-sheet-icon upload-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+            </svg>
+          </div>
+          <span>Upload Files</span>
+        </button>
+        <button class="mobile-sheet-item" id="mobile-btn-create-folder" type="button">
+          <div class="mobile-sheet-icon folder-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/>
+            </svg>
+          </div>
+          <span>New Folder</span>
+        </button>
+        <button class="mobile-sheet-item" id="mobile-btn-remote-upload" type="button">
+          <div class="mobile-sheet-icon remote-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+            </svg>
+          </div>
+          <span>Remote URL</span>
+        </button>
+        <button class="mobile-sheet-item" id="mobile-btn-upload-folder" type="button">
+          <div class="mobile-sheet-icon folder-up-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+            </svg>
+          </div>
+          <span>Upload Folder</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
