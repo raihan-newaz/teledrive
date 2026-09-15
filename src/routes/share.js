@@ -166,8 +166,8 @@ router.post('/public/:token/verify', shareVerifyLimiter, async (req, res) => {
 async function checkPublicAccess(req, res, file) {
   if (!hasPassword(file)) return true;
 
-  // 1. Check accessKey in query (?key=...) or header (x-share-key)
-  const accessKey = req.query.key || req.headers['x-share-key'];
+  // 1. Check accessKey in header (x-share-key)
+  const accessKey = req.headers['x-share-key'];
   if (accessKey && verifyShareAccessToken(file.share_token, accessKey)) {
     return true;
   }

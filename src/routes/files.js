@@ -614,7 +614,7 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     encryptedPath = originalPath + '.enc';
 
     // 1. If plaintext cache is enabled, place in local cache for 0ms instant playback
-    if (process.env.PLAINTEXT_CACHE_ENABLED !== 'false') {
+    if (process.env.PLAINTEXT_CACHE_ENABLED === 'true') {
       const cachedPath = path.join(cacheDir, `${fileId}.dec`);
       try { copyFileSync(originalPath, cachedPath); } catch (e) {}
     }
