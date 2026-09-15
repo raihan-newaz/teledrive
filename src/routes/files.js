@@ -697,6 +697,11 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
     } catch (e) {}
+    // Auto-trigger background HLS ABR transcode for videos so playback is instant
+    if (mimeType.startsWith('video/')) {
+      videoTranscode.requestHlsTranscode(fileRecord, userId, encryptionKey).catch(() => {});
+    }
+
     res.json({ success: true, file: fileRecord });
   } catch (error) {
     console.error('Upload error:', error);
@@ -712,7 +717,7 @@ const assemblyLocks = new Set();
 /**
  * Helper to commit completed chunked file to database (with mutex lock)
  */
-function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res) {
+function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, totalChunks, chunks, res, userKey = null) {
   if (assemblyLocks.has(uploadId)) {
     return res.json({ success: true, message: 'Assembly in progress' });
   }
@@ -764,6 +769,12 @@ function assembleFinalFile(uploadId, userId, safeName, totalFileSize, folderId, 
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_uploaded', { file: fileRecord, folderId });
     } catch (e) {}
+
+    // Auto-trigger background HLS ABR transcode for chunked videos
+    if (mimeType.startsWith('video/')) {
+      videoTranscode.requestHlsTranscode(fileRecord, userId, userKey).catch(() => {});
+    }
+
     return res.json({ success: true, done: true, file: fileRecord });
   } finally {
     assemblyLocks.delete(uploadId);
