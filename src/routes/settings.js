@@ -150,6 +150,7 @@ router.get('/', async (req, res) => {
         maxCacheLimitGb: 3,
         plaintextCacheEnabled: process.env.PLAINTEXT_CACHE_ENABLED === 'true'
       },
+      preferences: db.getAllSettings(),
       encryption: {
         algorithm: 'AES-256-GCM',
         enabled: true,
@@ -162,6 +163,47 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching settings:', error);
     return res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+/**
+ * GET /api/settings/preferences
+ * Retrieve user UI and upload preferences
+ */
+router.get('/preferences', async (req, res) => {
+  try {
+    const preferences = db.getAllSettings();
+    return res.json({ success: true, preferences });
+  } catch (error) {
+    console.error('Error fetching user preferences:', error);
+    return res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+/**
+ * PUT /api/settings/preferences
+ * Update user UI and upload preferences in SQLite database
+ */
+router.put('/preferences', async (req, res) => {
+  try {
+    const { preferences } = req.body;
+    if (!preferences || typeof preferences !== 'object') {
+      return res.status(400).json({ error: 'Invalid preferences object' });
+    }
+
+    const allowedKeys = ['theme', 'view_mode', 'sort_by', 'sort_order', 'chunk_size', 'concurrent_chunks', 'wake_lock'];
+    const filtered = {};
+    for (const key of allowedKeys) {
+      if (preferences[key] !== undefined) {
+        filtered[key] = String(preferences[key]);
+      }
+    }
+
+    db.setMultipleSettings(filtered);
+    return res.json({ success: true, preferences: db.getAllSettings() });
+  } catch (error) {
+    console.error('Error updating user preferences:', error);
+    return res.status(500).json({ error: 'Failed to update preferences' });
   }
 });
 

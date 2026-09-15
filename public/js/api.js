@@ -299,6 +299,14 @@ const API = {
     return this.request('GET', '/api/settings');
   },
 
+  async getPreferences() {
+    return this.request('GET', '/api/settings/preferences');
+  },
+
+  async updatePreferences(preferences) {
+    return this.request('PUT', '/api/settings/preferences', { preferences });
+  },
+
   async testTelegramSettings(data) {
     return this.request('POST', '/api/settings/telegram/test', data);
   },

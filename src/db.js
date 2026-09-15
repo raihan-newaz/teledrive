@@ -135,6 +135,14 @@ async function initialize() {
     );
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Performance compound indexes for lightning-fast scale
   try {
     db.run('CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);');
@@ -544,6 +552,52 @@ function getAllBackups(limit = 20) {
 }
 
 /**
+ * Get single app setting / preference
+ */
+function getSetting(key, defaultValue = null) {
+  if (!db) return defaultValue;
+  const row = get('SELECT value FROM app_settings WHERE key = ?', [key]);
+  return row ? row.value : defaultValue;
+}
+
+/**
+ * Get all app settings / preferences
+ */
+function getAllSettings() {
+  if (!db) return {};
+  const rows = all('SELECT key, value FROM app_settings');
+  const result = {};
+  if (Array.isArray(rows)) {
+    for (const r of rows) {
+      result[r.key] = r.value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Set single app setting / preference
+ */
+function setSetting(key, value) {
+  if (!db) return;
+  run('INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)', [key, String(value)]);
+  save();
+}
+
+/**
+ * Set multiple app settings / preferences in batch
+ */
+function setMultipleSettings(settingsObj) {
+  if (!db || !settingsObj || typeof settingsObj !== 'object') return;
+  for (const [key, value] of Object.entries(settingsObj)) {
+    if (value !== undefined && value !== null) {
+      run('INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)', [key, String(value)]);
+    }
+  }
+  save();
+}
+
+/**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
  */
@@ -585,5 +639,9 @@ module.exports = {
   getStorageStats,
   addBackup,
   getLatestBackup,
-  getAllBackups
+  getAllBackups,
+  getSetting,
+  getAllSettings,
+  setSetting,
+  setMultipleSettings
 };

@@ -93,6 +93,8 @@ const App = {
         try {
           await API.verifyAuth();
           this.showScreen('app');
+          // Load synced user preferences across devices
+          await this.loadUserPreferences();
           try {
             // Restore active folder or view from URL query / hash / sessionStorage
             const urlParams = new URLSearchParams(window.location.search);
@@ -1498,6 +1500,8 @@ const App = {
           UI.showToast('Login successful!', 'success');
           if (pwdInput) pwdInput.value = '';
           this.showScreen('app');
+          // Load synced user preferences across devices
+          await this.loadUserPreferences();
           const urlParams = new URLSearchParams(window.location.search);
           const targetFolder = urlParams.get('folder') || sessionStorage.getItem('teledrive_current_folder') || null;
           const targetView = urlParams.get('view') || sessionStorage.getItem('teledrive_current_view') || 'drive';
@@ -1561,7 +1565,7 @@ const App = {
     if (viewToggle) {
       viewToggle.onclick = () => {
         this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
-        localStorage.setItem('teledrive_view_mode', this.viewMode);
+        this.saveUserPreference('view_mode', this.viewMode);
         this.renderContents();
       };
     }
@@ -1635,8 +1639,7 @@ const App = {
           this.sortBy = sort;
           this.sortOrder = (sort === 'date') ? 'desc' : 'asc';
         }
-        localStorage.setItem('teledrive_sort_by', this.sortBy);
-        localStorage.setItem('teledrive_sort_order', this.sortOrder);
+        this.saveUserPreferences({ sort_by: this.sortBy, sort_order: this.sortOrder });
         this.updateSortButtonsUI();
         this.renderContents();
       };
@@ -2809,7 +2812,7 @@ const App = {
     if (viewPrefGrid) {
       viewPrefGrid.onclick = () => {
         this.viewMode = 'grid';
-        localStorage.setItem('teledrive_view_mode', 'grid');
+        this.saveUserPreference('view_mode', 'grid');
         viewPrefGrid.classList.add('active');
         if (viewPrefList) viewPrefList.classList.remove('active');
         this.renderContents();
@@ -2818,7 +2821,7 @@ const App = {
     if (viewPrefList) {
       viewPrefList.onclick = () => {
         this.viewMode = 'list';
-        localStorage.setItem('teledrive_view_mode', 'list');
+        this.saveUserPreference('view_mode', 'list');
         viewPrefList.classList.add('active');
         if (viewPrefGrid) viewPrefGrid.classList.remove('active');
         this.renderContents();
@@ -2851,12 +2854,12 @@ const App = {
             customInput.focus();
             const mb = Math.min(1900, Math.max(5, parseInt(customInput.value, 10) || 250));
             customInput.value = mb;
-            localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+            this.saveUserPreference('chunk_size', String(mb * 1024 * 1024));
           }
           UI.showToast('Custom chunk size mode enabled', 'info');
         } else {
           if (customWrap) customWrap.style.display = 'none';
-          localStorage.setItem('teledrive_chunk_size', prefChunkSize.value);
+          this.saveUserPreference('chunk_size', prefChunkSize.value);
           UI.showToast('Upload chunk size preference saved!', 'success');
         }
       };
@@ -2865,7 +2868,7 @@ const App = {
         customInput.oninput = () => {
           let mb = parseInt(customInput.value, 10);
           if (!isNaN(mb) && mb >= 5 && mb <= 1900) {
-            localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+            this.saveUserPreference('chunk_size', String(mb * 1024 * 1024));
           }
         };
         customInput.onchange = () => {
@@ -2873,7 +2876,7 @@ const App = {
           if (isNaN(mb) || mb < 5) mb = 5;
           if (mb > 1900) mb = 1900;
           customInput.value = mb;
-          localStorage.setItem('teledrive_chunk_size', String(mb * 1024 * 1024));
+          this.saveUserPreference('chunk_size', String(mb * 1024 * 1024));
           UI.showToast(`Custom chunk size set to ${mb} MB!`, 'success');
         };
       }
@@ -2882,7 +2885,7 @@ const App = {
     if (prefConcurrent) {
       prefConcurrent.value = localStorage.getItem('teledrive_concurrent_chunks') || '2';
       prefConcurrent.onchange = () => {
-        localStorage.setItem('teledrive_concurrent_chunks', prefConcurrent.value);
+        this.saveUserPreference('concurrent_chunks', prefConcurrent.value);
         UI.showToast('Parallel upload streams preference saved!', 'success');
       };
     }
@@ -2893,7 +2896,7 @@ const App = {
       prefWakeLock.checked = localStorage.getItem('teledrive_wake_lock') !== 'false';
       prefWakeLock.onchange = () => {
         const enabled = prefWakeLock.checked;
-        localStorage.setItem('teledrive_wake_lock', enabled ? 'true' : 'false');
+        this.saveUserPreference('wake_lock', enabled ? 'true' : 'false');
         if (!enabled && typeof Upload !== 'undefined' && Upload.releaseWakeLock) {
           Upload.releaseWakeLock();
         } else if (enabled && typeof Upload !== 'undefined' && Upload.isUploading) {
@@ -3658,12 +3661,15 @@ const App = {
     });
   },
 
-  setTheme(theme) {
+  setTheme(theme, sync = true) {
     document.documentElement.classList.add('theme-transition');
     void document.documentElement.offsetHeight;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('teledrive_theme', theme);
     this.updateThemeToggleIcon(theme);
+    if (sync) {
+      this.saveUserPreference('theme', theme);
+    }
     setTimeout(() => {
       document.documentElement.classList.remove('theme-transition');
     }, 240);
@@ -3691,6 +3697,63 @@ const App = {
     const current = document.documentElement.getAttribute('data-theme') || 'light';
     const next = current === 'light' ? 'dark' : 'light';
     this.setTheme(next);
+  },
+
+  async loadUserPreferences() {
+    try {
+      const data = await API.getPreferences();
+      if (data && data.preferences) {
+        const p = data.preferences;
+        if (p.theme && (p.theme === 'light' || p.theme === 'dark')) {
+          this.setTheme(p.theme, false);
+        }
+        if (p.view_mode && (p.view_mode === 'grid' || p.view_mode === 'list')) {
+          this.viewMode = p.view_mode;
+          localStorage.setItem('teledrive_view_mode', p.view_mode);
+        }
+        if (p.sort_by) {
+          this.sortBy = p.sort_by;
+          localStorage.setItem('teledrive_sort_by', p.sort_by);
+        }
+        if (p.sort_order) {
+          this.sortOrder = p.sort_order;
+          localStorage.setItem('teledrive_sort_order', p.sort_order);
+        }
+        if (p.chunk_size) {
+          localStorage.setItem('teledrive_chunk_size', p.chunk_size);
+        }
+        if (p.concurrent_chunks) {
+          localStorage.setItem('teledrive_concurrent_chunks', p.concurrent_chunks);
+        }
+        if (p.wake_lock !== undefined && p.wake_lock !== null) {
+          localStorage.setItem('teledrive_wake_lock', p.wake_lock);
+        }
+
+        this.updateSortButtonsUI();
+      }
+    } catch (e) {
+      console.warn('[Preferences] Could not load preferences from server:', e.message);
+    }
+  },
+
+  async saveUserPreference(key, value) {
+    localStorage.setItem(`teledrive_${key}`, String(value));
+    try {
+      await API.updatePreferences({ [key]: value });
+    } catch (e) {
+      console.warn(`[Preferences] Failed to sync ${key} to server:`, e.message);
+    }
+  },
+
+  async saveUserPreferences(obj) {
+    for (const [k, v] of Object.entries(obj)) {
+      localStorage.setItem(`teledrive_${k}`, String(v));
+    }
+    try {
+      await API.updatePreferences(obj);
+    } catch (e) {
+      console.warn('[Preferences] Failed to sync preferences to server:', e.message);
+    }
   }
 };
 
