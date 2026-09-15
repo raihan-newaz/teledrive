@@ -1044,9 +1044,10 @@ const Preview = {
           backBufferLength: 30,
           abrEwmaFastLive: 3,
           abrEwmaSlowLive: 9,
-          abrBandWidthFactor: 0.75, // 25% safety margin for unstable networks
-          abrBandWidthUpFactor: 0.70,
-          startLevel: -1 // Auto starting level
+          abrBandWidthFactor: 0.70,    // 30% safety margin — prefer lower quality for smooth start
+          abrBandWidthUpFactor: 0.65,  // conservative ramp-up like YouTube
+          startLevel: -1,              // will override in MANIFEST_PARSED
+          capLevelToPlayerSize: true    // don't serve 4K on a small viewport
         });
 
         this.currentHls = hls;
@@ -1055,6 +1056,27 @@ const Preview = {
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           console.log('[HLS] ABR Manifest loaded, available renditions:', hls.levels.length);
+
+          // YouTube-style: start at 720p (or closest ≤720p), then let ABR adapt
+          const TARGET_START_HEIGHT = 720;
+          let bestIdx = 0;
+          let bestDiff = Infinity;
+          hls.levels.forEach((lvl, i) => {
+            const diff = Math.abs(lvl.height - TARGET_START_HEIGHT);
+            if (diff < bestDiff && lvl.height <= TARGET_START_HEIGHT + 100) {
+              bestDiff = diff;
+              bestIdx = i;
+            }
+          });
+          hls.startLevel = bestIdx;
+          hls.currentLevel = bestIdx;        // force immediate switch
+          hls.nextLevel = bestIdx;
+
+          // After 5 seconds of playback data, let ABR take over automatically
+          setTimeout(() => {
+            hls.currentLevel = -1;           // switch back to auto ABR
+          }, 5000);
+
           buildQualityMenu(hls);
           video.play().catch(() => {});
         });

@@ -470,7 +470,14 @@ function transcodeToHls(sourcePath, outputDir, renditions, totalDuration, onProg
 function generateMasterPlaylist(outputDir, renditions) {
   let master = '#EXTM3U\n#EXT-X-VERSION:3\n\n';
 
-  renditions.forEach((r) => {
+  // List from lowest → highest bandwidth (standard HLS convention for better ABR behavior)
+  const sorted = [...renditions].sort((a, b) => {
+    const bwA = parseInt(a.maxRate.replace('k', ''), 10);
+    const bwB = parseInt(b.maxRate.replace('k', ''), 10);
+    return bwA - bwB;
+  });
+
+  sorted.forEach((r) => {
     const bandwidth = parseInt(r.maxRate.replace('k', ''), 10) * 1000;
     master += `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},RESOLUTION=${r.width}x${r.height},NAME="${r.label}"\n`;
     master += `${r.name}/index.m3u8\n\n`;
