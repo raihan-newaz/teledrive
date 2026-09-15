@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const fsPromises = require('fs/promises');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 const authMiddleware = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/auth');
 const telegram = require('../telegram');
@@ -346,10 +347,10 @@ router.post('/clear-cache', requireAdmin, async (req, res) => {
  */
 router.get('/webdav', requireAdmin, async (req, res) => {
   try {
-    const enabled = process.env.WEBDAV_ENABLED !== 'false';
-    const permissionMode = process.env.WEBDAV_PERMISSION_MODE || 'full';
-    const username = process.env.WEBDAV_USERNAME || 'admin';
-    const hasCustomPassword = Boolean(process.env.WEBDAV_PASSWORD);
+    const enabled = (db.getSetting('webdav_enabled') !== 'false') && (process.env.WEBDAV_ENABLED !== 'false');
+    const permissionMode = db.getSetting('webdav_permission_mode') || process.env.WEBDAV_PERMISSION_MODE || 'full';
+    const username = db.getSetting('webdav_username') || process.env.WEBDAV_USERNAME || 'admin';
+    const hasCustomPassword = Boolean(db.getSetting('webdav_password_hash') || process.env.WEBDAV_PASSWORD_HASH || process.env.WEBDAV_PASSWORD);
 
     return res.json({
       enabled,
@@ -357,6 +358,8 @@ router.get('/webdav', requireAdmin, async (req, res) => {
       username,
       hasCustomPassword,
       urlPath: '/webdav',
+      userEmail: req.user ? req.user.email : 'admin',
+      userName: req.user ? req.user.name : 'Admin'
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch WebDAV settings' });
@@ -369,13 +372,14 @@ router.get('/webdav', requireAdmin, async (req, res) => {
  */
 router.post('/webdav', requireAdmin, async (req, res) => {
   try {
-    const { enabled, permissionMode, username, password } = req.body;
+    const { enabled, permissionMode, username, password, resetPassword } = req.body;
 
     const updates = {};
     if (enabled !== undefined) {
       const val = enabled ? 'true' : 'false';
       process.env.WEBDAV_ENABLED = val;
       updates.WEBDAV_ENABLED = val;
+      db.setSetting('webdav_enabled', val);
     }
 
     if (permissionMode !== undefined) {
@@ -383,35 +387,123 @@ router.post('/webdav', requireAdmin, async (req, res) => {
       const mode = validModes.includes(permissionMode) ? permissionMode : 'full';
       process.env.WEBDAV_PERMISSION_MODE = mode;
       updates.WEBDAV_PERMISSION_MODE = mode;
+      db.setSetting('webdav_permission_mode', mode);
     }
 
     if (username !== undefined && username.trim()) {
       const user = username.trim();
       process.env.WEBDAV_USERNAME = user;
       updates.WEBDAV_USERNAME = user;
+      db.setSetting('webdav_username', user);
     }
 
-    if (password !== undefined && password.trim()) {
+    if (resetPassword) {
+      // Clear custom WebDAV password so authentication falls back to User Account / Master Password
+      delete process.env.WEBDAV_PASSWORD_HASH;
+      delete process.env.WEBDAV_PASSWORD;
+      updates.WEBDAV_PASSWORD_HASH = '';
+      updates.WEBDAV_PASSWORD = '';
+      db.setSetting('webdav_password_hash', '');
+    } else if (password !== undefined && password.trim()) {
       const pass = password.trim();
+      const passHash = bcrypt.hashSync(pass, 10);
+      process.env.WEBDAV_PASSWORD_HASH = passHash;
       process.env.WEBDAV_PASSWORD = pass;
+      updates.WEBDAV_PASSWORD_HASH = passHash;
       updates.WEBDAV_PASSWORD = pass;
+      db.setSetting('webdav_password_hash', passHash);
     }
 
     await updateEnvVariables(updates);
 
+    const hasCustomPassword = Boolean(db.getSetting('webdav_password_hash') || process.env.WEBDAV_PASSWORD_HASH || process.env.WEBDAV_PASSWORD);
+
     return res.json({
       success: true,
-      message: 'WebDAV settings updated successfully!',
+      message: resetPassword ? 'WebDAV password reset to Account/Master Password!' : 'WebDAV settings updated successfully!',
       settings: {
-        enabled: process.env.WEBDAV_ENABLED !== 'false',
-        permissionMode: process.env.WEBDAV_PERMISSION_MODE || 'full',
-        username: process.env.WEBDAV_USERNAME || 'admin',
-        hasCustomPassword: Boolean(process.env.WEBDAV_PASSWORD),
+        enabled: (db.getSetting('webdav_enabled') !== 'false') && (process.env.WEBDAV_ENABLED !== 'false'),
+        permissionMode: db.getSetting('webdav_permission_mode') || process.env.WEBDAV_PERMISSION_MODE || 'full',
+        username: db.getSetting('webdav_username') || process.env.WEBDAV_USERNAME || 'admin',
+        hasCustomPassword,
       }
     });
   } catch (error) {
     console.error('Error updating WebDAV settings:', error);
     return res.status(500).json({ error: 'Failed to update WebDAV settings: ' + error.message });
+  }
+});
+
+/**
+ * POST /api/settings/webdav/test-auth
+ * Test WebDAV credentials directly from settings UI
+ */
+router.post('/webdav/test-auth', requireAdmin, (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: 'Username and password are required to test credentials.' });
+    }
+
+    const testUser = username.trim().toLowerCase();
+    const testPass = password;
+
+    const configuredWebdavUser = (db.getSetting('webdav_username') || process.env.WEBDAV_USERNAME || 'admin').trim().toLowerCase();
+    const configuredWebdavPassHash = db.getSetting('webdav_password_hash') || process.env.WEBDAV_PASSWORD_HASH;
+    const configuredWebdavPassPlain = process.env.WEBDAV_PASSWORD;
+    const adminPasswordHash = process.env.MASTER_PASSWORD_HASH || process.env.ADMIN_PASSWORD_HASH;
+
+    let matchedMethod = null;
+
+    // 1. Check custom WebDAV password
+    if (configuredWebdavPassHash && (testUser === configuredWebdavUser || testUser === 'admin')) {
+      try {
+        if (bcrypt.compareSync(testPass, configuredWebdavPassHash)) {
+          matchedMethod = 'Custom WebDAV Credentials';
+        }
+      } catch (e) {}
+    }
+    if (!matchedMethod && configuredWebdavPassPlain && (testUser === configuredWebdavUser || testUser === 'admin')) {
+      if (testPass === configuredWebdavPassPlain) {
+        matchedMethod = 'Custom WebDAV Credentials';
+      }
+    }
+
+    // 2. Check Master Admin password
+    if (!matchedMethod && adminPasswordHash && (testUser === configuredWebdavUser || testUser === 'admin')) {
+      try {
+        if (bcrypt.compareSync(testPass, adminPasswordHash)) {
+          matchedMethod = 'Master Admin Password';
+        }
+      } catch (e) {}
+    }
+
+    // 3. Check DB User Accounts
+    if (!matchedMethod) {
+      try {
+        const allUsers = db.getAllUsers();
+        const matchedDbUser = allUsers.find(u => u.email.toLowerCase() === testUser || (u.name && u.name.toLowerCase() === testUser));
+        if (matchedDbUser && matchedDbUser.status === 'active') {
+          if (bcrypt.compareSync(testPass, matchedDbUser.password_hash)) {
+            matchedMethod = `User Account (${matchedDbUser.email})`;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (matchedMethod) {
+      return res.json({
+        success: true,
+        message: `Credentials verified successfully using ${matchedMethod}! You can use these credentials to connect from Windows, Mac, or mobile.`
+      });
+    } else {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication failed: Incorrect username or password.'
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

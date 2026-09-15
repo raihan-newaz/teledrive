@@ -47,22 +47,32 @@ function webdavAuthMiddleware(req, res, next) {
     username = username.split('\\').pop().trim();
   }
 
-  // Configured WebDAV credentials (or fall back to admin credentials)
-  const configuredWebdavUser = (process.env.WEBDAV_USERNAME || 'admin').trim().toLowerCase();
-  const configuredWebdavPassHash = process.env.WEBDAV_PASSWORD_HASH;
+  // Configured WebDAV credentials (or fall back to admin / user credentials)
+  const db = require('../db');
+  const configuredWebdavUser = (db.getSetting('webdav_username') || process.env.WEBDAV_USERNAME || 'admin').trim().toLowerCase();
+  const configuredWebdavPassHash = db.getSetting('webdav_password_hash') || process.env.WEBDAV_PASSWORD_HASH;
+  const configuredWebdavPassPlain = process.env.WEBDAV_PASSWORD;
   const adminPasswordHash = process.env.MASTER_PASSWORD_HASH || process.env.ADMIN_PASSWORD_HASH;
 
   let isAuthenticated = false;
+  const isWebdavUserMatch = (username.toLowerCase() === configuredWebdavUser || username.toLowerCase() === 'admin');
 
   // 1. If custom WebDAV password hash (bcrypt) is configured
-  if (configuredWebdavPassHash && password) {
+  if (configuredWebdavPassHash && password && isWebdavUserMatch) {
     try {
       isAuthenticated = bcrypt.compareSync(password, configuredWebdavPassHash);
     } catch (e) {}
   }
 
+  // 1b. Fall back to plaintext custom WebDAV password if set previously
+  if (!isAuthenticated && configuredWebdavPassPlain && password && isWebdavUserMatch) {
+    if (password === configuredWebdavPassPlain) {
+      isAuthenticated = true;
+    }
+  }
+
   // 2. Fall back to Master Admin Password verification via bcrypt
-  if (!isAuthenticated && adminPasswordHash && password) {
+  if (!isAuthenticated && adminPasswordHash && password && isWebdavUserMatch) {
     try {
       isAuthenticated = bcrypt.compareSync(password, adminPasswordHash);
     } catch (e) {
@@ -71,12 +81,11 @@ function webdavAuthMiddleware(req, res, next) {
   }
 
   // 3. Fall back to checking database user accounts
-  const db = require('../db');
   let matchedDbUser = null;
   if (!isAuthenticated && password) {
     try {
       const allUsers = db.getAllUsers();
-      matchedDbUser = allUsers.find(u => u.email.toLowerCase() === username.toLowerCase() || u.name.toLowerCase() === username.toLowerCase());
+      matchedDbUser = allUsers.find(u => u.email.toLowerCase() === username.toLowerCase() || (u.name && u.name.toLowerCase() === username.toLowerCase()));
       if (matchedDbUser && matchedDbUser.status === 'active') {
         if (bcrypt.compareSync(password, matchedDbUser.password_hash)) {
           isAuthenticated = true;

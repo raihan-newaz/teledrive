@@ -389,6 +389,10 @@ const API = {
     return this.request('POST', '/api/settings/webdav', data);
   },
 
+  async testWebDavAuth(username, password) {
+    return this.request('POST', '/api/settings/webdav/test-auth', { username, password });
+  },
+
   async getWebDavSessions() {
     return this.request('GET', '/api/settings/webdav/sessions');
   },

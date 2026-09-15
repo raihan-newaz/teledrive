@@ -3444,6 +3444,65 @@ const App = {
       };
     }
 
+    // WebDAV Test Credentials Button
+    const btnTestWebdav = document.getElementById('btn-test-webdav');
+    if (btnTestWebdav) {
+      btnTestWebdav.onclick = async () => {
+        const username = document.getElementById('webdav-username')?.value.trim() || 'admin';
+        let password = document.getElementById('webdav-password')?.value || '';
+
+        if (!password) {
+          const promptedPass = prompt(`Enter password to test WebDAV connection for user "${username}":`);
+          if (!promptedPass) return;
+          password = promptedPass;
+        }
+
+        btnTestWebdav.disabled = true;
+        btnTestWebdav.innerHTML = '<span>Testing...</span>';
+
+        try {
+          const res = await API.testWebDavAuth(username, password);
+          if (res.success) {
+            UI.showToast(res.message || 'WebDAV credentials verified successfully!', 'success');
+          } else {
+            UI.showToast(res.error || 'Authentication failed', 'error');
+          }
+        } catch (err) {
+          UI.showToast(err.message || 'WebDAV Authentication failed. Please check password.', 'error');
+        } finally {
+          btnTestWebdav.disabled = false;
+          btnTestWebdav.innerHTML = '<span>Test Credentials</span>';
+        }
+      };
+    }
+
+    // WebDAV Reset Password to Account Password Button
+    const btnResetWebdavPw = document.getElementById('btn-reset-webdav-pw');
+    if (btnResetWebdavPw) {
+      btnResetWebdavPw.onclick = async () => {
+        const confirmed = await UI.confirm({
+          title: 'Reset WebDAV Password?',
+          message: 'This will remove the custom WebDAV password and revert authentication back to your main TeleDrive account password.',
+          icon: 'warning',
+          confirmText: 'Reset Password',
+          confirmType: 'danger',
+          cancelText: 'Cancel'
+        });
+
+        if (!confirmed) return;
+
+        try {
+          const res = await API.updateWebDavSettings({ resetPassword: true });
+          UI.showToast(res.message || 'WebDAV password reset to Account Password!', 'success');
+          const passInput = document.getElementById('webdav-password');
+          if (passInput) passInput.value = '';
+          await this.loadWebDavSettings();
+        } catch (err) {
+          UI.showToast('Failed to reset password: ' + err.message, 'error');
+        }
+      };
+    }
+
     // WebDAV Copy URL Button
     const btnCopyWebdavUrl = document.getElementById('btn-copy-webdav-url');
     if (btnCopyWebdavUrl) {
@@ -3828,20 +3887,37 @@ const App = {
       const usernameInput = document.getElementById('webdav-username');
       const passwordInput = document.getElementById('webdav-password');
       const passwordHint = document.getElementById('webdav-pw-hint');
+      const pwStatusText = document.getElementById('webdav-pw-status-text');
+      const pwStatusBadge = document.getElementById('webdav-pw-status-badge');
+      const btnResetPw = document.getElementById('btn-reset-webdav-pw');
 
       if (enabledToggle) enabledToggle.checked = !!data.enabled;
       if (modeSelect && data.permissionMode) modeSelect.value = data.permissionMode;
       if (usernameInput && data.username) usernameInput.value = data.username;
       if (urlInput && data.webdavUrl) urlInput.value = data.webdavUrl;
 
-      if (passwordInput && passwordHint) {
-        if (data.hasCustomPassword) {
-          passwordInput.placeholder = '•••••••• (Custom password saved)';
-          passwordHint.textContent = 'Custom WebDAV password is saved. Leave blank to keep current password, or enter a new one to change.';
+      if (data.hasCustomPassword) {
+        if (pwStatusText) pwStatusText.textContent = 'Custom Password Active';
+        if (pwStatusBadge) {
+          pwStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          pwStatusBadge.style.color = '#10b981';
+        }
+        if (btnResetPw) btnResetPw.style.display = 'inline-flex';
+        if (passwordInput) passwordInput.placeholder = '•••••••• (Custom password saved)';
+        if (passwordHint) {
+          passwordHint.textContent = 'Dedicated WebDAV password is set. Leave blank to keep existing password, or enter a new one to change.';
           passwordHint.style.color = 'var(--accent-color)';
-        } else {
-          passwordInput.placeholder = 'Leave empty to use Master Password';
-          passwordHint.textContent = 'No separate password set — currently using your Master Password.';
+        }
+      } else {
+        if (pwStatusText) pwStatusText.textContent = 'Using Account Password';
+        if (pwStatusBadge) {
+          pwStatusBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+          pwStatusBadge.style.color = '#3b82f6';
+        }
+        if (btnResetPw) btnResetPw.style.display = 'none';
+        if (passwordInput) passwordInput.placeholder = 'Leave blank to use Account Password';
+        if (passwordHint) {
+          passwordHint.textContent = 'No separate WebDAV password set — sign in with your main TeleDrive account password, or type a password to customize.';
           passwordHint.style.color = 'var(--text-secondary)';
         }
       }
