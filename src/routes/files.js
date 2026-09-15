@@ -1584,12 +1584,12 @@ router.delete('/:id/permanent', async (req, res) => {
     if (!file) return res.status(404).json({ error: 'File not found' });
     const folderId = file.folder_id;
 
-    await permanentlyDeleteFile(file, { throwOnError: true });
+    const result = await permanentlyDeleteFile(file, { throwOnError: false });
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
       eventBroadcaster.broadcast('file_deleted', { fileId: req.params.id, folderId, userId });
     } catch (e) {}
-    res.json({ success: true });
+    res.json({ success: true, warning: result.telegramDeleted ? undefined : 'File removed from database and cache. Telegram message was already removed or unreachable.' });
   } catch (error) {
     console.error('Permanent delete error:', error);
     res.status(500).json({ error: error.message || 'Failed to permanently delete file' });
