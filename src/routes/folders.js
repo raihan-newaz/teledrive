@@ -87,10 +87,15 @@ async function permanentlyDeleteFolderRecursive(folderId, userId) {
     // 2. Permanently delete all files inside this folder from Telegram & DB
     const files = await db.all('SELECT * FROM files WHERE folder_id = ? AND user_id = ?', [folderId, userId]);
     const filesRouter = require('./files');
-    for (const file of files) {
-        if (filesRouter.permanentlyDeleteFile) {
-            await filesRouter.permanentlyDeleteFile(file, { throwOnError: true, user: { id: userId } });
-            deletedFiles++;
+    if (files.length > 0) {
+        if (filesRouter.permanentlyDeleteFilesBatch) {
+            const r = await filesRouter.permanentlyDeleteFilesBatch(files, userId);
+            deletedFiles += r.count || 0;
+        } else if (filesRouter.permanentlyDeleteFile) {
+            for (const file of files) {
+                await filesRouter.permanentlyDeleteFile(file, { throwOnError: false });
+                deletedFiles++;
+            }
         }
     }
 

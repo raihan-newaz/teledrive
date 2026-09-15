@@ -1316,13 +1316,90 @@ router.patch('/:id', (req, res) => {
 });
 
 /**
+ * Permanently deletes multiple files efficiently in batches (Telegram messages, local cache, DB records).
+ * Guaranteed to clean up local SQLite and cache even if Telegram API encounters missing messages or transient errors.
+ * @param {Array<Object>} files - Array of file objects from database
+ * @param {string} userId - Owner user ID
+ * @returns {Promise<{ count: number, warnings: string[] }>}
+ */
+async function permanentlyDeleteFilesBatch(files, userId) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return { count: 0, warnings: [] };
+  }
+
+  const warnings = [];
+  const allMessageIds = new Set();
+  const validFiles = [];
+
+  for (const file of files) {
+    if (!file || !file.id) continue;
+    validFiles.push(file);
+
+    if (file.telegram_message_id) {
+      const parsed = parseInt(file.telegram_message_id, 10);
+      if (!isNaN(parsed) && parsed > 0) allMessageIds.add(parsed);
+    }
+
+    try {
+      const chunks = db.getFileChunks(file.id);
+      if (Array.isArray(chunks)) {
+        for (const ch of chunks) {
+          if (ch.telegram_message_id) {
+            const parsed = parseInt(ch.telegram_message_id, 10);
+            if (!isNaN(parsed) && parsed > 0) allMessageIds.add(parsed);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 1. Bulk delete message IDs from Telegram in batches of 100
+  const messageIdArray = Array.from(allMessageIds);
+  const CHUNK_SIZE = 100;
+  for (let i = 0; i < messageIdArray.length; i += CHUNK_SIZE) {
+    const chunk = messageIdArray.slice(i, i + CHUNK_SIZE);
+    try {
+      await telegram.deleteFiles(chunk);
+      console.log(`[Batch Delete] Successfully deleted ${chunk.length} Telegram message(s) for user ${userId}`);
+    } catch (tgErr) {
+      console.warn(`[Batch Delete] Telegram deletion note for batch [${chunk.slice(0, 5).join(', ')}...]:`, tgErr.message);
+      warnings.push(tgErr.message);
+    }
+  }
+
+  // 2. Clean up local disk cache & DB records for all files
+  for (const file of validFiles) {
+    try { db.deleteFileChunks(file.id); } catch (e) {}
+
+    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+    await fsPromises.unlink(cachedPath).catch(() => {});
+    const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
+    await fsPromises.unlink(thumbPath).catch(() => {});
+    await videoTranscode.deleteFileHlsCache(userId || file.user_id, file.id).catch(() => {});
+
+    db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
+    if (userId) {
+      db.run('DELETE FROM files WHERE id = ? AND user_id = ?', [file.id, userId]);
+    } else {
+      db.run('DELETE FROM files WHERE id = ?', [file.id]);
+    }
+  }
+
+  if (userId) {
+    db.recalculateUserStorage(userId);
+  }
+
+  return { count: validFiles.length, warnings };
+}
+
+/**
  * Permanently deletes a single file (all chunks & message IDs from Telegram, local cache, and SQLite DB)
  * @param {Object} file - File record from database
  * @param {Object} [options={}] - Options (e.g. throwOnError: boolean)
  */
 async function permanentlyDeleteFile(file, options = {}) {
   if (!file) return { success: true, count: 0 };
-  const throwOnError = options.throwOnError !== false;
+  const throwOnError = options.throwOnError === true;
 
   // 1. Collect all unique Telegram message IDs for this file
   const messageIds = new Set();
@@ -1358,10 +1435,7 @@ async function permanentlyDeleteFile(file, options = {}) {
       console.log(`[Delete] Successfully deleted Telegram message(s) [${idsArray.join(', ')}] for file "${file.name}" (${file.id})`);
     } catch (tgErr) {
       telegramError = tgErr;
-      console.error(`[Delete] Failed to delete Telegram message(s) [${idsArray.join(', ')}] for file "${file.name}":`, tgErr.message);
-      if (throwOnError) {
-        throw tgErr;
-      }
+      console.warn(`[Delete] Telegram message delete note for "${file.name}":`, tgErr.message);
     }
   }
 
@@ -1383,6 +1457,10 @@ async function permanentlyDeleteFile(file, options = {}) {
 
   if (file.user_id) {
     db.recalculateUserStorage(file.user_id);
+  }
+
+  if (telegramError && throwOnError) {
+    throw telegramError;
   }
 
   return { success: true, fileId: file.id, telegramDeleted: !telegramError };
@@ -1453,23 +1531,8 @@ router.delete('/trash/empty', async (req, res) => {
   try {
     const userId = req.user.id;
     const trashedFiles = db.getTrashedFiles(userId);
-    let deletedCount = 0;
-    const errors = [];
-
-    for (const file of trashedFiles) {
-      try {
-        await permanentlyDeleteFile(file, { throwOnError: true });
-        deletedCount++;
-      } catch (err) {
-        errors.push(`${file.name}: ${err.message}`);
-      }
-    }
-
-    if (userId) db.recalculateUserStorage(userId);
-
-    if (errors.length > 0 && deletedCount === 0) {
-      return res.status(500).json({ error: 'Failed to delete from Telegram: ' + errors.join('; ') });
-    }
+    
+    const result = await permanentlyDeleteFilesBatch(trashedFiles, userId);
 
     try {
       const eventBroadcaster = require('../services/eventBroadcaster');
@@ -1478,8 +1541,8 @@ router.delete('/trash/empty', async (req, res) => {
 
     res.json({
       success: true,
-      count: deletedCount,
-      warnings: errors.length > 0 ? errors : undefined
+      count: result.count,
+      warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined
     });
   } catch (error) {
     console.error('Empty trash error:', error);
@@ -1624,19 +1687,15 @@ router.post('/batch-delete', async (req, res) => {
     const { fileIds = [], folderIds = [] } = req.body;
     let deletedFilesCount = 0;
     let deletedFoldersCount = 0;
-    const errors = [];
+    const warnings = [];
 
-    // 1. Permanently delete files
+    // 1. Collect all target files
+    const filesToDelete = [];
     if (Array.isArray(fileIds) && fileIds.length > 0) {
       for (const id of fileIds) {
         const file = db.getFile(id, userId);
         if (file) {
-          try {
-            await permanentlyDeleteFile(file, { throwOnError: true });
-            deletedFilesCount++;
-          } catch (err) {
-            errors.push(`${file.name}: ${err.message}`);
-          }
+          filesToDelete.push(file);
         }
       }
     }
@@ -1652,22 +1711,27 @@ router.post('/batch-delete', async (req, res) => {
             deletedFoldersCount += r.deletedFolders || 0;
           }
         } catch (err) {
-          errors.push(`Folder ${folderId}: ${err.message}`);
+          warnings.push(`Folder ${folderId}: ${err.message}`);
         }
+      }
+    }
+
+    // 3. Batch delete files
+    if (filesToDelete.length > 0) {
+      const result = await permanentlyDeleteFilesBatch(filesToDelete, userId);
+      deletedFilesCount += result.count;
+      if (result.warnings && result.warnings.length > 0) {
+        warnings.push(...result.warnings);
       }
     }
 
     if (userId) db.recalculateUserStorage(userId);
 
-    if (errors.length > 0 && deletedFilesCount === 0 && deletedFoldersCount === 0) {
-      return res.status(500).json({ error: 'Failed to delete from Telegram: ' + errors.join('; ') });
-    }
-
     res.json({
       success: true,
       deletedFilesCount,
       deletedFoldersCount,
-      warnings: errors.length > 0 ? errors : undefined
+      warnings: warnings.length > 0 ? warnings : undefined
     });
   } catch (error) {
     console.error('Batch delete error:', error);
@@ -1738,5 +1802,6 @@ router.post('/batch-move', async (req, res) => {
 });
 
 router.permanentlyDeleteFile = permanentlyDeleteFile;
+router.permanentlyDeleteFilesBatch = permanentlyDeleteFilesBatch;
 router.streamFileToResponse = streamFileToResponse;
 module.exports = router;

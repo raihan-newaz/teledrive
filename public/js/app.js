@@ -1789,7 +1789,7 @@ const App = {
           } else {
             UI.showToast(`Permanently deleted ${res.count || 0} file(s) from Telegram`, 'success');
           }
-          this.refreshCurrentView();
+          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to empty trash: ' + e.message, 'error');
         }
