@@ -38,8 +38,9 @@ const authMiddleware = (req, res, next) => {
     
     // Fetch user from database
     let user = null;
-    if (decoded.id) {
-      user = db.getUserById(decoded.id);
+    const targetUserId = decoded.id || (decoded.type === 'hls_playback' ? decoded.userId : null);
+    if (targetUserId) {
+      user = db.getUserById(targetUserId);
     } else {
       // Legacy token compatibility: find first admin or first user
       user = db.getUserByEmail('admin@teledrive.local') || db.getAllUsers().find(u => u.role === 'admin') || db.getAllUsers()[0];

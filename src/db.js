@@ -176,6 +176,35 @@ async function initialize() {
 
   try { db.run('ALTER TABLE app_settings ADD COLUMN user_id TEXT;'); } catch (e) {}
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS video_metadata (
+      file_id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+      duration REAL,
+      width INTEGER,
+      height INTEGER,
+      codec TEXT,
+      audio_codec TEXT,
+      bitrate INTEGER,
+      fps REAL,
+      is_hdr INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS video_transcode_jobs (
+      id TEXT PRIMARY KEY,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      user_id TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      progress INTEGER DEFAULT 0,
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // Performance compound indexes for lightning-fast scale & user isolation
   try {
     db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
@@ -192,6 +221,8 @@ async function initialize() {
     db.run('CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id);');
     db.run('CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);');
     db.run('CREATE INDEX IF NOT EXISTS idx_backups_created ON backups(created_at);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_video_transcode_jobs_file ON video_transcode_jobs(file_id);');
+    db.run('CREATE INDEX IF NOT EXISTS idx_video_transcode_jobs_user ON video_transcode_jobs(user_id);');
   } catch (e) {
     console.warn('[DB] Index creation warning:', e.message);
   }
@@ -862,6 +893,74 @@ function getUserStorageStats(userId) {
   };
 }
 
+function getVideoMetadata(fileId) {
+  if (!fileId) return null;
+  return get('SELECT * FROM video_metadata WHERE file_id = ?', [fileId]);
+}
+
+function saveVideoMetadata(fileId, meta = {}) {
+  if (!fileId) return;
+  const now = new Date().toISOString();
+  run(
+    `INSERT INTO video_metadata (file_id, duration, width, height, codec, audio_codec, bitrate, fps, is_hdr, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(file_id) DO UPDATE SET
+       duration = excluded.duration,
+       width = excluded.width,
+       height = excluded.height,
+       codec = excluded.codec,
+       audio_codec = excluded.audio_codec,
+       bitrate = excluded.bitrate,
+       fps = excluded.fps,
+       is_hdr = excluded.is_hdr,
+       updated_at = excluded.updated_at`,
+    [
+      fileId,
+      meta.duration || null,
+      meta.width || null,
+      meta.height || null,
+      meta.codec || null,
+      meta.audio_codec || null,
+      meta.bitrate || null,
+      meta.fps || null,
+      meta.is_hdr ? 1 : 0,
+      now,
+      now
+    ]
+  );
+  save();
+}
+
+function getTranscodeJob(fileId) {
+  if (!fileId) return null;
+  return get('SELECT * FROM video_transcode_jobs WHERE file_id = ?', [fileId]);
+}
+
+function upsertTranscodeJob(fileId, userId, status, progress = 0, error = null) {
+  if (!fileId) return;
+  const now = new Date().toISOString();
+  const existing = get('SELECT id FROM video_transcode_jobs WHERE file_id = ?', [fileId]);
+  if (existing) {
+    run(
+      'UPDATE video_transcode_jobs SET user_id = ?, status = ?, progress = ?, error = ?, updated_at = ? WHERE file_id = ?',
+      [userId || null, status, progress, error, now, fileId]
+    );
+  } else {
+    const { v4: uuidv4 } = require('uuid');
+    run(
+      'INSERT INTO video_transcode_jobs (id, file_id, user_id, status, progress, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [uuidv4(), fileId, userId || null, status, progress, error, now, now]
+    );
+  }
+  save();
+}
+
+function deleteTranscodeJob(fileId) {
+  if (!fileId) return;
+  run('DELETE FROM video_transcode_jobs WHERE file_id = ?', [fileId]);
+  save();
+}
+
 /**
  * Get the raw database instance
  * @returns {object} sql.js Database instance
@@ -917,5 +1016,10 @@ module.exports = {
   updateUserLastLogin,
   deleteUser,
   recalculateUserStorage,
-  getUserStorageStats
+  getUserStorageStats,
+  getVideoMetadata,
+  saveVideoMetadata,
+  getTranscodeJob,
+  upsertTranscodeJob,
+  deleteTranscodeJob
 };

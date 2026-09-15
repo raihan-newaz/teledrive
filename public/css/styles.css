@@ -2194,6 +2194,135 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
 }
 
+/* YouTube Quality Menu & ABR Controls */
+.yt-quality-wrap {
+  position: relative;
+}
+.yt-quality-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto !important;
+  padding: 0 8px;
+  border-radius: 18px;
+}
+.yt-quality-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.yt-quality-menu {
+  position: absolute;
+  bottom: 44px;
+  right: 0;
+  background: rgba(24, 24, 27, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm, 8px);
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75);
+  z-index: 60;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.yt-menu-header {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
+}
+.yt-quality-option {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.yt-quality-option:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.yt-quality-option.active {
+  color: #38bdf8;
+  font-weight: 600;
+}
+.yt-check-icon {
+  width: 14px;
+  display: inline-block;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+/* Transcoding status banner */
+.yt-transcode-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 35;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  transition: all 0.3s ease;
+}
+.yt-transcode-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: ytSpin 0.8s linear infinite;
+}
+.yt-transcode-btn {
+  background: #0284c7;
+  color: #fff;
+  border: none;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.yt-transcode-btn:hover {
+  background: #0369a1;
+}
+.yt-transcode-dismiss {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.yt-transcode-dismiss:hover {
+  color: #fff;
+}
+
 @media (max-width: 600px) {
   .yt-time-display {
     font-size: 11px;

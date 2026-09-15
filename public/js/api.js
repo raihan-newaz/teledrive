@@ -324,6 +324,36 @@ const API = {
     return this.buildMediaUrl(fileId, 'stream');
   },
 
+  async getHlsStatus(fileId) {
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const folderToken = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const headers = {};
+    if (folderToken) headers['x-folder-token'] = folderToken;
+    return this.request('GET', `/api/files/${fileId}/hls/status`, null, { headers });
+  },
+
+  async requestHlsTranscode(fileId) {
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const folderToken = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const headers = {};
+    if (folderToken) headers['x-folder-token'] = folderToken;
+    return this.request('POST', `/api/files/${fileId}/hls/transcode`, null, { headers });
+  },
+
+  getHlsMasterUrl(fileId, token = null) {
+    const file = typeof App !== 'undefined' && App.filesMap ? App.filesMap.get(String(fileId)) : null;
+    const folderToken = file && file.folder_id ? this.folderTokens[String(file.folder_id)] : '';
+    const params = new URLSearchParams();
+    if (token) {
+      params.append('token', token);
+    } else if (this.token) {
+      params.append('token', this.token);
+    }
+    if (folderToken) params.append('folderToken', folderToken);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return `/api/files/${fileId}/hls/master.m3u8${qs}`;
+  },
+
   async uploadThumbnail(fileId, thumbnailBase64) {
     if (!fileId || !thumbnailBase64) return null;
     try {

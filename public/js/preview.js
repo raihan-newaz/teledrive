@@ -3,6 +3,8 @@
  */
 const Preview = {
   currentFile: null,
+  currentHls: null,
+  hlsPollTimeout: null,
   zoomLevel: 1,
   rotationAngle: 0,
   controlsTimeout: null,
@@ -143,9 +145,17 @@ const Preview = {
     if (cat === 'video') {
       contentEl.innerHTML = `
         <div class="yt-player-wrap" id="yt-player">
-          <video class="yt-video-element" id="main-video" preload="auto" autoplay playsinline src="${streamUrl}">
+          <video class="yt-video-element" id="main-video" preload="auto" playsinline>
             Your browser does not support HTML5 video streaming.
           </video>
+
+          <!-- Adaptive Transcoding Background Status Banner -->
+          <div class="yt-transcode-banner" id="yt-transcode-banner" style="display:none;">
+            <span class="yt-transcode-spinner"></span>
+            <span id="yt-transcode-text">Preparing 4K Adaptive Streaming (HLS)...</span>
+            <button class="yt-transcode-btn" id="yt-transcode-switch-btn" style="display:none;">Switch to HLS</button>
+            <button class="yt-transcode-dismiss" id="yt-transcode-dismiss" title="Dismiss">&times;</button>
+          </div>
 
           <!-- Center Loading Spinner -->
           <div class="yt-spinner" id="yt-spinner">
@@ -200,6 +210,23 @@ const Preview = {
               </div>
 
               <div class="yt-btn-group-right">
+                <!-- Quality / Settings Selector (Always visible) -->
+                <div class="yt-quality-wrap" id="yt-quality-wrap">
+                  <button class="yt-btn yt-quality-btn" id="yt-quality-btn" title="Quality / Settings">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    <span id="yt-quality-badge" class="yt-quality-badge">Auto</span>
+                  </button>
+                  <div class="yt-quality-menu" id="yt-quality-menu" style="display:none;">
+                    <div class="yt-menu-header">Quality</div>
+                    <div class="yt-quality-options-list" id="yt-quality-options-list">
+                      <div class="yt-quality-option active" data-level="direct">
+                        <span class="yt-check-icon">✓</span>
+                        <span>Original (Direct Stream)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Speed Selector -->
                 <div class="yt-speed-wrap">
                   <button class="yt-btn yt-speed-btn" id="yt-speed-btn" title="Playback Speed">
@@ -411,7 +438,15 @@ const Preview = {
   close() {
     clearTimeout(this.controlsTimeout);
     clearTimeout(this.navTimeout);
+    clearTimeout(this.hlsPollTimeout);
     this._clearListeners();
+
+    if (this.currentHls) {
+      try {
+        this.currentHls.destroy();
+      } catch (e) {}
+      this.currentHls = null;
+    }
 
     if (typeof UI !== 'undefined' && UI.resumeThumbnailQueue) {
       UI.resumeThumbnailQueue();
@@ -461,6 +496,15 @@ const Preview = {
     const speedBtn = document.getElementById('yt-speed-btn');
     const speedText = document.getElementById('yt-speed-text');
     const speedMenu = document.getElementById('yt-speed-menu');
+    const qualityWrap = document.getElementById('yt-quality-wrap');
+    const qualityBtn = document.getElementById('yt-quality-btn');
+    const qualityBadge = document.getElementById('yt-quality-badge');
+    const qualityMenu = document.getElementById('yt-quality-menu');
+    const qualityList = document.getElementById('yt-quality-options-list');
+    const transcodeBanner = document.getElementById('yt-transcode-banner');
+    const transcodeText = document.getElementById('yt-transcode-text');
+    const transcodeSwitchBtn = document.getElementById('yt-transcode-switch-btn');
+    const transcodeDismissBtn = document.getElementById('yt-transcode-dismiss');
     const pipBtn = document.getElementById('yt-pip-btn');
     const fullscreenBtn = document.getElementById('yt-fullscreen-btn');
     const fullscreenIcon = document.getElementById('yt-fullscreen-icon');
@@ -671,6 +715,7 @@ const Preview = {
     if (speedBtn && speedMenu) {
       speedBtn.onclick = (e) => {
         e.stopPropagation();
+        if (qualityMenu) qualityMenu.style.display = 'none';
         speedMenu.style.display = speedMenu.style.display === 'none' ? 'flex' : 'none';
       };
 
@@ -688,6 +733,135 @@ const Preview = {
 
       this._addListener(document, 'click', () => {
         if (speedMenu) speedMenu.style.display = 'none';
+      });
+    }
+
+    // Quality Menu & Helpers
+    let lastHlsToken = null;
+    const updateQualityBadge = (isAuto, height) => {
+      if (!qualityBadge) return;
+      if (isAuto) {
+        qualityBadge.textContent = height ? `Auto (${height}p)` : 'Auto';
+      } else {
+        qualityBadge.textContent = height ? `${height}p` : 'HD';
+      }
+    };
+
+    const updateDirectMenu = (statusInfo) => {
+      if (!qualityList) return;
+      let statusHtml = '';
+      if (statusInfo && (statusInfo.status === 'processing' || statusInfo.status === 'queued')) {
+        statusHtml = `<div class="yt-quality-option" style="opacity:0.75; font-size:11px; cursor:default;">
+          <span class="yt-check-icon">⏳</span>
+          <span>Transcoding 4K/HLS (${statusInfo.progress || 10}%)...</span>
+        </div>`;
+      } else if (statusInfo && statusInfo.error) {
+        statusHtml = `<div class="yt-quality-option" style="opacity:0.85; font-size:11px; cursor:default; color:#ffb74d;">
+          <span class="yt-check-icon">ℹ️</span>
+          <span>${statusInfo.error.includes('FFmpeg') ? 'VPS Docker has FFmpeg (Active on VPS)' : statusInfo.error}</span>
+        </div>`;
+      }
+      qualityList.innerHTML = `
+        <div class="yt-quality-option active" data-level="direct">
+          <span class="yt-check-icon">✓</span>
+          <span>Original (Direct Stream)</span>
+        </div>
+        ${statusHtml}
+      `;
+      if (qualityBadge) qualityBadge.textContent = 'Direct';
+    };
+
+    const buildQualityMenu = (hls) => {
+      if (!qualityList || !qualityWrap) return;
+      qualityWrap.style.display = 'block';
+
+      let html = `<div class="yt-quality-option active" data-level="-1">
+        <span class="yt-check-icon">✓</span>
+        <span>Auto</span>
+      </div>`;
+
+      const sortedLevels = hls.levels
+        .map((lvl, index) => ({ ...lvl, index }))
+        .sort((a, b) => (b.height || 0) - (a.height || 0));
+
+      sortedLevels.forEach(lvl => {
+        const h = lvl.height || 720;
+        let label = `${h}p`;
+        if (h >= 2160) label = '2160p (4K)';
+        else if (h >= 1440) label = '1440p (2K)';
+        else if (h >= 1080) label = '1080p (FHD)';
+        else if (h >= 720) label = '720p (HD)';
+        else if (h >= 480) label = '480p (SD)';
+
+        html += `<div class="yt-quality-option" data-level="${lvl.index}">
+          <span class="yt-check-icon"></span>
+          <span>${label}</span>
+        </div>`;
+      });
+
+      // Add Original Direct Stream Option
+      html += `<div class="yt-quality-option" data-level="direct">
+        <span class="yt-check-icon"></span>
+        <span>Original (Direct Stream)</span>
+      </div>`;
+
+      qualityList.innerHTML = html;
+
+      qualityList.querySelectorAll('.yt-quality-option').forEach(opt => {
+        opt.onclick = (e) => {
+          e.stopPropagation();
+          const levelAttr = opt.getAttribute('data-level');
+          qualityList.querySelectorAll('.yt-quality-option').forEach(o => {
+            o.classList.remove('active');
+            const check = o.querySelector('.yt-check-icon');
+            if (check) check.textContent = '';
+          });
+          opt.classList.add('active');
+          const check = opt.querySelector('.yt-check-icon');
+          if (check) check.textContent = '✓';
+
+          if (levelAttr === 'direct') {
+            const curTime = video.currentTime;
+            if (this.currentHls) {
+              try { this.currentHls.destroy(); } catch (err) {}
+              this.currentHls = null;
+            }
+            video.src = streamUrl;
+            video.currentTime = curTime;
+            video.play().catch(() => {});
+            if (qualityBadge) qualityBadge.textContent = 'Direct';
+          } else {
+            const levelIdx = parseInt(levelAttr, 10);
+            if (!this.currentHls && lastHlsToken) {
+              const curTime = video.currentTime;
+              loadHlsStream(lastHlsToken);
+              video.currentTime = curTime;
+            }
+            if (this.currentHls) {
+              this.currentHls.currentLevel = levelIdx;
+              if (levelIdx === -1) {
+                const curLevel = this.currentHls.levels[this.currentHls.currentLevel];
+                updateQualityBadge(true, curLevel ? curLevel.height : null);
+              } else {
+                const lvl = this.currentHls.levels[levelIdx];
+                updateQualityBadge(false, lvl ? lvl.height : null);
+              }
+            }
+          }
+          if (qualityMenu) qualityMenu.style.display = 'none';
+        };
+      });
+    };
+
+    if (qualityBtn && qualityMenu) {
+      qualityBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (speedMenu) speedMenu.style.display = 'none';
+        qualityMenu.style.display = qualityMenu.style.display === 'none' ? 'flex' : 'none';
+      };
+
+      this._addListener(document, 'click', () => {
+        if (qualityMenu) qualityMenu.style.display = 'none';
       });
     }
 
@@ -748,8 +922,147 @@ const Preview = {
       };
     }
 
-    // Immediately trigger playback
-    video.play().catch(() => {});
+    // Dismiss transcode banner button
+    if (transcodeDismissBtn && transcodeBanner) {
+      transcodeDismissBtn.onclick = (e) => {
+        e.stopPropagation();
+        transcodeBanner.style.display = 'none';
+      };
+    }
+
+    // ─── Adaptive Bitrate Streaming (HLS) Loading & Transcode Engine ───
+    const fileId = this.currentFile.id;
+    const streamUrl = API.getStreamUrl(fileId);
+
+    const loadHlsStream = (token) => {
+      lastHlsToken = token;
+      if (this.currentHls) {
+        try { this.currentHls.destroy(); } catch (e) {}
+        this.currentHls = null;
+      }
+
+      const masterUrl = API.getHlsMasterUrl(fileId, token);
+
+      if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        const hls = new Hls({
+          maxBufferLength: 30,
+          maxMaxBufferLength: 45,
+          maxBufferSize: 60 * 1000 * 1000,
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 30,
+          abrEwmaFastLive: 3,
+          abrEwmaSlowLive: 9,
+          abrBandWidthFactor: 0.75, // 25% safety margin for unstable networks
+          abrBandWidthUpFactor: 0.70,
+          startLevel: -1 // Auto starting level
+        });
+
+        this.currentHls = hls;
+        hls.loadSource(masterUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('[HLS] ABR Manifest loaded, available renditions:', hls.levels.length);
+          buildQualityMenu(hls);
+          video.play().catch(() => {});
+        });
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+          const lvl = hls.levels[data.level];
+          if (lvl) {
+            updateQualityBadge(hls.autoLevelEnabled, lvl.height);
+          }
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            console.warn('[HLS] Fatal playback error, falling back to direct stream:', data);
+            hls.destroy();
+            this.currentHls = null;
+            video.src = streamUrl;
+            updateDirectMenu();
+            video.play().catch(() => {});
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS for Safari iOS / macOS
+        video.src = masterUrl;
+        video.play().catch(() => {});
+      } else {
+        // Direct stream fallback
+        video.src = streamUrl;
+        updateDirectMenu();
+        video.play().catch(() => {});
+      }
+    };
+
+    // Check HLS readiness and trigger background transcode if needed
+    (async () => {
+      try {
+        const status = await API.getHlsStatus(fileId);
+        if (status && status.ready) {
+          loadHlsStream(status.token);
+          return;
+        }
+
+        // Start instant direct stream immediately while transcode runs in background
+        video.src = streamUrl;
+        updateDirectMenu(status);
+        video.play().catch(() => {});
+
+        // Request background transcoding
+        const transcodeRes = await API.requestHlsTranscode(fileId).catch(() => null);
+
+        if (transcodeRes && transcodeRes.ready) {
+          loadHlsStream(transcodeRes.token);
+          return;
+        }
+
+        if (transcodeRes && (transcodeRes.status === 'queued' || transcodeRes.status === 'processing')) {
+          updateDirectMenu(transcodeRes);
+          if (transcodeBanner) {
+            transcodeBanner.style.display = 'flex';
+            if (transcodeText) transcodeText.textContent = 'Preparing 4K Adaptive Streaming...';
+          }
+
+          const pollHlsStatus = async () => {
+            if (!this.currentFile || this.currentFile.id !== fileId) return;
+            try {
+              const curStatus = await API.getHlsStatus(fileId);
+              updateDirectMenu(curStatus);
+              if (curStatus.ready) {
+                lastHlsToken = curStatus.token;
+                if (transcodeText) transcodeText.textContent = 'Adaptive Stream (HLS) Ready! 🎉';
+                if (transcodeSwitchBtn) {
+                  transcodeSwitchBtn.style.display = 'inline-block';
+                  transcodeSwitchBtn.onclick = () => {
+                    transcodeBanner.style.display = 'none';
+                    const curTime = video.currentTime;
+                    loadHlsStream(curStatus.token);
+                    video.currentTime = curTime;
+                  };
+                }
+                return;
+              }
+              if (curStatus.status === 'processing' && transcodeText) {
+                transcodeText.textContent = `Preparing Adaptive Stream (${curStatus.progress || 10}%)...`;
+              }
+              this.hlsPollTimeout = setTimeout(pollHlsStatus, 3000);
+            } catch (e) {}
+          };
+
+          this.hlsPollTimeout = setTimeout(pollHlsStatus, 3000);
+        } else if (transcodeRes && transcodeRes.error) {
+          updateDirectMenu(transcodeRes);
+        }
+      } catch (err) {
+        console.warn('[Video] HLS check failed, using direct stream:', err.message);
+        video.src = streamUrl;
+        updateDirectMenu();
+        video.play().catch(() => {});
+      }
+    })();
   },
 
   updateVolumeIcon(vol, iconEl) {
