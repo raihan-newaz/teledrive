@@ -3495,20 +3495,20 @@ const App = {
             <div style="height: 100%; width: ${pct}%; background: ${pct > 90 ? '#ef4444' : 'var(--accent-color)'}; border-radius: 2px;"></div>
           </div>` : ''}
 
-          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; border-top: 1px solid var(--border-color); padding-top: 8px; flex-wrap: wrap;">
-            <button type="button" class="btn-secondary icon-btn-sm btn-edit-user" title="Edit User" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 6px; border-top: 1px solid var(--border-color); padding-top: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary btn-sm btn-edit-user" title="Edit User">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
               <span>Edit</span>
             </button>
-            <button type="button" class="btn-secondary icon-btn-sm btn-reset-pw" title="Reset Password" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+            <button type="button" class="btn-secondary btn-sm btn-reset-pw" title="Reset Password">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
               <span>Reset PW</span>
             </button>
             ${!isSelf ? `
-            <button type="button" class="btn-secondary icon-btn-sm btn-toggle-status" title="${u.status === 'active' ? 'Suspend User' : 'Activate User'}" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; ${u.status === 'active' ? 'color: #f59e0b;' : 'color: #10b981;'}">
+            <button type="button" class="${u.status === 'active' ? 'btn-warning' : 'btn-success'} btn-sm btn-toggle-status" title="${u.status === 'active' ? 'Suspend User' : 'Activate User'}">
               <span>${u.status === 'active' ? 'Suspend' : 'Activate'}</span>
             </button>
-            <button type="button" class="btn-danger icon-btn-sm btn-delete-user" title="Delete User" style="height: 30px; font-size: 12px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;">
+            <button type="button" class="btn-danger btn-sm btn-delete-user" title="Delete User">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               <span>Delete</span>
             </button>` : ''}
