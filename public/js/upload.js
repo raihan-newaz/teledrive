@@ -108,9 +108,10 @@ const Upload = {
    */
   async getOrCreateFolder(name, parentId) {
     const trimmed = (name || '').trim();
-    if (!trimmed) return parentId;
+    const cleanParentId = (parentId && parentId !== 'null' && parentId !== 'undefined' && String(parentId).trim() !== '') ? String(parentId).trim() : null;
+    if (!trimmed) return cleanParentId;
 
-    const cacheKey = `${parentId || 'root'}::${trimmed}`;
+    const cacheKey = `${cleanParentId || 'root'}::${trimmed}`;
     if (this._folderCache.has(cacheKey)) {
       return this._folderCache.get(cacheKey);
     }
@@ -120,13 +121,13 @@ const Upload = {
 
     const promise = (async () => {
       try {
-        const res = await API.createFolder(trimmed, parentId);
+        const res = await API.createFolder(trimmed, cleanParentId);
         const folderId = res.id;
         this._folderCache.set(cacheKey, folderId);
         return folderId;
       } catch (err) {
         console.error(`[Upload] Failed to create folder "${trimmed}":`, err);
-        return parentId;
+        return cleanParentId;
       } finally {
         this._folderPromiseCache.delete(cacheKey);
       }
@@ -141,13 +142,14 @@ const Upload = {
    * e.g. "my-project/sub1/sub2/file.txt" under baseFolderId
    */
   async resolveDestinationFolder(relativePath, baseFolderId) {
-    if (!relativePath) return baseFolderId;
+    const cleanBaseFolderId = (baseFolderId && baseFolderId !== 'null' && baseFolderId !== 'undefined' && String(baseFolderId).trim() !== '') ? String(baseFolderId).trim() : null;
+    if (!relativePath) return cleanBaseFolderId;
     const parts = relativePath.split(/[/\\]+/).filter(Boolean);
     // If only filename or empty, it belongs directly in baseFolderId
-    if (parts.length <= 1) return baseFolderId;
+    if (parts.length <= 1) return cleanBaseFolderId;
 
     const dirSegments = parts.slice(0, -1);
-    let currentParentId = baseFolderId || null;
+    let currentParentId = cleanBaseFolderId;
 
     for (const segment of dirSegments) {
       currentParentId = await this.getOrCreateFolder(segment, currentParentId);
@@ -158,6 +160,7 @@ const Upload = {
   async addFiles(fileList, baseFolderId) {
     if (!fileList || fileList.length === 0) return;
 
+    const cleanBaseFolderId = (baseFolderId && baseFolderId !== 'null' && baseFolderId !== 'undefined' && String(baseFolderId).trim() !== '') ? String(baseFolderId).trim() : null;
     const fileArray = Array.from(fileList);
     const hasRelativePaths = fileArray.some(f => (f.webkitRelativePath || f._relativePath));
     if (hasRelativePaths && typeof UI !== 'undefined' && UI.showToast) {
@@ -167,11 +170,11 @@ const Upload = {
     let addedCount = 0;
     for (const file of fileArray) {
       const relPath = file.webkitRelativePath || file._relativePath || '';
-      let targetFolderId = baseFolderId;
+      let targetFolderId = cleanBaseFolderId;
 
       if (relPath) {
         try {
-          targetFolderId = await this.resolveDestinationFolder(relPath, baseFolderId);
+          targetFolderId = await this.resolveDestinationFolder(relPath, cleanBaseFolderId);
         } catch (e) {
           console.warn('[Upload] Folder resolution error for:', relPath, e);
         }
@@ -641,7 +644,7 @@ const Upload = {
 
       const formData = new FormData();
       formData.append('file', item.file);
-      if (item.folderId) {
+      if (item.folderId && item.folderId !== 'null' && item.folderId !== 'undefined') {
         formData.append('folderId', item.folderId);
       }
 
@@ -717,7 +720,7 @@ const Upload = {
       formData.append('totalChunks', totalChunks);
       formData.append('fileName', item.file.name);
       formData.append('fileSize', totalSize);
-      if (item.folderId) {
+      if (item.folderId && item.folderId !== 'null' && item.folderId !== 'undefined') {
         formData.append('folderId', item.folderId);
       }
 

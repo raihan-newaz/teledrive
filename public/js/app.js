@@ -605,10 +605,18 @@ const App = {
     const hasFolders = this.folders.length > 0;
     const hasFiles = filteredFiles.length > 0;
 
+    if (!hasFolders) {
+      if (foldersGrid) foldersGrid.innerHTML = '';
+      if (foldersSection) foldersSection.style.display = 'none';
+    }
+    if (!hasFiles) {
+      if (filesGrid) filesGrid.innerHTML = '';
+      if (filesSection) filesSection.style.display = 'none';
+      this.renderedFileCount = 0;
+    }
+
     if (!hasFolders && !hasFiles) {
       if (fileContainer) fileContainer.style.display = 'none';
-      if (foldersSection) foldersSection.style.display = 'none';
-      if (filesSection) filesSection.style.display = 'none';
       if (emptyState) emptyState.style.display = 'flex';
       return;
     }
@@ -620,8 +628,6 @@ const App = {
     if (hasFolders) {
       foldersSection.style.display = 'block';
       foldersGrid.innerHTML = this.folders.map(f => UI.renderFolderCard(f)).join('');
-    } else {
-      foldersSection.style.display = 'none';
     }
 
     // Disconnect old scroll observer
@@ -806,7 +812,7 @@ const App = {
 
       if (newCard) {
         if (existingCard) {
-          filesGrid.replaceChild(newCard, existingCard);
+          foldersGrid.replaceChild(newCard, existingCard);
         } else {
           if (foldersGrid.firstChild) {
             foldersGrid.insertBefore(newCard, foldersGrid.firstChild);
@@ -2761,9 +2767,9 @@ const App = {
     if (fileInput) {
       fileInput.onchange = async (e) => {
         if (e.target.files && e.target.files.length > 0) {
-          await Upload.addFiles(Array.from(e.target.files), this.currentFolderId);
+          const files = Array.from(e.target.files);
           fileInput.value = '';
-          this.refreshCurrentView();
+          await Upload.addFiles(files, this.currentFolderId);
         }
       };
     }
@@ -2772,9 +2778,9 @@ const App = {
     if (folderInput) {
       folderInput.onchange = async (e) => {
         if (e.target.files && e.target.files.length > 0) {
-          await Upload.addFiles(Array.from(e.target.files), this.currentFolderId);
+          const files = Array.from(e.target.files);
           folderInput.value = '';
-          this.refreshCurrentView();
+          await Upload.addFiles(files, this.currentFolderId);
         }
       };
     }

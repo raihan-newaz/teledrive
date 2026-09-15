@@ -761,7 +761,8 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
       return res.status(413).json({ error: quotaCheck.message, quotaExceeded: true });
     }
 
-    const folderId = req.body.folderId || null;
+    const rawFolderId = req.body.folderId;
+    const folderId = (rawFolderId && rawFolderId !== 'null' && rawFolderId !== 'undefined' && String(rawFolderId).trim() !== '') ? String(rawFolderId).trim() : null;
     const safeName = sanitizeFilename(req.file.originalname);
     const fileId = uuidv4();
 
@@ -959,7 +960,8 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const totalChunks = parseInt(req.body.totalChunks, 10);
     const fileName = req.body.fileName || req.file.originalname;
     const totalFileSize = parseInt(req.body.fileSize, 10) || req.file.size;
-    const folderId = req.body.folderId || null;
+    const rawFolderId = req.body.folderId;
+    const folderId = (rawFolderId && rawFolderId !== 'null' && rawFolderId !== 'undefined' && String(rawFolderId).trim() !== '') ? String(rawFolderId).trim() : null;
 
     if (!uploadId || typeof uploadId !== 'string' || uploadId.length > 128 || isNaN(chunkIndex) || isNaN(totalChunks)) {
       return res.status(400).json({ error: 'Missing or invalid chunk metadata' });
