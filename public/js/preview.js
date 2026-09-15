@@ -818,11 +818,12 @@ const Preview = {
       if (!qualityList) return;
       let statusHtml = '';
       if (statusInfo && (statusInfo.status === 'processing' || statusInfo.status === 'queued')) {
-        const pct = statusInfo.progress || 10;
+        const pct = statusInfo.progress || 2;
+        const phase = pct <= 30 ? 'Downloading' : 'Transcoding';
         statusHtml = `
           <div class="yt-quality-option" style="opacity:0.85; font-size:12px; cursor:default; color:#8ab4f8; border-top:1px solid rgba(255,255,255,0.1); margin-top:4px; padding-top:6px;">
             <span class="yt-check-icon">⏳</span>
-            <span>Auto (ABR) — Transcoding (${pct}%)</span>
+            <span>Auto (ABR) — ${phase} (${pct}%)</span>
           </div>
           <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
             <span class="yt-check-icon"></span>
@@ -1113,7 +1114,7 @@ const Preview = {
           updateDirectMenu(transcodeRes);
           if (transcodeBanner) {
             transcodeBanner.style.display = 'flex';
-            if (transcodeText) transcodeText.textContent = 'Preparing 4K Adaptive Streaming...';
+            if (transcodeText) transcodeText.textContent = 'Downloading & Preparing Adaptive Stream...';
           }
 
           const pollHlsStatus = async () => {
@@ -1135,7 +1136,9 @@ const Preview = {
                 return;
               }
               if (curStatus.status === 'processing' && transcodeText) {
-                transcodeText.textContent = `Preparing Adaptive Stream (${curStatus.progress || 10}%)...`;
+                const p = curStatus.progress || 2;
+                const phase = p <= 30 ? 'Downloading & Decrypting' : 'Transcoding';
+                transcodeText.textContent = `${phase} (${p}%)...`;
               }
               this.hlsPollTimeout = setTimeout(pollHlsStatus, 3000);
             } catch (e) {}

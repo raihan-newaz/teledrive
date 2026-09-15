@@ -212,7 +212,7 @@ function isHlsReady(userId, fileId) {
 /**
  * Downloads and decrypts all parts of a file into a secure temporary plaintext file
  */
-async function assemblePlaintextSource(file, userKey, tempOutputPath) {
+async function assemblePlaintextSource(file, userKey, tempOutputPath, onProgress) {
   let parts = [];
   if (file.is_chunked === 1) {
     parts = db.getFileChunks(file.id);
@@ -318,6 +318,12 @@ async function assemblePlaintextSource(file, userKey, tempOutputPath) {
       const canWrite = writeStream.write(partPlaintext);
       if (!canWrite) {
         await new Promise(r => writeStream.once('drain', r));
+      }
+
+      // Report download progress
+      if (onProgress) {
+        const partPct = Math.round(((parts.indexOf(part) + 1) / parts.length) * 100);
+        onProgress(partPct);
       }
     }
 
@@ -489,11 +495,17 @@ async function processQueue() {
   const tempSrcPath = path.join(tmpDir, `transcode_src_${fileId}${path.extname(file.name || '') || '.mp4'}`);
 
   try {
-    db.upsertTranscodeJob(fileId, userId, 'processing', 5, null);
+    db.upsertTranscodeJob(fileId, userId, 'processing', 2, null);
 
     // 1. Download and decrypt full source to temporary plaintext file
+    // Progress phase 1: download = 2% → 30%
     console.log(`[HLS] Assembling decrypted source for "${file.name}" (${file.id})...`);
-    await assemblePlaintextSource(file, userKey, tempSrcPath);
+    await assemblePlaintextSource(file, userKey, tempSrcPath, (dlPct) => {
+      const mapped = Math.round(2 + (dlPct / 100) * 28); // 2% → 30%
+      db.upsertTranscodeJob(fileId, userId, 'processing', mapped, null);
+    });
+
+    db.upsertTranscodeJob(fileId, userId, 'processing', 30, null);
 
     // 2. Probe metadata using ffprobe
     const metadata = await probeVideo(tempSrcPath);
@@ -503,8 +515,10 @@ async function processQueue() {
     const renditions = selectRenditionProfiles(metadata.width, metadata.height);
 
     // 4. Run FFmpeg Multi-Rendition HLS Transcoder
+    // Progress phase 2: transcode = 30% → 99%
     await transcodeToHls(tempSrcPath, hlsDir, renditions, metadata.duration, (pct) => {
-      db.upsertTranscodeJob(fileId, userId, 'processing', Math.max(5, pct), null);
+      const mapped = Math.round(30 + (pct / 100) * 69); // 30% → 99%
+      db.upsertTranscodeJob(fileId, userId, 'processing', Math.min(99, mapped), null);
     });
 
     db.upsertTranscodeJob(fileId, userId, 'ready', 100, null);
