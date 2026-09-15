@@ -1846,14 +1846,14 @@ const App = {
         if (!confirmed) return;
 
         try {
-          this.emptyTrashLocally();
-          UI.showToast('Permanently deleting all items from Telegram...', 'info');
+          UI.showToast('Permanently deleting items from Telegram...', 'info');
           const res = await API.emptyTrash();
           if (res.warnings && res.warnings.length > 0) {
             UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
           } else {
             UI.showToast(`Permanently deleted ${res.count || 0} file(s) from Telegram`, 'success');
           }
+          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to empty trash: ' + e.message, 'error');
           await this.refreshCurrentView();
@@ -2042,14 +2042,15 @@ const App = {
         if (!confirmed) return;
 
         try {
-          this.removeItemsLocally(selectedItems);
           UI.showToast('Permanently deleting from Telegram...', 'info');
           const res = await API.batchDelete(fileIds, folderIds);
           if (res.warnings && res.warnings.length > 0) {
             UI.showToast(`Deleted with warning: ${res.warnings.join('; ')}`, 'warning');
           } else {
-            UI.showToast(`Permanently deleted ${count} item(s) from Telegram`, 'success');
+            UI.showToast(`Permanently deleted ${res.deletedFilesCount || count} item(s) from Telegram`, 'success');
           }
+          UI.clearSelection();
+          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Failed to permanently delete items: ' + e.message, 'error');
           await this.refreshCurrentView();
@@ -2381,18 +2382,21 @@ const App = {
         if (!this.selectedItem) return;
         const targetItem = this.selectedItem;
         UI.hideAllModals();
-        this.removeItemsLocally([targetItem]);
         try {
           UI.showToast('Deleting permanently from Telegram...', 'info');
           if (targetItem.type === 'folder') {
             await API.deleteFolder(targetItem.id, true);
           } else {
-            await API.permanentDeleteFile(targetItem.id);
+            const res = await API.permanentDeleteFile(targetItem.id);
+            if (res && res.error) {
+              throw new Error(res.error);
+            }
           }
           UI.showToast('Permanently deleted from Telegram', 'success');
+          await this.refreshCurrentView();
         } catch (e) {
           UI.showToast('Delete failed: ' + e.message, 'error');
-          this.refreshCurrentView();
+          await this.refreshCurrentView();
         }
       };
     }
@@ -2884,17 +2888,20 @@ const App = {
     if (!confirmed) return;
 
     try {
-      this.removeItemsLocally([item]);
       UI.showToast('Deleting permanently from Telegram...', 'info');
       if (isFolder) {
         await API.deleteFolder(item.id, true);
       } else {
-        await API.permanentDeleteFile(item.id);
+        const res = await API.permanentDeleteFile(item.id);
+        if (res && res.error) {
+          throw new Error(res.error);
+        }
       }
       UI.showToast('Permanently deleted from Telegram', 'success');
+      await this.refreshCurrentView();
     } catch (e) {
       UI.showToast('Delete failed: ' + e.message, 'error');
-      this.refreshCurrentView();
+      await this.refreshCurrentView();
     }
   },
 

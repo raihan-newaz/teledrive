@@ -1322,66 +1322,84 @@ router.patch('/:id', (req, res) => {
  * @param {string} userId - Owner user ID
  * @returns {Promise<{ count: number, warnings: string[] }>}
  */
+/**
+ * Permanently deletes multiple files.
+ * Deletes from Telegram FIRST. Once confirmed (or already gone), cleans DB and cache, and immediately broadcasts realtime file_deleted event so the frontend vanishes the file in real-time.
+ * If Telegram deletion fails for a file, that file is NOT removed from DB and remains visible in Trash.
+ * @param {Array<Object>} files - Array of file objects from database
+ * @param {string} userId - Owner user ID
+ * @returns {Promise<{ count: number, warnings: string[], deletedFileIds: string[] }>}
+ */
 async function permanentlyDeleteFilesBatch(files, userId) {
   if (!Array.isArray(files) || files.length === 0) {
-    return { count: 0, warnings: [] };
+    return { count: 0, warnings: [], deletedFileIds: [] };
   }
 
   const warnings = [];
-  const allMessageIds = new Set();
-  const validFiles = [];
+  const deletedFileIds = [];
+  const eventBroadcaster = require('../services/eventBroadcaster');
 
   for (const file of files) {
     if (!file || !file.id) continue;
-    validFiles.push(file);
 
+    // 1. Collect Telegram message IDs for this specific file
+    const fileMessageIds = new Set();
     if (file.telegram_message_id) {
       const parsed = parseInt(file.telegram_message_id, 10);
-      if (!isNaN(parsed) && parsed > 0) allMessageIds.add(parsed);
+      if (!isNaN(parsed) && parsed > 0) fileMessageIds.add(parsed);
     }
-
     try {
       const chunks = db.getFileChunks(file.id);
       if (Array.isArray(chunks)) {
         for (const ch of chunks) {
           if (ch.telegram_message_id) {
             const parsed = parseInt(ch.telegram_message_id, 10);
-            if (!isNaN(parsed) && parsed > 0) allMessageIds.add(parsed);
+            if (!isNaN(parsed) && parsed > 0) fileMessageIds.add(parsed);
           }
         }
       }
     } catch (e) {}
-  }
 
-  // 1. Bulk delete message IDs from Telegram in batches of 100
-  const messageIdArray = Array.from(allMessageIds);
-  const CHUNK_SIZE = 100;
-  for (let i = 0; i < messageIdArray.length; i += CHUNK_SIZE) {
-    const chunk = messageIdArray.slice(i, i + CHUNK_SIZE);
-    try {
-      await telegram.deleteFiles(chunk);
-      console.log(`[Batch Delete] Successfully deleted ${chunk.length} Telegram message(s) for user ${userId}`);
-    } catch (tgErr) {
-      console.warn(`[Batch Delete] Telegram deletion note for batch [${chunk.slice(0, 5).join(', ')}...]:`, tgErr.message);
-      warnings.push(tgErr.message);
+    // 2. Attempt deletion from Telegram first
+    let tgSuccess = true;
+    if (fileMessageIds.size > 0) {
+      try {
+        await telegram.deleteFiles(Array.from(fileMessageIds));
+        console.log(`[Batch Delete] Successfully deleted Telegram message(s) for "${file.name}" (${file.id})`);
+      } catch (tgErr) {
+        console.warn(`[Batch Delete] Telegram deletion note for "${file.name}":`, tgErr.message);
+        if (tgErr.message && (tgErr.message.includes('MESSAGE_ID_INVALID') || tgErr.message.includes('not found'))) {
+          tgSuccess = true;
+        } else {
+          warnings.push(`File "${file.name}": ${tgErr.message}`);
+          tgSuccess = false;
+        }
+      }
     }
-  }
 
-  // 2. Clean up local disk cache & DB records for all files
-  for (const file of validFiles) {
-    try { db.deleteFileChunks(file.id); } catch (e) {}
-    try { db.deleteTranscodeJob(file.id); } catch (e) {}
+    // 3. Only delete from local DB & cache if Telegram confirmed or was already removed
+    if (tgSuccess) {
+      try { db.deleteFileChunks(file.id); } catch (e) {}
+      try { db.deleteTranscodeJob(file.id); } catch (e) {}
 
-    const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-    await fsPromises.unlink(cachedPath).catch(() => {});
-    const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
-    await fsPromises.unlink(thumbPath).catch(() => {});
+      const cachedPath = path.join(cacheDir, `${file.id}.dec`);
+      await fsPromises.unlink(cachedPath).catch(() => {});
+      const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
+      await fsPromises.unlink(thumbPath).catch(() => {});
 
-    db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
-    if (userId) {
-      db.run('DELETE FROM files WHERE id = ? AND user_id = ?', [file.id, userId]);
-    } else {
-      db.run('DELETE FROM files WHERE id = ?', [file.id]);
+      db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
+      if (userId) {
+        db.run('DELETE FROM files WHERE id = ? AND user_id = ?', [file.id, userId]);
+      } else {
+        db.run('DELETE FROM files WHERE id = ?', [file.id]);
+      }
+
+      deletedFileIds.push(file.id);
+
+      // Instantly broadcast file_deleted so the frontend vanishes THIS specific file right now
+      try {
+        eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id, userId });
+      } catch (e) {}
     }
   }
 
@@ -1389,83 +1407,81 @@ async function permanentlyDeleteFilesBatch(files, userId) {
     db.recalculateUserStorage(userId);
   }
 
-  return { count: validFiles.length, warnings };
+  return { count: deletedFileIds.length, warnings, deletedFileIds };
 }
 
 /**
- * Permanently deletes a single file (all chunks & message IDs from Telegram, local cache, and SQLite DB)
+ * Permanently deletes a single file.
+ * Telegram is deleted first; on success, cleans DB and broadcasts realtime event.
  * @param {Object} file - File record from database
- * @param {Object} [options={}] - Options (e.g. throwOnError: boolean)
+ * @param {Object} [options={}] - Options
  */
 async function permanentlyDeleteFile(file, options = {}) {
   if (!file) return { success: true, count: 0 };
-  const throwOnError = options.throwOnError === true;
+  const eventBroadcaster = require('../services/eventBroadcaster');
 
-  // 1. Collect all unique Telegram message IDs for this file
+  // 1. Collect Telegram message IDs
   const messageIds = new Set();
   if (file.telegram_message_id) {
     const parsed = parseInt(file.telegram_message_id, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      messageIds.add(parsed);
-    }
+    if (!isNaN(parsed) && parsed > 0) messageIds.add(parsed);
   }
-
   try {
     const chunks = db.getFileChunks(file.id);
     if (Array.isArray(chunks)) {
       for (const ch of chunks) {
         if (ch.telegram_message_id) {
           const parsed = parseInt(ch.telegram_message_id, 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            messageIds.add(parsed);
-          }
+          if (!isNaN(parsed) && parsed > 0) messageIds.add(parsed);
         }
       }
     }
-  } catch (e) {
-    console.warn(`[Delete] Error fetching chunks for file ${file.id}:`, e.message);
-  }
+  } catch (e) {}
 
-  // 2. Delete all collected message IDs from Telegram channel
-  let telegramError = null;
+  // 2. Delete from Telegram
+  let tgSuccess = true;
+  let tgError = null;
   if (messageIds.size > 0) {
-    const idsArray = Array.from(messageIds);
     try {
-      await telegram.deleteFiles(idsArray);
-      console.log(`[Delete] Successfully deleted Telegram message(s) [${idsArray.join(', ')}] for file "${file.name}" (${file.id})`);
-    } catch (tgErr) {
-      telegramError = tgErr;
-      console.warn(`[Delete] Telegram message delete note for "${file.name}":`, tgErr.message);
+      await telegram.deleteFiles(Array.from(messageIds));
+      console.log(`[Delete] Successfully deleted Telegram message(s) for "${file.name}" (${file.id})`);
+    } catch (err) {
+      tgError = err;
+      if (err.message && (err.message.includes('MESSAGE_ID_INVALID') || err.message.includes('not found'))) {
+        tgSuccess = true;
+      } else {
+        tgSuccess = false;
+        console.warn(`[Delete] Telegram message delete error for "${file.name}":`, err.message);
+      }
     }
   }
 
-  // 3. Clean up file chunks & transcode jobs in DB
-  try {
-    db.deleteFileChunks(file.id);
-  } catch (e) {}
-  try {
-    db.deleteTranscodeJob(file.id);
-  } catch (e) {}
+  if (!tgSuccess) {
+    return { success: false, fileId: file.id, telegramDeleted: false, error: tgError ? tgError.message : 'Telegram deletion failed' };
+  }
 
-  // 4. Remove local decrypted cache & thumbnail
+  // 3. Clean DB and cache
+  try { db.deleteFileChunks(file.id); } catch (e) {}
+  try { db.deleteTranscodeJob(file.id); } catch (e) {}
+
   const cachedPath = path.join(cacheDir, `${file.id}.dec`);
   await fsPromises.unlink(cachedPath).catch(() => {});
   const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
   await fsPromises.unlink(thumbPath).catch(() => {});
 
-  // 5. Remove file record and video metadata from database
   db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
-  db.run('DELETE FROM files WHERE id = ?', [file.id]);
-
   if (file.user_id) {
+    db.run('DELETE FROM files WHERE id = ? AND user_id = ?', [file.id, file.user_id]);
     db.recalculateUserStorage(file.user_id);
+  } else {
+    db.run('DELETE FROM files WHERE id = ?', [file.id]);
   }
 
-  if (telegramError && throwOnError) {
-    throw telegramError;
-  }
+  try {
+    eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id, userId: file.user_id });
+  } catch (e) {}
 
-  return { success: true, fileId: file.id, telegramDeleted: !telegramError };
+  return { success: true, fileId: file.id, telegramDeleted: true };
 }
 
 /**
