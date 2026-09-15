@@ -14,13 +14,17 @@ const securityMiddleware = () => {
             contentSecurityPolicy: {
                 directives: {
                     defaultSrc: ["'self'"],
-                    scriptSrc: ["'self'", "'unsafe-inline'"],
-                    styleSrc: ["'self'", "'unsafe-inline'"],
-                    imgSrc: ["'self'", "blob:", "data:"],
+                    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://static.cloudflareinsights.com"],
+                    scriptSrcElem: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://static.cloudflareinsights.com"],
+                    scriptSrcAttr: ["'unsafe-inline'"],
+                    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                    styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                    fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+                    imgSrc: ["'self'", "blob:", "data:", "https:"],
                     mediaSrc: ["'self'", "blob:"],
                     frameSrc: ["'self'"],
-                    connectSrc: ["'self'"],
-                    fontSrc: ["'self'"],
+                    connectSrc: ["'self'", "blob:", "data:", "https://cloudflareinsights.com", "https://static.cloudflareinsights.com", "ws:", "wss:"],
+                    workerSrc: ["'self'", "blob:"],
                     upgradeInsecureRequests: null
                 }
             },
