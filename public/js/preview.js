@@ -751,14 +751,33 @@ const Preview = {
       if (!qualityList) return;
       let statusHtml = '';
       if (statusInfo && (statusInfo.status === 'processing' || statusInfo.status === 'queued')) {
-        statusHtml = `<div class="yt-quality-option" style="opacity:0.75; font-size:11px; cursor:default;">
-          <span class="yt-check-icon">⏳</span>
-          <span>Transcoding 4K/HLS (${statusInfo.progress || 10}%)...</span>
-        </div>`;
+        const pct = statusInfo.progress || 10;
+        statusHtml = `
+          <div class="yt-quality-option" style="opacity:0.85; font-size:12px; cursor:default; color:#8ab4f8; border-top:1px solid rgba(255,255,255,0.1); margin-top:4px; padding-top:6px;">
+            <span class="yt-check-icon">⏳</span>
+            <span>Auto (ABR) — Transcoding (${pct}%)</span>
+          </div>
+          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
+            <span class="yt-check-icon"></span>
+            <span>2160p (4K)</span>
+          </div>
+          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
+            <span class="yt-check-icon"></span>
+            <span>1080p (FHD)</span>
+          </div>
+          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
+            <span class="yt-check-icon"></span>
+            <span>720p (HD)</span>
+          </div>
+          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
+            <span class="yt-check-icon"></span>
+            <span>480p (SD)</span>
+          </div>
+        `;
       } else if (statusInfo && statusInfo.error) {
         statusHtml = `<div class="yt-quality-option" style="opacity:0.85; font-size:11px; cursor:default; color:#ffb74d;">
           <span class="yt-check-icon">ℹ️</span>
-          <span>${statusInfo.error.includes('FFmpeg') ? 'VPS Docker has FFmpeg (Active on VPS)' : statusInfo.error}</span>
+          <span>${statusInfo.error}</span>
         </div>`;
       }
       qualityList.innerHTML = `
@@ -1033,16 +1052,15 @@ const Preview = {
               updateDirectMenu(curStatus);
               if (curStatus.ready) {
                 lastHlsToken = curStatus.token;
-                if (transcodeText) transcodeText.textContent = 'Adaptive Stream (HLS) Ready! 🎉';
-                if (transcodeSwitchBtn) {
-                  transcodeSwitchBtn.style.display = 'inline-block';
-                  transcodeSwitchBtn.onclick = () => {
-                    transcodeBanner.style.display = 'none';
-                    const curTime = video.currentTime;
-                    loadHlsStream(curStatus.token);
-                    video.currentTime = curTime;
-                  };
+                if (transcodeBanner) transcodeBanner.style.display = 'none';
+                if (typeof UI !== 'undefined' && UI.showToast) {
+                  UI.showToast('4K Adaptive Bitrate Stream Ready! 🎉', 'success');
                 }
+                const curTime = video.currentTime;
+                const wasPlaying = !video.paused;
+                loadHlsStream(curStatus.token);
+                video.currentTime = curTime;
+                if (wasPlaying) video.play().catch(() => {});
                 return;
               }
               if (curStatus.status === 'processing' && transcodeText) {
