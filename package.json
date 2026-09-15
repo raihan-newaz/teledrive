@@ -6,9 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "decrypt-backup": "node src/scripts/decrypt-backup.js",
-    "clear-channel": "node src/scripts/clear-channel.js",
-    "user-clear-channel": "node src/scripts/user-clear-channel.js"
+    "decrypt-backup": "node src/scripts/decrypt-backup.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

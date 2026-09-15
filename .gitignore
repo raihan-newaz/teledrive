@@ -32,3 +32,8 @@ Thumbs.db
 .idea/
 *.apk
 
+# Temporary maintenance scripts
+src/scripts/*clear-channel.js
+data/user_session.txt
+
+
