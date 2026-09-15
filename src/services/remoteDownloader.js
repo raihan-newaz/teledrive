@@ -265,15 +265,17 @@ class RemoteDownloader {
     const jobId = jobRecord.id;
     const userId = jobRecord.user_id;
 
-    // Fetch user encryption key
+    // Fetch user encryption key and file prefix
     const user = db.getUserById(userId);
     const userKey = user && user.encryption_key ? user.encryption_key : (process.env.ENCRYPTION_KEY || 'default-encryption-key');
+    const userPrefix = user && user.file_prefix ? user.file_prefix : '';
 
     const abortController = new AbortController();
     const activeTask = {
       id: jobId,
       userId,
       userKey,
+      userPrefix,
       chunkSize: jobRecord.chunk_size || DEFAULT_CHUNK_SIZE,
       abortController,
       chunks: [],
@@ -423,8 +425,9 @@ class RemoteDownloader {
         // AES-256-GCM encryption with user's specific key
         const { iv, salt, authTag } = await cryptoModule.encryptFile(rawChunkPath, encChunkPath, userKey);
 
-        // Upload chunk to Telegram
-        const chunkTgName = `${filename}.part${chunkIndex + 1}.enc`;
+        // Upload chunk to Telegram (with optional user prefix)
+        const prefix = activeTask.userPrefix || '';
+        const chunkTgName = (prefix ? `${prefix}_` : '') + `${filename}.part${chunkIndex + 1}.enc`;
         const tgMessage = await telegram.uploadFile(encChunkPath, chunkTgName);
 
         activeTask.chunks.push({

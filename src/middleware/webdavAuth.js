@@ -125,6 +125,7 @@ function webdavAuthMiddleware(req, res, next) {
       status: targetUser.status,
       storageLimit: targetUser.storage_limit || 0,
       storageUsed: targetUser.storage_used || 0,
+      filePrefix: targetUser.file_prefix || '',
       encryptionKey: userKey
     };
   }

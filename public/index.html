@@ -1784,10 +1784,17 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="create-user-quota">Storage Quota (GB)</label>
-        <input type="number" id="create-user-quota" placeholder="0 = Unlimited storage" min="0" step="1" value="0">
-        <small class="hint">Set to 0 for unlimited cloud storage, or enter max Gigabytes (e.g. 25, 50, 100).</small>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label for="create-user-quota">Storage Quota (GB)</label>
+          <input type="number" id="create-user-quota" placeholder="0 = Unlimited storage" min="0" step="1" value="0">
+          <small class="hint">0 = Unlimited cloud storage.</small>
+        </div>
+        <div class="form-group">
+          <label for="create-user-prefix">Upload File Prefix <span class="hint" style="font-weight: normal; font-size: 11px;">(Optional)</span></label>
+          <input type="text" id="create-user-prefix" placeholder="e.g. rai" maxlength="20" autocomplete="off">
+          <small class="hint">Prefix for uploaded files (e.g. <code>rai_filename.ext.enc</code>).</small>
+        </div>
       </div>
 
       <div class="modal-actions" style="margin-top: 20px;">
@@ -1840,6 +1847,12 @@
           <label for="edit-user-quota">Storage Quota (GB)</label>
           <input type="number" id="edit-user-quota" placeholder="0 = Unlimited" min="0" step="1">
         </div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-user-prefix">Upload File Prefix <span class="hint" style="font-weight: normal; font-size: 11px;">(Optional)</span></label>
+        <input type="text" id="edit-user-prefix" placeholder="e.g. rai" maxlength="20" autocomplete="off">
+        <small class="hint">Prefix for uploaded files (e.g. <code>rai_filename.ext.enc</code>).</small>
       </div>
 
       <div class="modal-actions" style="margin-top: 20px;">

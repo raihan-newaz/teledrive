@@ -3009,12 +3009,14 @@ const App = {
         const pwInp = document.getElementById('create-user-password');
         const roleSel = document.getElementById('create-user-role');
         const quotaInp = document.getElementById('create-user-quota');
+        const prefixInp = document.getElementById('create-user-prefix');
 
         if (emailInp) emailInp.value = '';
         if (nameInp) nameInp.value = '';
         if (pwInp) pwInp.value = '';
         if (roleSel) roleSel.value = 'user';
         if (quotaInp) quotaInp.value = '0';
+        if (prefixInp) prefixInp.value = '';
 
         UI.showModal('create-user-modal');
         setTimeout(() => emailInp && emailInp.focus(), 100);
@@ -3030,6 +3032,7 @@ const App = {
         const password = document.getElementById('create-user-password')?.value || '';
         const role = document.getElementById('create-user-role')?.value || 'user';
         const quotaGB = parseFloat(document.getElementById('create-user-quota')?.value) || 0;
+        const filePrefix = document.getElementById('create-user-prefix')?.value.trim() || '';
         const storageLimit = Math.round(quotaGB * 1024 * 1024 * 1024);
 
         if (!email || !password) {
@@ -3045,7 +3048,7 @@ const App = {
         btnSubmitCreateUser.innerHTML = '<span>Creating...</span>';
 
         try {
-          await API.createAdminUser({ email, name, password, role, storageLimit });
+          await API.createAdminUser({ email, name, password, role, storageLimit, filePrefix });
           UI.showToast(`User ${email} created successfully!`, 'success');
           UI.hideModal('create-user-modal');
           await this.loadAdminUsers();
@@ -3067,6 +3070,7 @@ const App = {
         const role = document.getElementById('edit-user-role')?.value || 'user';
         const status = document.getElementById('edit-user-status')?.value || 'active';
         const quotaGB = parseFloat(document.getElementById('edit-user-quota')?.value) || 0;
+        const filePrefix = document.getElementById('edit-user-prefix')?.value.trim() || '';
         const storageLimit = Math.round(quotaGB * 1024 * 1024 * 1024);
 
         if (!id) return;
@@ -3075,7 +3079,7 @@ const App = {
         btnSubmitEditUser.innerHTML = '<span>Saving...</span>';
 
         try {
-          await API.updateAdminUser(id, { name, role, status, storageLimit });
+          await API.updateAdminUser(id, { name, role, status, storageLimit, filePrefix });
           UI.showToast('User updated successfully!', 'success');
           UI.hideModal('edit-user-modal');
           await this.loadAdminUsers();
@@ -3829,7 +3833,8 @@ const App = {
                 <div style="font-size: 12px; color: var(--text-secondary);">${u.email}</div>
               </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              ${u.file_prefix ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; background: rgba(59, 130, 246, 0.12); color: var(--accent-color); border: 1px solid var(--border-color);" title="Upload Prefix: ${u.file_prefix}">🏷️ ${u.file_prefix}</span>` : ''}
               <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; ${roleClass}">${roleLabel}</span>
               <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: capitalize; ${statusClass}">${u.status}</span>
             </div>
@@ -3886,6 +3891,7 @@ const App = {
     const roleSel = document.getElementById('edit-user-role');
     const statusSel = document.getElementById('edit-user-status');
     const quotaInp = document.getElementById('edit-user-quota');
+    const prefixInp = document.getElementById('edit-user-prefix');
     const titleEl = document.getElementById('edit-user-modal-title');
 
     if (idInp) idInp.value = user.id;
@@ -3893,6 +3899,7 @@ const App = {
     if (roleSel) roleSel.value = user.role || 'user';
     if (statusSel) statusSel.value = user.status || 'active';
     if (quotaInp) quotaInp.value = user.storage_limit > 0 ? (user.storage_limit / (1024 * 1024 * 1024)).toFixed(1) : 0;
+    if (prefixInp) prefixInp.value = user.file_prefix || '';
     if (titleEl) titleEl.textContent = `Edit User: ${user.email}`;
 
     UI.showModal('edit-user-modal');

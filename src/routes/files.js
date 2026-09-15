@@ -779,8 +779,10 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag, sha256 } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
-    // 3. Upload encrypted file to Telegram
-    const message = await telegram.uploadFile(encryptedPath, safeName + '.enc');
+    // 3. Upload encrypted file to Telegram (with optional user prefix)
+    const userPrefix = req.user.filePrefix || '';
+    const tgFileName = (userPrefix ? `${userPrefix}_` : '') + `${safeName}.enc`;
+    const message = await telegram.uploadFile(encryptedPath, tgFileName);
 
     // 4. Save metadata to SQLite
     const mimeType = getMimeType(safeName);
@@ -1008,8 +1010,9 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
-    // 4. Upload chunk to Telegram
-    const chunkTgName = `${safeName}.part${chunkIndex + 1}.enc`;
+    // 4. Upload chunk to Telegram (with optional user prefix)
+    const userPrefix = req.user.filePrefix || '';
+    const chunkTgName = (userPrefix ? `${userPrefix}_` : '') + `${safeName}.part${chunkIndex + 1}.enc`;
     const message = await telegram.uploadFile(encryptedPath, chunkTgName);
 
     // 5. Persist chunk in DB

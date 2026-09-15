@@ -73,6 +73,7 @@ const authMiddleware = (req, res, next) => {
       status: user.status,
       storageLimit: user.storage_limit || 0,
       storageUsed: user.storage_used || 0,
+      filePrefix: user.file_prefix || '',
       encryptionKey: userKey,
       tokenExp: decoded.exp
     };

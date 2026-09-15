@@ -42,6 +42,7 @@ async function initialize() {
       encryption_key TEXT NOT NULL,
       storage_limit INTEGER DEFAULT 0,
       storage_used INTEGER DEFAULT 0,
+      file_prefix TEXT,
       last_login_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -99,11 +100,13 @@ async function initialize() {
       iv TEXT NOT NULL,
       salt TEXT NOT NULL,
       auth_tag TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(file_id, chunk_index)
     );
   `);
 
-  // Safe migrations for existing databases
+  // Schema migrations for existing databases
+  try { db.run('ALTER TABLE users ADD COLUMN file_prefix TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN user_id TEXT;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN is_chunked INTEGER DEFAULT 0;'); } catch (e) {}
   try { db.run('ALTER TABLE files ADD COLUMN total_chunks INTEGER DEFAULT 1;'); } catch (e) {}
@@ -844,7 +847,7 @@ function getUserByEmail(email) {
 }
 
 function getAllUsers() {
-  return all('SELECT id, email, name, role, status, storage_limit, storage_used, last_login_at, created_at, updated_at FROM users ORDER BY created_at ASC');
+  return all('SELECT id, email, name, role, status, storage_limit, storage_used, file_prefix, last_login_at, created_at, updated_at FROM users ORDER BY created_at ASC');
 }
 
 function createUser(user) {
@@ -852,12 +855,13 @@ function createUser(user) {
   const role = user.role || 'user';
   const status = user.status || 'active';
   const storageLimit = user.storageLimit !== undefined ? user.storageLimit : (user.storage_limit || 0);
+  const filePrefix = user.filePrefix !== undefined ? user.filePrefix : (user.file_prefix || null);
   const now = new Date().toISOString();
 
   run(`
-    INSERT INTO users (id, email, password_hash, name, role, status, encryption_key, storage_limit, storage_used, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-  `, [id, user.email.toLowerCase().trim(), user.passwordHash || user.password_hash, user.name, role, status, user.encryptionKey || user.encryption_key, storageLimit, now, now]);
+    INSERT INTO users (id, email, password_hash, name, role, status, encryption_key, storage_limit, storage_used, file_prefix, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+  `, [id, user.email.toLowerCase().trim(), user.passwordHash || user.password_hash, user.name, role, status, user.encryptionKey || user.encryption_key, storageLimit, filePrefix, now, now]);
 
   save(true);
   return getUserById(id);
@@ -894,6 +898,11 @@ function updateUser(id, updates = {}) {
   if (updates.storageUsed !== undefined || updates.storage_used !== undefined) {
     fields.push('storage_used = ?');
     params.push(updates.storageUsed !== undefined ? updates.storageUsed : updates.storage_used);
+  }
+  if (updates.filePrefix !== undefined || updates.file_prefix !== undefined) {
+    fields.push('file_prefix = ?');
+    const fp = updates.filePrefix !== undefined ? updates.filePrefix : updates.file_prefix;
+    params.push(fp && typeof fp === 'string' && fp.trim() ? fp.trim() : null);
   }
   if (updates.lastLoginAt !== undefined || updates.last_login_at !== undefined) {
     fields.push('last_login_at = ?');

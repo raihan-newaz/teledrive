@@ -508,8 +508,10 @@ router.put('*', async (req, res) => {
 
     const { iv, salt } = await cryptoModule.encryptFile(tempUploadPath, tempEncPath, encryptionKey);
 
-    // Upload to Telegram Channel
-    const message = await telegram.uploadFile(tempEncPath, filename + '.enc');
+    // Upload to Telegram Channel (with optional user prefix)
+    const prefix = req.user?.filePrefix || '';
+    const tgFileName = (prefix ? `${prefix}_` : '') + filename + '.enc';
+    const message = await telegram.uploadFile(tempEncPath, tgFileName);
     if (!message || !message.id) {
       throw new Error('Telegram upload failed: No message ID returned');
     }

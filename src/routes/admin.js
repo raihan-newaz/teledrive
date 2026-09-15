@@ -38,7 +38,7 @@ router.get('/users', async (req, res) => {
  */
 router.post('/users', async (req, res) => {
   try {
-    const { name, email, password, role, status, storageLimit } = req.body;
+    const { name, email, password, role, status, storageLimit, filePrefix } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -74,6 +74,9 @@ router.post('/users', async (req, res) => {
       limitBytes = parseInt(storageLimit, 10) || 0;
     }
 
+    // Clean file prefix if provided (alphanumeric, underscore, hyphen)
+    const cleanedPrefix = (typeof filePrefix === 'string' && filePrefix.trim()) ? filePrefix.trim().replace(/[^a-zA-Z0-9_-]/g, '') : null;
+
     // 5. Create user in DB
     const newUser = db.createUser({
       name: name.trim(),
@@ -82,7 +85,8 @@ router.post('/users', async (req, res) => {
       role: role === 'admin' ? 'admin' : 'user',
       status: status === 'suspended' ? 'suspended' : 'active',
       encryptionKey: wrappedKey,
-      storageLimit: limitBytes
+      storageLimit: limitBytes,
+      filePrefix: cleanedPrefix
     });
 
     return res.status(201).json({
@@ -96,6 +100,7 @@ router.post('/users', async (req, res) => {
         status: newUser.status,
         storageLimit: newUser.storage_limit,
         storageUsed: 0,
+        filePrefix: newUser.file_prefix,
         createdAt: newUser.created_at
       }
     });
@@ -112,7 +117,7 @@ router.post('/users', async (req, res) => {
 router.put('/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, status, storageLimit } = req.body;
+    const { name, email, role, status, storageLimit, filePrefix } = req.body;
 
     const user = db.getUserById(id);
     if (!user) {
@@ -136,6 +141,10 @@ router.put('/users/:id', async (req, res) => {
     if (storageLimit !== undefined && storageLimit !== null) {
       updates.storageLimit = parseInt(storageLimit, 10) || 0;
     }
+    if (filePrefix !== undefined) {
+      const cleanedPrefix = (typeof filePrefix === 'string' && filePrefix.trim()) ? filePrefix.trim().replace(/[^a-zA-Z0-9_-]/g, '') : null;
+      updates.filePrefix = cleanedPrefix;
+    }
 
     if (email && typeof email === 'string' && email.trim()) {
       const trimmedEmail = email.trim().toLowerCase();
@@ -158,6 +167,7 @@ router.put('/users/:id', async (req, res) => {
         status: updated.status,
         storageLimit: updated.storage_limit,
         storageUsed: updated.storage_used,
+        filePrefix: updated.file_prefix,
         updatedAt: updated.updated_at
       }
     });
