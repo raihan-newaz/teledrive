@@ -358,89 +358,96 @@ class GDriveCrawler {
       throw new Error(`Google Drive returned status ${statusCode}. Make sure the folder is shared with "Anyone with the link".`);
     }
 
+    // 1. Check for folder title in ds:1 or HTML meta
     let folderName = 'Google Drive Folder';
-    const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-
-    if (ogTitleMatch && ogTitleMatch[1]) {
-      folderName = ogTitleMatch[1].trim();
-    } else if (titleMatch && titleMatch[1]) {
-      folderName = titleMatch[1].replace(' - Google Drive', '').trim() || folderName;
+    const ds1Match = html.match(/AF_initDataCallback\(\{key:\s*'ds:1'[\s\S]*?data:[\s\S]*?\["([a-zA-Z0-9_-]+)",\s*null,\s*"([^"]+)"/);
+    if (ds1Match && ds1Match[2]) {
+      folderName = ds1Match[2];
+    } else {
+      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+      if (ogTitleMatch && ogTitleMatch[1]) {
+        folderName = ogTitleMatch[1].trim();
+      } else if (titleMatch && titleMatch[1]) {
+        folderName = titleMatch[1].replace(' - Google Drive', '').trim() || folderName;
+      }
     }
 
     const itemsMap = new Map();
 
-    // Multi-strategy item extraction
-    // 1. Array parsing from _DRIVE_ivd or data-initial-data
+    const decodeHex = (str) => {
+      if (!str) return '';
+      return str.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+                .replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    };
+
+    // 2. Decode window['_DRIVE_ivd'] hex-encoded payload
     const ivdMatches = [
-      ...html.matchAll(/_DRIVE_ivd\s*=\s*(\[[^;]+\]);/g),
-      ...html.matchAll(/window\['_DRIVE_ivd'\]\s*=\s*(\[[^;]+\]);/g),
-      ...html.matchAll(/data-initial-data="([^"]+)"/g)
+      ...html.matchAll(/window\['_DRIVE_ivd'\]\s*=\s*'([^']+)'/gs),
+      ...html.matchAll(/_DRIVE_ivd\s*=\s*'([^']+)'/gs)
     ];
 
     for (const match of ivdMatches) {
       try {
-        let jsonStr = match[1];
-        if (match[0].startsWith('data-initial-data')) {
-          jsonStr = jsonStr.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+        let decoded = decodeHex(match[1]).replace(/\\\//g, '/');
+
+        // Pattern A: [ "ID", [ "PARENT_ID" ... ], "NAME", "MIME_TYPE" ... ]
+        const itemRegexA = /\["([a-zA-Z0-9_-]{25,45})",\s*\[[^\]]*\],\s*"([^"]+)",\s*"([^"]+)"(?:,\s*(\d+))?/g;
+        let mA;
+        while ((mA = itemRegexA.exec(decoded)) !== null) {
+          const id = mA[1];
+          const name = mA[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const mimeType = mA[3];
+          const size = parseInt(mA[4] || '0', 10) || 0;
+          if (id && name && id !== folderId) {
+            itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size });
+          }
         }
-        const parsed = JSON.parse(jsonStr);
-        this._extractItemsFromArray(parsed, itemsMap);
+
+        // Pattern B: [ "ID", null, "NAME", "MIME_TYPE" ... ]
+        const itemRegexB = /\["([a-zA-Z0-9_-]{25,45})",\s*null,\s*"([^"]+)",\s*"([^"]+)"(?:,\s*(\d+))?/g;
+        let mB;
+        while ((mB = itemRegexB.exec(decoded)) !== null) {
+          const id = mB[1];
+          const name = mB[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const mimeType = mB[3];
+          const size = parseInt(mB[4] || '0', 10) || 0;
+          if (id && name && id !== folderId && !itemsMap.has(id)) {
+            itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size });
+          }
+        }
       } catch (e) {}
     }
 
-    // 2. AF_initDataCallback blobs
-    const callbackRegex = /AF_initDataCallback\(\s*\{[\s\S]*?data:\s*([\s\S]*?)\s*\}\s*\);/g;
+    // 3. AF_initDataCallback blobs
+    const callbackRegex = /AF_initDataCallback\(\s*\{[\s\S]*?data:\s*([\s\S]*?)(?:,\s*sideChannel:|\}\);)/g;
     let cbMatch;
     while ((cbMatch = callbackRegex.exec(html)) !== null) {
       try {
-        const parsed = JSON.parse(cbMatch[1]);
-        this._extractItemsFromArray(parsed, itemsMap);
+        const rawBlob = cbMatch[1].replace(/\\\//g, '/');
+        const itemRegexC = /\["([a-zA-Z0-9_-]{25,45})",\s*(?:\[[^\]]*\]|null),\s*"([^"]+)",\s*"([^"]+)"/g;
+        let mC;
+        while ((mC = itemRegexC.exec(rawBlob)) !== null) {
+          const id = mC[1];
+          const name = mC[2].replace(/\\"/g, '"');
+          const mimeType = mC[3];
+          if (id && name && id !== folderId && !itemsMap.has(id)) {
+            itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size: 0 });
+          }
+        }
       } catch (e) {}
     }
 
-    // 3. Fallback regex engine A: Resource array with array name [id, [name], ...]
-    const patternA = /\["([a-zA-Z0-9_-]{25,45})",\s*\["([^"\\]+)"[^\]]*\],\s*"([^"]+)"/g;
-    let matchA;
-    while ((matchA = patternA.exec(html)) !== null) {
-      const id = matchA[1];
-      const name = matchA[2];
-      const mimeType = matchA[3];
-      if (id && name && id !== folderId) {
-        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size: 0 });
-      }
-    }
-
-    // 4. Fallback regex engine B: [id, "name", "mimeType"]
-    const patternB = /\["([a-zA-Z0-9_-]{25,45})",\s*"([^"\\]{1,150})",\s*"([a-zA-Z0-9_\-\.\/]+)"/g;
-    let matchB;
-    while ((matchB = patternB.exec(html)) !== null) {
-      const id = matchB[1];
-      const name = matchB[2];
-      const mimeType = matchB[3];
-      if (id && name && id !== folderId && (mimeType.includes('/') || mimeType.startsWith('application/'))) {
-        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType, size: 0 });
-      }
-    }
-
-    // 5. Fallback regex engine C: File IDs with obvious file extensions
-    const patternC = /"([a-zA-Z0-9_-]{25,45})"[^"]{1,100}"([^"\\]+\.(?:mp4|mkv|avi|mov|mp3|wav|flac|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|7z|tar|gz|apk|exe|iso|jpg|jpeg|png|webp|gif|txt|csv|json|py|js|html))"/gi;
-    let matchC;
-    while ((matchC = patternC.exec(html)) !== null) {
-      const id = matchC[1];
-      const name = matchC[2];
-      if (id && name && id !== folderId && !itemsMap.has(id)) {
-        itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType: 'application/octet-stream', size: 0 });
-      }
-    }
-
-    // 6. Fallback regex engine D: /file/d/{id} hyperlinks inside the page
-    const patternD = /\/file\/d\/([a-zA-Z0-9_-]{25,45})[^\w-]/g;
-    let matchD;
-    while ((matchD = patternD.exec(html)) !== null) {
-      const id = matchD[1];
-      if (id && id !== folderId && !itemsMap.has(id)) {
-        itemsMap.set(id, { id, name: `gdrive_file_${id}`, mimeType: 'application/octet-stream', size: 0 });
+    // 4. Fallback: file IDs with extensions in raw HTML
+    if (itemsMap.size === 0) {
+      const patternExt = /"([a-zA-Z0-9_-]{25,45})"[^"]{1,100}"([^"\\]+\.(?:mp4|mkv|avi|mov|mp3|wav|flac|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|7z|tar|gz|apk|exe|iso|jpg|jpeg|png|webp|gif|txt|csv|json|py|js|html))"/gi;
+      let mExt;
+      while ((mExt = patternExt.exec(html)) !== null) {
+        const id = mExt[1];
+        const name = mExt[2];
+        if (id && name && id !== folderId && !itemsMap.has(id)) {
+          itemsMap.set(id, { id, name: sanitizeFilename(name), mimeType: 'application/octet-stream', size: 0 });
+        }
       }
     }
 
@@ -460,12 +467,27 @@ class GDriveCrawler {
           );
         }
       } else {
+        // Resolve download URLs based on Google Apps types
+        let downloadUrl = `https://drive.google.com/uc?export=download&id=${item.id}`;
+        let fileName = item.name;
+
+        if (item.mimeType === 'application/vnd.google-apps.document') {
+          downloadUrl = `https://docs.google.com/document/d/${item.id}/export?format=docx`;
+          if (!fileName.toLowerCase().endsWith('.docx')) fileName += '.docx';
+        } else if (item.mimeType === 'application/vnd.google-apps.spreadsheet') {
+          downloadUrl = `https://docs.google.com/spreadsheets/d/${item.id}/export?format=xlsx`;
+          if (!fileName.toLowerCase().endsWith('.xlsx')) fileName += '.xlsx';
+        } else if (item.mimeType === 'application/vnd.google-apps.presentation') {
+          downloadUrl = `https://docs.google.com/presentation/d/${item.id}/export/pptx`;
+          if (!fileName.toLowerCase().endsWith('.pptx')) fileName += '.pptx';
+        }
+
         files.push({
           id: item.id,
-          name: item.name,
+          name: fileName,
           size: item.size || 0,
           mimeType: item.mimeType || 'application/octet-stream',
-          downloadUrl: `https://drive.google.com/uc?export=download&id=${item.id}`
+          downloadUrl
         });
       }
     }
