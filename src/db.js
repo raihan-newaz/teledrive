@@ -205,6 +205,11 @@ async function initialize() {
     );
   `);
 
+  // Clean up any stale in-progress/queued transcode jobs from prior server run
+  try {
+    db.run("DELETE FROM video_transcode_jobs WHERE status IN ('queued', 'processing');");
+  } catch (e) {}
+
   // Performance compound indexes for lightning-fast scale & user isolation
   try {
     db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');

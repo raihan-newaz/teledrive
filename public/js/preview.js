@@ -825,26 +825,6 @@ const Preview = {
             <span class="yt-check-icon">⏳</span>
             <span>Auto (ABR) — ${phase} (${pct}%)</span>
           </div>
-          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
-            <span class="yt-check-icon"></span>
-            <span>2160p (4K)</span>
-          </div>
-          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
-            <span class="yt-check-icon"></span>
-            <span>1440p (2K)</span>
-          </div>
-          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
-            <span class="yt-check-icon"></span>
-            <span>1080p (FHD)</span>
-          </div>
-          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
-            <span class="yt-check-icon"></span>
-            <span>720p (HD)</span>
-          </div>
-          <div class="yt-quality-option" style="opacity:0.45; font-size:12px; cursor:default;">
-            <span class="yt-check-icon"></span>
-            <span>480p (SD)</span>
-          </div>
         `;
       } else if (statusInfo && statusInfo.error) {
         statusHtml = `<div class="yt-quality-option" style="opacity:0.85; font-size:11px; cursor:default; color:#ffb74d;">
@@ -871,74 +851,68 @@ const Preview = {
         <span>Auto</span>
       </div>`;
 
-      const sortedLevels = hls.levels
-        .map((lvl, index) => ({ ...lvl, index }))
-        .sort((a, b) => (b.height || 0) - (a.height || 0));
+      // Available levels from HLS manifest (highest to lowest for menu UI)
+      const levels = hls.levels || [];
+      const sortedLevels = levels.map((lvl, idx) => ({ ...lvl, index: idx })).sort((a, b) => b.height - a.height);
 
-      sortedLevels.forEach(lvl => {
-        const h = lvl.height || 720;
-        let label = `${h}p`;
-        if (h >= 2160) label = '2160p (4K)';
-        else if (h >= 1440) label = '1440p (2K)';
-        else if (h >= 1080) label = '1080p (FHD)';
-        else if (h >= 720) label = '720p (HD)';
-        else if (h >= 480) label = '480p (SD)';
-
-        html += `<div class="yt-quality-option" data-level="${lvl.index}">
-          <span class="yt-check-icon"></span>
-          <span>${label}</span>
-        </div>`;
+      sortedLevels.forEach((lvl) => {
+        html += `
+          <div class="yt-quality-option" data-level="${lvl.index}">
+            <span class="yt-check-icon"></span>
+            <span>${lvl.height}p${lvl.height >= 2160 ? ' (4K)' : lvl.height >= 1440 ? ' (2K)' : lvl.height >= 1080 ? ' (FHD)' : lvl.height >= 720 ? ' (HD)' : ' (SD)'}</span>
+          </div>
+        `;
       });
 
-      // Add Original Direct Stream Option
-      html += `<div class="yt-quality-option" data-level="direct">
-        <span class="yt-check-icon"></span>
-        <span>Original (Direct Stream)</span>
-      </div>`;
+      // Direct Stream fallback option
+      html += `
+        <div class="yt-quality-option" data-level="direct" style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 4px; padding-top: 6px;">
+          <span class="yt-check-icon"></span>
+          <span>Original (Direct Stream)</span>
+        </div>
+      `;
 
       qualityList.innerHTML = html;
 
+      // Attach selection listener
       qualityList.querySelectorAll('.yt-quality-option').forEach(opt => {
         opt.onclick = (e) => {
           e.stopPropagation();
-          const levelAttr = opt.getAttribute('data-level');
+          const targetLevel = opt.getAttribute('data-level');
+          
           qualityList.querySelectorAll('.yt-quality-option').forEach(o => {
             o.classList.remove('active');
-            const check = o.querySelector('.yt-check-icon');
-            if (check) check.textContent = '';
+            const chk = o.querySelector('.yt-check-icon');
+            if (chk) chk.textContent = '';
           });
           opt.classList.add('active');
-          const check = opt.querySelector('.yt-check-icon');
-          if (check) check.textContent = '✓';
+          const checkIcon = opt.querySelector('.yt-check-icon');
+          if (checkIcon) checkIcon.textContent = '✓';
 
-          if (levelAttr === 'direct') {
-            const curTime = video.currentTime;
+          if (targetLevel === 'direct') {
+            // Switch to direct stream
             if (this.currentHls) {
-              try { this.currentHls.destroy(); } catch (err) {}
+              this.currentHls.destroy();
               this.currentHls = null;
             }
+            const curTime = video.currentTime;
+            const wasPlaying = !video.paused;
             video.src = streamUrl;
             video.currentTime = curTime;
-            video.play().catch(() => {});
             if (qualityBadge) qualityBadge.textContent = 'Direct';
+            if (wasPlaying) video.play().catch(() => {});
           } else {
-            const levelIdx = parseInt(levelAttr, 10);
+            const lvlIdx = parseInt(targetLevel, 10);
             if (!this.currentHls && lastHlsToken) {
-              const curTime = video.currentTime;
               loadHlsStream(lastHlsToken);
-              video.currentTime = curTime;
             }
             if (this.currentHls) {
-              this.currentHls.currentLevel = levelIdx;
-              if (levelIdx === -1) {
-                const curLevel = this.currentHls.levels[this.currentHls.currentLevel];
-                updateQualityBadge(true, curLevel ? curLevel.height : null);
-              } else {
-                const lvl = this.currentHls.levels[levelIdx];
-                updateQualityBadge(false, lvl ? lvl.height : null);
-              }
+              this.currentHls.currentLevel = lvlIdx;
+              const lvl = lvlIdx === -1 ? null : this.currentHls.levels[lvlIdx];
+              updateQualityBadge(lvlIdx === -1, lvl ? lvl.height : null);
             }
           }
+
           if (qualityMenu) qualityMenu.style.display = 'none';
         };
       });
@@ -947,8 +921,9 @@ const Preview = {
     if (qualityBtn && qualityMenu) {
       qualityBtn.onclick = (e) => {
         e.stopPropagation();
+        const isHidden = qualityMenu.style.display === 'none' || !qualityMenu.style.display;
+        qualityMenu.style.display = isHidden ? 'block' : 'none';
         if (speedMenu) speedMenu.style.display = 'none';
-        qualityMenu.style.display = qualityMenu.style.display === 'none' ? 'flex' : 'none';
       };
 
       this._addListener(document, 'click', () => {
@@ -956,8 +931,8 @@ const Preview = {
       });
     }
 
-    // Picture in Picture
-    if (pipBtn) {
+    // PiP Mode
+    if (pipBtn && video) {
       pipBtn.onclick = async (e) => {
         e.stopPropagation();
         try {
@@ -1069,12 +1044,12 @@ const Preview = {
             }
           });
           hls.startLevel = bestIdx;
-          hls.currentLevel = bestIdx;        // force immediate switch
+          hls.currentLevel = bestIdx;
           hls.nextLevel = bestIdx;
 
           // After 5 seconds of playback data, let ABR take over automatically
           setTimeout(() => {
-            hls.currentLevel = -1;           // switch back to auto ABR
+            hls.currentLevel = -1;
           }, 5000);
 
           buildQualityMenu(hls);
@@ -1110,33 +1085,27 @@ const Preview = {
       }
     };
 
-    // Check HLS readiness and trigger background transcode if needed
+    // Check HLS readiness — do NOT automatically trigger heavy background transcode
     (async () => {
       try {
-        const status = await API.getHlsStatus(fileId);
+        const status = await API.getHlsStatus(fileId).catch(() => null);
         if (status && status.ready) {
           loadHlsStream(status.token);
           return;
         }
 
-        // Start instant direct stream immediately while transcode runs in background
+        // Direct Stream plays instantly without blocking server resources
         video.src = streamUrl;
         updateDirectMenu(status);
         video.play().catch(() => {});
 
-        // Request background transcoding
-        const transcodeRes = await API.requestHlsTranscode(fileId).catch(() => null);
-
-        if (transcodeRes && transcodeRes.ready) {
-          loadHlsStream(transcodeRes.token);
-          return;
-        }
-
-        if (transcodeRes && (transcodeRes.status === 'queued' || transcodeRes.status === 'processing')) {
-          updateDirectMenu(transcodeRes);
+        // If transcode is ALREADY actively in progress (e.g. from upload), listen for completion
+        if (status && (status.status === 'queued' || status.status === 'processing')) {
           if (transcodeBanner) {
             transcodeBanner.style.display = 'flex';
-            if (transcodeText) transcodeText.textContent = 'Downloading & Preparing Adaptive Stream...';
+            const p = status.progress || 2;
+            const phase = p <= 30 ? 'Downloading' : 'Transcoding';
+            if (transcodeText) transcodeText.textContent = `${phase} (${p}%)...`;
           }
 
           const pollHlsStatus = async () => {
@@ -1144,11 +1113,11 @@ const Preview = {
             try {
               const curStatus = await API.getHlsStatus(fileId);
               updateDirectMenu(curStatus);
-              if (curStatus.ready) {
+              if (curStatus && curStatus.ready) {
                 lastHlsToken = curStatus.token;
                 if (transcodeBanner) transcodeBanner.style.display = 'none';
                 if (typeof UI !== 'undefined' && UI.showToast) {
-                  UI.showToast('4K Adaptive Bitrate Stream Ready! 🎉', 'success');
+                  UI.showToast('Adaptive Bitrate Stream Ready! 🎉', 'success');
                 }
                 const curTime = video.currentTime;
                 const wasPlaying = !video.paused;
@@ -1157,18 +1126,22 @@ const Preview = {
                 if (wasPlaying) video.play().catch(() => {});
                 return;
               }
-              if (curStatus.status === 'processing' && transcodeText) {
+              if (curStatus && curStatus.status === 'processing' && transcodeText) {
                 const p = curStatus.progress || 2;
-                const phase = p <= 30 ? 'Downloading & Decrypting' : 'Transcoding';
+                const phase = p <= 30 ? 'Downloading' : 'Transcoding';
                 transcodeText.textContent = `${phase} (${p}%)...`;
               }
-              this.hlsPollTimeout = setTimeout(pollHlsStatus, 3000);
+              if (curStatus && (curStatus.status === 'queued' || curStatus.status === 'processing')) {
+                this.hlsPollTimeout = setTimeout(pollHlsStatus, 4000);
+              } else {
+                if (transcodeBanner) transcodeBanner.style.display = 'none';
+              }
             } catch (e) {}
           };
 
-          this.hlsPollTimeout = setTimeout(pollHlsStatus, 3000);
-        } else if (transcodeRes && transcodeRes.error) {
-          updateDirectMenu(transcodeRes);
+          this.hlsPollTimeout = setTimeout(pollHlsStatus, 4000);
+        } else {
+          if (transcodeBanner) transcodeBanner.style.display = 'none';
         }
       } catch (err) {
         console.warn('[Video] HLS check failed, using direct stream:', err.message);
