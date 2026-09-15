@@ -163,9 +163,13 @@ const App = {
           const emailInput = document.getElementById('login-email');
           const pwdInput = document.getElementById('login-password');
           if (emailInput && !emailInput.value) {
-            emailInput.value = localStorage.getItem('teledrive_last_email') || 'admin@teledrive.local';
+            emailInput.value = localStorage.getItem('teledrive_last_email') || '';
           }
-          if (pwdInput) pwdInput.focus();
+          if (emailInput && !emailInput.value) {
+            emailInput.focus();
+          } else if (pwdInput) {
+            pwdInput.focus();
+          }
         }, 50);
       } else {
         loginEl.setAttribute('inert', '');
