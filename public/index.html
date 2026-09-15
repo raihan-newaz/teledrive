@@ -613,16 +613,16 @@
           <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
         </svg>
       </div>
-      <h3 style="margin: 0; font-size: 18px;">Remote URL Upload</h3>
-      <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Download any direct web file straight to your Telegram cloud without using your phone or PC data.</p>
+      <h3 style="margin: 0; font-size: 18px;">Remote & Google Drive Importer</h3>
+      <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0;">Download direct web files or import public Google Drive folders/files straight to your Telegram cloud without using device data.</p>
     </div>
     <form id="form-remote-upload" onsubmit="return false;">
       <div class="form-group">
-        <label for="remote-url-input" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Direct Download Link <span class="req">*</span></label>
-        <input type="url" id="remote-url-input" placeholder="https://example.com/video.mp4" required autocomplete="off">
+        <label for="remote-url-input" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Direct URL or Google Drive Link <span class="req">*</span></label>
+        <input type="url" id="remote-url-input" placeholder="https://drive.google.com/drive/folders/... or direct file link" required autocomplete="off">
       </div>
       <div class="form-group">
-        <label for="remote-filename-input" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Custom File Name (Optional)</label>
+        <label for="remote-filename-input" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Custom File / Folder Name (Optional)</label>
         <input type="text" id="remote-filename-input" placeholder="Leave blank to detect automatically" autocomplete="off">
       </div>
       <div class="modal-actions" style="margin-top: 20px;">

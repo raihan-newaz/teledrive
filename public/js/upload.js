@@ -863,7 +863,23 @@ const Upload = {
   async startRemoteDownload(url, customName, folderId) {
     const userChunkSize = this.CHUNK_SIZE;
     const res = await API.startRemoteUpload(url, customName, folderId, userChunkSize);
-    if (res && res.task) {
+    if (res && res.jobs && Array.isArray(res.jobs) && res.jobs.length > 0) {
+      for (const j of res.jobs) {
+        this.remoteTasks.unshift({
+          id: j.id,
+          fileName: j.filename || 'Remote file',
+          status: 'uploading',
+          progress: 0,
+          speedText: 'Queued in cloud...',
+          etaText: '',
+          downloadedBytes: 0,
+          totalBytes: 0,
+          isRemote: true
+        });
+      }
+      this.showUploadPanel();
+      this.renderQueue();
+    } else if (res && res.task) {
       this.remoteTasks.unshift({
         id: res.task.taskId,
         fileName: res.task.fileName || 'Remote file',

@@ -11,6 +11,7 @@ const db = require('../db');
 const cryptoModule = require('../crypto');
 const telegram = require('../telegram');
 const eventBroadcaster = require('./eventBroadcaster');
+const gdriveCrawler = require('./gdriveCrawler');
 
 // Configurable environment settings
 const MAX_CONCURRENT_JOBS = parseInt(process.env.REMOTE_DOWNLOAD_MAX_CONCURRENT || '2', 10);
@@ -386,7 +387,24 @@ class RemoteDownloader {
     };
 
     try {
-      await executeStream(targetUrl, 0);
+      if (gdriveCrawler.isGoogleDriveUrl(jobRecord.url)) {
+        // Special Google Drive stream resolver (bypasses virus scan warnings & handles tokens)
+        const gdriveRes = await gdriveCrawler.openDownloadStream(jobRecord.url, abortController.signal);
+        const resolvedFilename = (jobRecord.filename && jobRecord.filename !== 'Discovering file...' && !jobRecord.filename.startsWith('download_'))
+          ? jobRecord.filename
+          : (gdriveRes.filename || 'gdrive_file');
+
+        db.updateRemoteJob(jobId, {
+          filename: resolvedFilename,
+          content_type: gdriveRes.contentType || 'application/octet-stream',
+          total_size: gdriveRes.totalSize || jobRecord.total_size || 0
+        });
+
+        this.broadcastJobEvent(db.getRemoteJob(jobId, userId));
+        await this.streamAndUploadChunks(gdriveRes.stream, activeTask, resolvedFilename, gdriveRes.totalSize, jobRecord.folder_id);
+      } else {
+        await executeStream(targetUrl, 0);
+      }
     } finally {
       // Clean temp folder
       await fsPromises.rm(activeTask.jobDir, { recursive: true, force: true }).catch(() => {});

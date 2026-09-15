@@ -2753,9 +2753,16 @@ const App = {
         if (btn) btn.disabled = true;
 
         try {
-          await Upload.startRemoteDownload(url, fileName, App.currentFolderId);
+          const res = await Upload.startRemoteDownload(url, fileName, App.currentFolderId);
           UI.hideModals();
-          UI.showToast('Remote download started on VPS', 'info');
+          if (res && res.isFolder) {
+            UI.showToast(res.message || `Discovered folder "${res.folderName}" with ${res.totalFiles} files. Downloads queued!`, 'success');
+            if (typeof App.loadFolder === 'function') {
+              App.loadFolder(App.currentFolderId);
+            }
+          } else {
+            UI.showToast('Remote download started on VPS', 'info');
+          }
         } catch (err) {
           UI.showToast(err.message || 'Failed to start remote download', 'error');
         } finally {
