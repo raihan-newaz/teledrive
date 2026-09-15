@@ -27,9 +27,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Google+Sans+Text:ital,wght@0,400;0,500;0,700;1,400&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/themes.css?v=20260916_02">
-  <link rel="stylesheet" href="/css/styles.css?v=20260916_02">
-  <link rel="stylesheet" href="/css/responsive.css?v=20260916_02">
+  <link rel="stylesheet" href="/css/themes.css?v=20260916_03">
+  <link rel="stylesheet" href="/css/styles.css?v=20260916_03">
+  <link rel="stylesheet" href="/css/responsive.css?v=20260916_03">
   <script>
     (function() {
       try {
@@ -190,39 +190,101 @@
   <!-- 2. LOGIN SCREEN                                                           -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <div id="login-screen" class="screen" style="display:none;">
+    <div class="auth-ambient-orb orb-1"></div>
+    <div class="auth-ambient-orb orb-2"></div>
+    
+    <div class="auth-top-bar">
+      <button type="button" class="login-theme-btn" id="login-theme-toggle" title="Toggle Light / Dark Theme" aria-label="Toggle Theme">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+    </div>
+
     <div class="auth-container">
-      <div class="auth-card">
+      <div class="auth-card modern-auth-card">
         <div class="auth-header">
-          <div class="logo-circle">
-            <svg viewBox="0 0 24 24" width="40" height="40" fill="var(--accent-color)">
+          <div class="logo-circle modern-logo-circle">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor">
               <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
             </svg>
           </div>
-          <h2>Welcome to TeleDrive</h2>
-          <p class="subtitle">Enter your master password to unlock your encrypted cloud</p>
+          <h2>TeleDrive</h2>
+          <p class="subtitle">Secure, unlimited cloud storage backed by Telegram MTProto</p>
+          <div class="auth-badge-secure">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+            <span>AES-256-GCM Zero-Knowledge Cloud</span>
+          </div>
         </div>
 
         <form id="login-form" autocomplete="off" action="javascript:void(0);">
           <input type="text" name="prevent_autofill_username" id="prevent_autofill_username" style="display:none;" tabindex="-1" autocomplete="off">
           <input type="password" name="prevent_autofill_password" id="prevent_autofill_password" style="display:none;" tabindex="-1" autocomplete="off">
-          <div class="form-group">
-            <label for="login-email" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Email</label>
-            <input type="email" id="login-email" name="teledrive_email" placeholder="e.g. user@example.com" required autocomplete="username">
+          
+          <div class="form-group modern-form-group">
+            <label for="login-email">Account Email</label>
+            <div class="modern-input-wrapper">
+              <div class="input-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+              </div>
+              <input type="email" id="login-email" name="teledrive_email" placeholder="e.g. user@example.com" required autocomplete="username">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="login-password" style="font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-secondary);">Password</label>
-            <div class="input-with-action">
-              <input type="password" id="login-password" name="teledrive_sec_field" placeholder="Enter password" required autocomplete="current-password" data-lpignore="true" data-1password-ignore="true">
-              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password">
+
+          <div class="form-group modern-form-group">
+            <label for="login-password">Master Password</label>
+            <div class="modern-input-wrapper input-with-action">
+              <div class="input-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <input type="password" id="login-password" name="teledrive_sec_field" placeholder="Enter master password" required autocomplete="current-password" data-lpignore="true" data-1password-ignore="true">
+              <button type="button" class="btn-toggle-pass icon-btn-sm" data-target="login-password" title="Show/Hide Password" aria-label="Toggle Password Visibility">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
           </div>
-          <button type="submit" class="btn-primary btn-block" id="login-btn">
+
+          <button type="submit" class="btn-primary btn-block modern-login-btn" id="login-btn">
             <span>Unlock Drive</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
           </button>
+          
           <div class="loading-spinner" id="login-spinner" style="display:none;"></div>
         </form>
+
+        <div class="auth-footer-features">
+          <div class="feature-chip">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Encrypted Chunks</span>
+          </div>
+          <div class="feature-chip">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.48 2.54l2.6 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V2.05c-5.05.5-9 4.76-9 9.95 0 5.52 4.47 10 9.99 10 3.31 0 6.24-1.61 8.01-4.09l-2.52-1.48C16.14 17.75 14.22 19 12 19z"/></svg>
+            <span>Fast Stream Playback</span>
+          </div>
+          <div class="feature-chip">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+            <span>Unlimited Storage</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
