@@ -17,15 +17,50 @@ function generateIV() {
   return crypto.randomBytes(12).toString('base64');
 }
 
+const keyCache = new Map();
+const MAX_KEY_CACHE = 5000;
+
 /**
- * Derives a 32-byte key from passphrase and salt using PBKDF2
+ * Derives a 32-byte key from passphrase and salt using PBKDF2 (with LRU caching for 0ms reuse)
  * @param {string} passphrase - The encryption passphrase
  * @param {string} saltBase64 - The salt as a base64 string
  * @returns {Buffer} 32-byte derived key
  */
 function deriveKey(passphrase, saltBase64) {
+  const cacheKey = `${passphrase}::${saltBase64}`;
+  if (keyCache.has(cacheKey)) {
+    return keyCache.get(cacheKey);
+  }
   const salt = Buffer.from(saltBase64, 'base64');
-  return crypto.pbkdf2Sync(passphrase, salt, 310000, 32, 'sha512');
+  const derived = crypto.pbkdf2Sync(passphrase, salt, 310000, 32, 'sha512');
+  if (keyCache.size >= MAX_KEY_CACHE) {
+    const firstKey = keyCache.keys().next().value;
+    keyCache.delete(firstKey);
+  }
+  keyCache.set(cacheKey, derived);
+  return derived;
+}
+
+/**
+ * Asynchronously derives key in libuv threadpool to avoid event-loop blocking
+ */
+function deriveKeyAsync(passphrase, saltBase64) {
+  const cacheKey = `${passphrase}::${saltBase64}`;
+  if (keyCache.has(cacheKey)) {
+    return Promise.resolve(keyCache.get(cacheKey));
+  }
+  return new Promise((resolve, reject) => {
+    const salt = Buffer.from(saltBase64, 'base64');
+    crypto.pbkdf2(passphrase, salt, 310000, 32, 'sha512', (err, derived) => {
+      if (err) return reject(err);
+      if (keyCache.size >= MAX_KEY_CACHE) {
+        const firstKey = keyCache.keys().next().value;
+        keyCache.delete(firstKey);
+      }
+      keyCache.set(cacheKey, derived);
+      resolve(derived);
+    });
+  });
 }
 
 /**

@@ -1,3 +1,8 @@
+const os = require('os');
+// Set libuv threadpool size to utilize all CPU cores (critical for multi-core VPS concurrency)
+const cpuCount = (os.cpus() && os.cpus().length) ? os.cpus().length : 4;
+process.env.UV_THREADPOOL_SIZE = String(Math.max(16, cpuCount * 4));
+
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
