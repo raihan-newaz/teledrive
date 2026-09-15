@@ -314,13 +314,26 @@ async function deleteFiles(messageIds) {
   try {
     const channelEntity = await getChannelInputEntity();
     console.log(`[Telegram] Deleting message ID(s): [${ids.join(', ')}] from channel...`);
-    const result = await withTelegramRetry(() => tClient.deleteMessages(channelEntity, ids, { revoke: true }));
-    console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}]. Result:`, JSON.stringify(result));
+
+    let result;
+    try {
+      // First attempt direct MTProto channels.DeleteMessages
+      result = await withTelegramRetry(() => tClient.invoke(new Api.channels.DeleteMessages({
+        channel: channelEntity,
+        id: ids
+      })));
+    } catch (chanErr) {
+      // Fallback to client.deleteMessages
+      result = await withTelegramRetry(() => tClient.deleteMessages(channelEntity, ids, { revoke: true }));
+    }
+
+    console.log(`[Telegram] Successfully deleted message ID(s): [${ids.join(', ')}]`);
     return { success: true, count: ids.length, result };
   } catch (err) {
+    _cachedChannelEntity = null; // Invalidate cached entity on error
     console.error(`[Telegram] Error deleting message ID(s) [${ids.join(', ')}]:`, err.message);
-    if (err.message && (err.message.includes('CHAT_ADMIN_REQUIRED') || err.message.includes('MESSAGE_DELETE_FORBIDDEN') || err.message.includes('admin'))) {
-      throw new Error(`Telegram bot permission error: Bot requires "Delete messages" administrator rights in the channel to remove files.`);
+    if (err.message && (err.message.includes('CHAT_ADMIN_REQUIRED') || err.message.includes('MESSAGE_DELETE_FORBIDDEN'))) {
+      throw new Error(`Telegram error: Bot requires "Delete messages" administrator rights in the channel (${err.message})`);
     }
     throw err;
   }
