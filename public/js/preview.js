@@ -138,6 +138,18 @@ const Preview = {
       closeBtn.onclick = () => this.close();
     }
 
+    // Preview overlay fullscreen button (top bar)
+    const previewFsBtn = document.getElementById('preview-fullscreen-top');
+    if (previewFsBtn) {
+      previewFsBtn.onclick = () => {
+        if (!document.fullscreenElement) {
+          overlay.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      };
+    }
+
     const mime = file.mime_type || '';
     const cat = UI.getFileTypeCategory(mime, file.name);
 
@@ -155,6 +167,20 @@ const Preview = {
             <span id="yt-transcode-text">Preparing 4K Adaptive Streaming (HLS)...</span>
             <button class="yt-transcode-btn" id="yt-transcode-switch-btn" style="display:none;">Switch to HLS</button>
             <button class="yt-transcode-dismiss" id="yt-transcode-dismiss" title="Dismiss">&times;</button>
+          </div>
+
+          <!-- YouTube Double Click Seek Indicators (Left & Right) -->
+          <div class="yt-seek-ripple yt-seek-left" id="yt-seek-left">
+            <div class="yt-seek-ripple-circle">
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="#fff"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+              <span class="yt-seek-text">10 seconds</span>
+            </div>
+          </div>
+          <div class="yt-seek-ripple yt-seek-right" id="yt-seek-right">
+            <div class="yt-seek-ripple-circle">
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="#fff"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+              <span class="yt-seek-text">10 seconds</span>
+            </div>
           </div>
 
           <!-- Center Loading Spinner -->
@@ -594,15 +620,56 @@ const Preview = {
 
     if (playBtn) playBtn.onclick = togglePlay;
     if (centerBtn) centerBtn.onclick = togglePlay;
-    video.onclick = togglePlay;
 
-    // Double click to toggle fullscreen
-    video.ondblclick = (e) => {
+    // ─── YouTube-style double-tap seek zones ──────────────────────────
+    const seekLeftEl = document.getElementById('yt-seek-left');
+    const seekRightEl = document.getElementById('yt-seek-right');
+    let _clickTimer = null;
+    let _clickCount = 0;
+
+    const showSeekRipple = (el) => {
+      if (!el) return;
+      el.classList.remove('active');
+      void el.offsetWidth;            // force reflow to restart animation
+      el.classList.add('active');
+      setTimeout(() => el.classList.remove('active'), 500);
+    };
+
+    video.onclick = (e) => {
       e.stopPropagation();
-      if (!document.fullscreenElement) {
-        if (playerWrap) playerWrap.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
+      _clickCount++;
+
+      if (_clickCount === 1) {
+        _clickTimer = setTimeout(() => {
+          // Single click → toggle play/pause
+          togglePlay();
+          _clickCount = 0;
+        }, 300);
+      } else if (_clickCount === 2) {
+        clearTimeout(_clickTimer);
+        _clickCount = 0;
+
+        // Determine zone: left 40% / right 40% / center 20%
+        const rect = video.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const pct = x / rect.width;
+
+        if (pct < 0.4) {
+          // Left zone → rewind 10s
+          video.currentTime = Math.max(0, video.currentTime - 10);
+          showSeekRipple(seekLeftEl);
+        } else if (pct > 0.6) {
+          // Right zone → forward 10s
+          video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
+          showSeekRipple(seekRightEl);
+        } else {
+          // Center zone → toggle fullscreen
+          if (!document.fullscreenElement) {
+            if (playerWrap) playerWrap.requestFullscreen().catch(() => {});
+          } else {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
       }
     };
 

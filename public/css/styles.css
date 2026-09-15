@@ -2009,6 +2009,67 @@ input:focus, select:focus, textarea:focus {
   transform: scale(1);
 }
 
+/* YouTube-style Double Click Seek Ripples (Left & Right 10s) */
+.yt-seek-ripple {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+.yt-seek-left {
+  left: 0;
+  border-top-right-radius: 50% 100%;
+  border-bottom-right-radius: 50% 100%;
+  background: radial-gradient(circle at left center, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.08) 60%, transparent 100%);
+}
+.yt-seek-right {
+  right: 0;
+  border-top-left-radius: 50% 100%;
+  border-bottom-left-radius: 50% 100%;
+  background: radial-gradient(circle at right center, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.08) 60%, transparent 100%);
+}
+.yt-seek-ripple-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #ffffff;
+  pointer-events: none;
+}
+.yt-seek-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+.yt-seek-ripple.active {
+  animation: ytSeekFlash 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes ytSeekFlash {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
 .yt-controls-gradient {
   position: absolute;
   bottom: 0;
