@@ -284,39 +284,56 @@ const App = {
     }
   },
 
-  async loadStorageStats() {
+  _storageStatsTimer: null,
+  loadStorageStats(immediate = false) {
+    if (immediate) {
+      if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
+      this._doLoadStorageStats();
+      return;
+    }
+    if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
+    this._storageStatsTimer = setTimeout(() => {
+      this._doLoadStorageStats();
+    }, 400);
+  },
+
+  async _doLoadStorageStats() {
     try {
       const res = await API.getStorageStats();
-      if (res && res.stats) {
-        const stats = res.stats;
-        const storageText = document.getElementById('storage-text');
-        const storageSubtext = document.getElementById('storage-subtext');
-        const storageFill = document.getElementById('storage-fill');
+      const s = (res && res.stats) ? res.stats : res;
+      if (!s) return;
 
-        const usedFormatted = UI.formatSize(stats.storageUsed);
-        if (storageText) {
-          storageText.textContent = `${stats.activeFileCount} files · ${usedFormatted}`;
+      const storageText = document.getElementById('storage-text');
+      const storageSubtext = document.getElementById('storage-subtext');
+      const storageFill = document.getElementById('storage-fill');
+
+      const usedBytes = s.storageUsed !== undefined ? s.storageUsed : (s.used || s.totalSize || 0);
+      const usedFormatted = UI.formatFileSize(usedBytes);
+      const fileCount = s.activeFileCount !== undefined ? s.activeFileCount : (s.totalFiles || s.fileCount || 0);
+
+      if (storageText) {
+        storageText.textContent = `${fileCount} files · ${usedFormatted}`;
+      }
+
+      if (s.storageLimit > 0) {
+        const quotaFormatted = UI.formatFileSize(s.storageLimit);
+        const pct = s.usagePercentage !== undefined ? s.usagePercentage : Math.min(100, Math.round((usedBytes / s.storageLimit) * 100));
+        if (storageSubtext) {
+          storageSubtext.textContent = `${pct}% of ${quotaFormatted} used`;
         }
-
-        if (stats.storageLimit > 0) {
-          const quotaFormatted = UI.formatSize(stats.storageLimit);
-          if (storageSubtext) {
-            storageSubtext.textContent = `${stats.usagePercentage}% of ${quotaFormatted} used`;
-          }
-          if (storageFill) {
-            storageFill.style.width = `${Math.min(100, stats.usagePercentage)}%`;
-            if (stats.usagePercentage >= 95) storageFill.style.background = '#ea4335';
-            else if (stats.usagePercentage >= 80) storageFill.style.background = '#fbbc05';
-            else storageFill.style.background = 'var(--accent-color)';
-          }
-        } else {
-          if (storageSubtext) {
-            storageSubtext.textContent = 'Unlimited Free Storage';
-          }
-          if (storageFill) {
-            storageFill.style.width = '100%';
-            storageFill.style.background = 'var(--accent-color)';
-          }
+        if (storageFill) {
+          storageFill.style.width = `${Math.min(100, Math.max(4, pct))}%`;
+          if (pct >= 95) storageFill.style.background = '#ea4335';
+          else if (pct >= 80) storageFill.style.background = '#fbbc05';
+          else storageFill.style.background = 'var(--accent-color)';
+        }
+      } else {
+        if (storageSubtext) {
+          storageSubtext.textContent = 'Unlimited Free Storage';
+        }
+        if (storageFill) {
+          storageFill.style.width = '100%';
+          storageFill.style.background = 'var(--accent-color)';
         }
       }
     } catch (e) {
@@ -328,10 +345,20 @@ const App = {
     try {
       UI.showModal('storage-analytics-modal');
 
+      const catList = document.getElementById('storage-categories-list');
+      if (catList) {
+        catList.innerHTML = '<div style="grid-column: 1 / -1; padding: 14px; text-align: center; color: var(--text-secondary); font-size: 12.5px;">Loading storage breakdown...</div>';
+      }
+
+      const largestContainer = document.getElementById('storage-largest-files');
+      if (largestContainer) {
+        largestContainer.innerHTML = '<div style="padding: 14px; text-align: center; color: var(--text-secondary); font-size: 12.5px;">Loading largest files...</div>';
+      }
+
       const [statsRes, breakdownRes, largestRes] = await Promise.all([
-        API.getStorageStats(),
-        API.getStorageBreakdown(),
-        API.getLargestFiles(10)
+        API.getStorageStats().catch(() => null),
+        API.getStorageBreakdown().catch(() => null),
+        API.getLargestFiles(10).catch(() => null)
       ]);
 
       if (statsRes && statsRes.stats) {
@@ -344,18 +371,18 @@ const App = {
         const warnBanner = document.getElementById('storage-warning-banner');
         const warnText = document.getElementById('storage-warning-text');
 
-        if (usedEl) usedEl.textContent = `${UI.formatSize(s.storageUsed)} used`;
-        if (quotaEl) quotaEl.textContent = s.storageLimit > 0 ? `of ${UI.formatSize(s.storageLimit)} limit` : 'of Unlimited quota';
+        if (usedEl) usedEl.textContent = `${UI.formatFileSize(s.storageUsed || 0)} used`;
+        if (quotaEl) quotaEl.textContent = s.storageLimit > 0 ? `of ${UI.formatFileSize(s.storageLimit)} limit` : 'of Unlimited quota';
 
         if (s.storageLimit > 0) {
           if (barEl) {
-            barEl.style.width = `${s.usagePercentage}%`;
+            barEl.style.width = `${s.usagePercentage || 0}%`;
             if (s.usagePercentage >= 95) barEl.style.background = '#ea4335';
             else if (s.usagePercentage >= 80) barEl.style.background = '#fbbc05';
             else barEl.style.background = 'var(--accent-color)';
           }
-          if (percEl) percEl.textContent = `${s.usagePercentage}% used`;
-          if (freeEl) freeEl.textContent = `${UI.formatSize(s.freeStorage)} remaining`;
+          if (percEl) percEl.textContent = `${s.usagePercentage || 0}% used`;
+          if (freeEl) freeEl.textContent = `${UI.formatFileSize(s.freeStorage || 0)} remaining`;
 
           if (s.warningLevel && warnBanner) {
             warnBanner.style.display = 'block';
@@ -371,14 +398,13 @@ const App = {
             barEl.style.width = '100%';
             barEl.style.background = 'var(--accent-color)';
           }
-          if (percEl) percEl.textContent = 'Active';
+          if (percEl) percEl.textContent = `${s.activeFileCount || 0} active files`;
           if (freeEl) freeEl.textContent = 'Unlimited Free';
           if (warnBanner) warnBanner.style.display = 'none';
         }
       }
 
       // Render Categories Breakdown
-      const catList = document.getElementById('storage-categories-list');
       if (catList && breakdownRes && breakdownRes.breakdown) {
         catList.innerHTML = '';
         const b = breakdownRes.breakdown;
@@ -393,12 +419,12 @@ const App = {
 
         for (const [key, item] of Object.entries(b)) {
           const card = document.createElement('div');
-          card.style.cssText = 'background: var(--bg-primary, #fff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;';
+          card.style.cssText = 'background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;';
           card.innerHTML = `
             <span style="font-size: 20px;">${iconMap[key] || '📁'}</span>
             <div style="min-width: 0;">
-              <div style="font-weight: 600; font-size: 13px;">${item.label}</div>
-              <div style="font-size: 11.5px; color: var(--text-secondary);">${UI.formatSize(item.size)} (${item.count})</div>
+              <div style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${item.label}</div>
+              <div style="font-size: 11.5px; color: var(--text-secondary);">${UI.formatFileSize(item.size || 0)} (${item.count || 0})</div>
             </div>
           `;
           catList.appendChild(card);
@@ -406,21 +432,18 @@ const App = {
       }
 
       // Render Largest Files
-      const largestContainer = document.getElementById('storage-largest-files');
-      if (largestContainer && largestRes && Array.isArray(largestRes.files)) {
-        if (largestRes.files.length === 0) {
-          largestContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px;">No files yet.</div>';
-        } else {
+      if (largestContainer) {
+        if (largestRes && Array.isArray(largestRes.files) && largestRes.files.length > 0) {
           largestContainer.innerHTML = '';
           largestRes.files.forEach((f, idx) => {
             const row = document.createElement('div');
-            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border-color, #f0f0f0); font-size: 13px; cursor: pointer;';
+            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-size: 13px; cursor: pointer;';
             row.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                 <span style="color: var(--text-secondary); font-size: 12px; width: 18px;">${idx + 1}.</span>
-                <span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f.name}</span>
+                <span style="font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f.name}</span>
               </div>
-              <span style="font-weight: 600; color: var(--text-secondary); font-size: 12px; margin-left: 12px; white-space: nowrap;">${UI.formatSize(f.size)}</span>
+              <span style="font-weight: 600; color: var(--text-secondary); font-size: 12px; margin-left: 12px; white-space: nowrap;">${UI.formatFileSize(f.size || 0)}</span>
             `;
             row.onclick = () => {
               UI.hideAllModals();
@@ -432,6 +455,8 @@ const App = {
             };
             largestContainer.appendChild(row);
           });
+        } else {
+          largestContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px;">No files yet.</div>';
         }
       }
     } catch (err) {
@@ -542,41 +567,6 @@ const App = {
       if (reqId === this._navReqCounter && !silent) {
         UI.hideSkeletons();
       }
-    }
-  },
-
-  _storageStatsTimer: null,
-  loadStorageStats(immediate = false) {
-    if (immediate) {
-      if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
-      this._doLoadStorageStats();
-      return;
-    }
-    if (this._storageStatsTimer) clearTimeout(this._storageStatsTimer);
-    this._storageStatsTimer = setTimeout(() => {
-      this._doLoadStorageStats();
-    }, 1200);
-  },
-
-  async _doLoadStorageStats() {
-    try {
-      const stats = await API.getStorageStats();
-      const storageText = document.getElementById('storage-text');
-      const storageFill = document.getElementById('storage-fill');
-      if (storageText && stats) {
-        const usedFormatted = UI.formatFileSize(stats.used || stats.totalSize || 0);
-        if (stats.limit && stats.limit > 0) {
-          const limitFormatted = UI.formatFileSize(stats.limit);
-          const percent = Math.min(100, Math.round(((stats.used || stats.totalSize || 0) / stats.limit) * 100));
-          storageText.textContent = `${stats.totalFiles || stats.fileCount || 0} files · ${usedFormatted} / ${limitFormatted} (${percent}%)`;
-          if (storageFill) storageFill.style.width = `${Math.max(4, percent)}%`;
-        } else {
-          storageText.textContent = `${stats.totalFiles || stats.fileCount || 0} files · ${usedFormatted} used`;
-          if (storageFill) storageFill.style.width = '15%';
-        }
-      }
-    } catch (e) {
-      // Ignore
     }
   },
 

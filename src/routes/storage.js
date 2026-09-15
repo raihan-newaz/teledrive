@@ -70,4 +70,20 @@ router.get('/recent', (req, res) => {
   }
 });
 
+/**
+ * POST /api/storage/recalculate
+ * Recalculates and updates storage usage for authenticated user
+ */
+router.post('/recalculate', (req, res) => {
+  try {
+    const userId = req.user.id;
+    db.recalculateUserStorage(userId);
+    const stats = db.getUserDetailedStorageStats(userId);
+    return res.json({ success: true, stats });
+  } catch (error) {
+    console.error('[Storage API] Error recalculating storage:', error);
+    return res.status(500).json({ error: 'Failed to recalculate storage' });
+  }
+});
+
 module.exports = router;

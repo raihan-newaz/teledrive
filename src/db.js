@@ -304,6 +304,13 @@ async function initialize() {
       }
       console.log('[DB] Auto-migrated legacy data to primary Admin account (admin@teledrive.local)');
     }
+
+    // Guarantee any orphaned files/folders are assigned to primary admin
+    const primaryAdmin = get('SELECT id FROM users WHERE role = "admin" LIMIT 1') || get('SELECT id FROM users LIMIT 1');
+    if (primaryAdmin && primaryAdmin.id) {
+      run('UPDATE files SET user_id = ? WHERE user_id IS NULL OR user_id = ""', [primaryAdmin.id]);
+      run('UPDATE folders SET user_id = ? WHERE user_id IS NULL OR user_id = ""', [primaryAdmin.id]);
+    }
   } catch (migErr) {
     console.warn('[DB] User auto-migration notice:', migErr.message);
   }

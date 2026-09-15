@@ -347,6 +347,10 @@ const UI = {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(i >= 3 ? 2 : 1)) + ' ' + sizes[i];
   },
 
+  formatSize(bytes) {
+    return this.formatFileSize(bytes);
+  },
+
   formatDate(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr);
