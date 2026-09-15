@@ -2465,11 +2465,57 @@ const App = {
       };
     }
 
+    // Option 3: Remote URL Upload
+    const btnRemoteUpload = document.getElementById('btn-remote-upload');
+    if (btnRemoteUpload) {
+      btnRemoteUpload.onclick = (e) => {
+        e.stopPropagation();
+        if (dropdownMenu) dropdownMenu.style.display = 'none';
+        UI.showModal('remote-upload-modal');
+        const urlInput = document.getElementById('remote-url-input');
+        if (urlInput) {
+          urlInput.value = '';
+          setTimeout(() => urlInput.focus(), 100);
+        }
+        const fnInput = document.getElementById('remote-filename-input');
+        if (fnInput) fnInput.value = '';
+      };
+    }
+
+    // Remote URL Form Submit
+    const formRemoteUpload = document.getElementById('form-remote-upload');
+    if (formRemoteUpload) {
+      formRemoteUpload.onsubmit = async (e) => {
+        e.preventDefault();
+        const url = document.getElementById('remote-url-input')?.value?.trim();
+        const fileName = document.getElementById('remote-filename-input')?.value?.trim();
+        if (!url) return;
+
+        const btn = document.getElementById('btn-submit-remote-upload');
+        if (btn) btn.disabled = true;
+
+        try {
+          await Upload.startRemoteDownload(url, fileName, App.currentFolderId);
+          UI.hideModals();
+          UI.showToast('Remote download started on VPS', 'info');
+        } catch (err) {
+          UI.showToast(err.message || 'Failed to start remote download', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      };
+    }
+
     // Mobile FAB button
     if (fabUpload) {
       fabUpload.onclick = (e) => {
         e.stopPropagation();
-        if (fileInput) fileInput.click();
+        if (dropdownMenu) {
+          const isHidden = dropdownMenu.style.display === 'none' || !dropdownMenu.style.display;
+          dropdownMenu.style.display = isHidden ? 'flex' : 'none';
+        } else if (fileInput) {
+          fileInput.click();
+        }
       };
     }
 
@@ -3875,6 +3921,28 @@ const App = {
           this.addUploadedFileLocally(data.file);
         } catch (err) {
           console.warn('[Realtime] file_uploaded error:', err);
+        }
+      });
+
+      es.addEventListener('remote_upload_progress', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && data.taskId && window.Upload && typeof window.Upload.handleRemoteProgress === 'function') {
+            window.Upload.handleRemoteProgress(data);
+          }
+        } catch (err) {
+          console.warn('[Realtime] remote_upload_progress error:', err);
+        }
+      });
+
+      es.addEventListener('remote_upload_completed', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && data.taskId && window.Upload && typeof window.Upload.handleRemoteCompleted === 'function') {
+            window.Upload.handleRemoteCompleted(data);
+          }
+        } catch (err) {
+          console.warn('[Realtime] remote_upload_completed error:', err);
         }
       });
 

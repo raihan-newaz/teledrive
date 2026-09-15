@@ -412,6 +412,19 @@ const API = {
 
   async revokeShare(fileId) {
     return this.request('DELETE', `/api/share/file/${fileId}`);
+  },
+
+  // ─── Remote URL Upload ─────────────────────────────────────────────
+  async startRemoteUpload(url, fileName, folderId) {
+    return this.request('POST', '/api/remote-upload/start', { url, fileName, folderId });
+  },
+
+  async getRemoteTasks() {
+    return this.request('GET', '/api/remote-upload/tasks');
+  },
+
+  async cancelRemoteTask(taskId) {
+    return this.request('POST', '/api/remote-upload/cancel', { taskId });
   }
 };
 

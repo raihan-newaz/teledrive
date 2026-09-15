@@ -37,6 +37,7 @@ const shareRouter = require('./src/routes/share');
 const webdavRouter = require('./src/routes/webdav');
 const realtimeRouter = require('./src/routes/realtime');
 const adminRouter = require('./src/routes/admin');
+const remoteUploadRouter = require('./src/routes/remoteUpload');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -127,6 +128,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/share', shareRouter);
 app.use('/api/realtime', realtimeRouter);
+app.use('/api/remote-upload', remoteUploadRouter);
 
 // Public share landing page
 app.get('/share/:token', (req, res) => {

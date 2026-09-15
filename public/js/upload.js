@@ -703,6 +703,85 @@ const Upload = {
     this.initPanelEvents();
   },
 
+  remoteTasks: [],
+
+  async startRemoteDownload(url, customName, folderId) {
+    const res = await API.startRemoteUpload(url, customName, folderId);
+    if (res && res.task) {
+      this.remoteTasks.unshift({
+        id: res.task.taskId,
+        fileName: res.task.fileName || 'Remote file',
+        status: 'uploading',
+        progress: 0,
+        speedText: 'Starting cloud download...',
+        etaText: '',
+        downloadedBytes: 0,
+        totalBytes: 0,
+        isRemote: true
+      });
+      this.showUploadPanel();
+      this.renderQueue();
+    }
+    return res;
+  },
+
+  handleRemoteProgress(data) {
+    let task = this.remoteTasks.find(t => t.id === data.taskId);
+    if (!task) {
+      task = {
+        id: data.taskId,
+        fileName: data.fileName || 'Remote download',
+        status: data.status,
+        progress: data.progress || 0,
+        speedText: data.speedText || '',
+        etaText: data.etaText || '',
+        downloadedBytes: data.downloadedBytes || 0,
+        totalBytes: data.totalBytes || 0,
+        isRemote: true
+      };
+      this.remoteTasks.unshift(task);
+      this.showUploadPanel();
+    } else {
+      task.status = (data.status === 'downloading' || data.status === 'uploading') ? 'uploading' : data.status;
+      task.fileName = data.fileName || task.fileName;
+      task.progress = data.progress !== undefined ? data.progress : task.progress;
+      task.speedText = data.speedText || task.speedText;
+      task.etaText = data.etaText || task.etaText;
+      task.downloadedBytes = data.downloadedBytes || task.downloadedBytes;
+      task.totalBytes = data.totalBytes || task.totalBytes;
+      task.error = data.error || null;
+    }
+    this.renderQueue();
+  },
+
+  handleRemoteCompleted(data) {
+    const task = this.remoteTasks.find(t => t.id === data.taskId);
+    if (task) {
+      task.status = 'done';
+      task.progress = 100;
+      task.speedText = 'Uploaded to cloud';
+      task.etaText = '';
+      this.renderQueue();
+    }
+    if (window.UI && typeof window.UI.showToast === 'function') {
+      window.UI.showToast(`Remote upload complete: ${data.file ? data.file.name : ''}`, 'success');
+    }
+  },
+
+  async cancelRemoteTask(taskId) {
+    try {
+      await API.cancelRemoteTask(taskId);
+      const task = this.remoteTasks.find(t => t.id === taskId);
+      if (task) {
+        task.status = 'cancelled';
+        task.speedText = 'Cancelled';
+      }
+      this.renderQueue();
+    } catch (err) {
+      console.error('Cancel remote task error:', err);
+    }
+  },
+
   initPanelEvents() {
     const body = document.getElementById('upload-panel-body');
     if (!body || this._panelEventsInitialized) return;
@@ -720,10 +799,15 @@ const Upload = {
 
       if (action === 'cancel') {
         this.cancelUpload(id);
+      } else if (action === 'cancel-remote') {
+        this.cancelRemoteTask(id);
       } else if (action === 'retry') {
         this.retryUpload(id);
       } else if (action === 'dismiss') {
         this.dismissItem(id);
+      } else if (action === 'dismiss-remote') {
+        this.remoteTasks = this.remoteTasks.filter(t => t.id !== id);
+        this.renderQueue();
       }
     });
   },
@@ -750,39 +834,84 @@ const Upload = {
     const title = document.getElementById('upload-panel-title');
     if (!body) return;
 
-    const pendingCount = this.queue.filter(i => i.status === 'uploading' || i.status === 'pending').length;
+    const allItems = [
+      ...this.remoteTasks.map(t => ({
+        id: t.id,
+        name: t.fileName,
+        status: t.status,
+        progress: t.progress || 0,
+        speedText: t.speedText || '',
+        etaText: t.etaText || '',
+        statusText: t.error || (t.status === 'uploading' ? 'Cloud downloading...' : ''),
+        sizeText: t.totalBytes ? `${this.formatFileSize(t.downloadedBytes)} / ${this.formatFileSize(t.totalBytes)}` : this.formatFileSize(t.downloadedBytes),
+        isRemote: true
+      })),
+      ...this.queue.map(item => ({
+        id: item.id,
+        name: item.file.name,
+        status: item.status,
+        progress: item.progress || 0,
+        speedText: item.speedText || '',
+        etaText: item.etaText || '',
+        statusText: item.statusText || '',
+        partText: item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '',
+        sizeText: (item.status === 'uploading' && item.overallLoaded && item.progress < 100)
+          ? `${this.formatFileSize(item.overallLoaded)} / ${this.formatFileSize(item.file.size)}`
+          : this.formatFileSize(item.file.size),
+        isRemote: false
+      }))
+    ];
+
+    const pendingCount = allItems.filter(i => i.status === 'uploading' || i.status === 'pending').length;
     if (title) {
       title.textContent = pendingCount > 0 ? `Uploading ${pendingCount} item(s)...` : 'Uploads completed';
     }
 
-    body.innerHTML = this.queue.map(item => {
-      const safeName = item.file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    body.innerHTML = allItems.map(item => {
+      const safeName = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const statusIcon = this.getStatusIcon(item.status);
-      const partText = item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '';
+      const partText = item.partText || '';
+      const cloudBadge = item.isRemote ? '<span title="Remote URL Upload" style="color:var(--accent-color); font-size:11px; margin-right:4px;">☁️</span>' : '';
 
-      // Action buttons with modern SVGs and data-action / data-id
+      // Action buttons
       let actionBtn = '';
-      if (item.status === 'uploading' || item.status === 'pending') {
-        actionBtn = `
-          <button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        `;
-      } else if (item.status === 'cancelled' || item.status === 'error') {
-        actionBtn = `
-          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume / Retry">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path></svg>
-          </button>
-          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        `;
+      if (item.isRemote) {
+        if (item.status === 'uploading' || item.status === 'pending') {
+          actionBtn = `
+            <button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel-remote" title="Cancel remote download">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          `;
+        } else {
+          actionBtn = `
+            <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss-remote" title="Dismiss">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          `;
+        }
       } else {
-        actionBtn = `
-          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        `;
+        if (item.status === 'uploading' || item.status === 'pending') {
+          actionBtn = `
+            <button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          `;
+        } else if (item.status === 'cancelled' || item.status === 'error') {
+          actionBtn = `
+            <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume / Retry">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path></svg>
+            </button>
+            <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          `;
+        } else {
+          actionBtn = `
+            <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          `;
+        }
       }
 
       // Metrics string (speed, ETA)
@@ -793,7 +922,7 @@ const Upload = {
       return `
         <div class="upload-item" id="item-${item.id}">
           <div class="upload-item-header">
-            <span class="upload-item-name" title="${safeName}">${safeName}</span>
+            <span class="upload-item-name" title="${safeName}">${cloudBadge}${safeName}</span>
             <div class="upload-item-right">
               <span class="upload-item-status">${statusIcon}<span>${partText} ${item.progress}%</span></span>
               ${actionBtn}
@@ -804,9 +933,7 @@ const Upload = {
           </div>
           <div class="upload-item-metrics">
             ${metricsText}
-            <span>${(item.status === 'uploading' && item.overallLoaded && item.progress < 100)
-              ? `${this.formatFileSize(item.overallLoaded)} / ${this.formatFileSize(item.file.size)}`
-              : this.formatFileSize(item.file.size)}</span>
+            <span>${item.sizeText}</span>
           </div>
         </div>
       `;
