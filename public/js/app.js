@@ -3899,7 +3899,8 @@ const App = {
         userCard.className = 'admin-user-card';
         userCard.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;';
 
-        const lastLoginText = u.last_login ? UI.formatDate(u.last_login) : 'Never';
+        const rawLastLogin = u.last_login_at || u.last_login || u.lastLoginAt || u.lastLogin;
+        const lastLoginText = rawLastLogin ? UI.formatDate(rawLastLogin) : 'Never';
         const roleLabel = u.role === 'admin' ? 'Admin' : 'User';
         const statusClass = u.status === 'active' ? 'background: rgba(16, 185, 129, 0.15); color: #10b981;' : 'background: rgba(239, 68, 68, 0.15); color: #ef4444;';
         const roleClass = u.role === 'admin' ? 'background: rgba(99, 102, 241, 0.15); color: #6366f1;' : 'background: rgba(100, 116, 139, 0.15); color: var(--text-secondary);';

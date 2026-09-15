@@ -22,7 +22,9 @@ router.get('/users', async (req, res) => {
       return {
         ...user,
         totalFiles: stats.totalFiles,
-        storageUsed: stats.totalSize
+        storageUsed: stats.totalSize,
+        last_login: user.last_login_at || null,
+        lastLoginAt: user.last_login_at || null
       };
     });
     return res.json({ success: true, users: enriched });

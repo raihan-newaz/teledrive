@@ -924,7 +924,7 @@ function updateUser(id, updates = {}) {
 
 function updateUserLastLogin(id) {
   run('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
-  save();
+  save(true);
 }
 
 function deleteUser(id) {

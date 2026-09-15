@@ -353,7 +353,11 @@ const UI = {
 
   formatDate(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
+    let d = new Date(dateStr);
+    if (isNaN(d.getTime()) && typeof dateStr === 'string') {
+      d = new Date(dateStr.replace(' ', 'T') + 'Z');
+    }
+    if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   },
 
