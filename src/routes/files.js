@@ -795,14 +795,6 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
     const tgFileName = (userPrefix ? `${userPrefix}_` : '') + `${safeName}.enc`;
     const message = await telegram.uploadFile(encryptedPath, tgFileName);
 
-    if (req.destroyed) {
-      try {
-        await telegram.deleteFile(message.id);
-        console.log(`[Upload] Deleted aborted single file message ${message.id} from Telegram`);
-      } catch (e) {}
-      return;
-    }
-
     // 4. Save metadata to SQLite
     const mimeType = getMimeType(safeName);
     const now = new Date().toISOString();
@@ -1019,7 +1011,11 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       return res.status(400).json({ error: 'Invalid total file size' });
     }
 
-    if (isSessionCancelled(uploadId) || req.destroyed) {
+    if (chunkIndex === 0) {
+      cancelledSessions.delete(uploadId);
+    }
+
+    if (isSessionCancelled(uploadId)) {
       return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
     }
 
@@ -1051,7 +1047,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
       return res.json({ success: true, done: false, chunkIndex, uploadedChunks: existingChunks.length, totalChunks });
     }
 
-    if (isSessionCancelled(uploadId) || req.destroyed) {
+    if (isSessionCancelled(uploadId)) {
       return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
     }
 
@@ -1062,7 +1058,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const encryptionKey = req.user.encryptionKey || process.env.ENCRYPTION_KEY;
     const { iv, salt, authTag } = await cryptoModule.encryptFile(originalPath, encryptedPath, encryptionKey);
 
-    if (isSessionCancelled(uploadId) || req.destroyed) {
+    if (isSessionCancelled(uploadId)) {
       return res.status(409).json({ error: 'Upload was cancelled by user', cancelled: true });
     }
 
@@ -1072,7 +1068,7 @@ router.post('/upload-chunk', uploadLimiter, upload.single('file'), async (req, r
     const message = await telegram.uploadFile(encryptedPath, chunkTgName);
 
     // CRITICAL: Check if upload was cancelled while chunk was in-flight to Telegram
-    if (isSessionCancelled(uploadId) || req.destroyed) {
+    if (isSessionCancelled(uploadId)) {
       try {
         await telegram.deleteFile(message.id);
         console.log(`[UploadChunk] Deleted in-flight chunk message ${message.id} from Telegram for cancelled session ${uploadId}`);
