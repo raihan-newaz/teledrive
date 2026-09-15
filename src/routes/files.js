@@ -1341,50 +1341,96 @@ async function permanentlyDeleteFilesBatch(files, userId) {
   const deletedFileIds = [];
   const eventBroadcaster = require('../services/eventBroadcaster');
 
+  // 1. Map files to their message IDs and index all message IDs
+  const fileToMsgIdsMap = new Map();
+  const allMsgIds = new Set();
+
   for (const file of files) {
     if (!file || !file.id) continue;
+    const fileMsgIds = new Set();
 
-    // 1. Collect Telegram message IDs for this specific file
-    const fileMessageIds = new Set();
     if (file.telegram_message_id) {
       const parsed = parseInt(file.telegram_message_id, 10);
-      if (!isNaN(parsed) && parsed > 0) fileMessageIds.add(parsed);
+      if (!isNaN(parsed) && parsed > 0) fileMsgIds.add(parsed);
     }
+
     try {
       const chunks = db.getFileChunks(file.id);
       if (Array.isArray(chunks)) {
         for (const ch of chunks) {
           if (ch.telegram_message_id) {
             const parsed = parseInt(ch.telegram_message_id, 10);
-            if (!isNaN(parsed) && parsed > 0) fileMessageIds.add(parsed);
+            if (!isNaN(parsed) && parsed > 0) fileMsgIds.add(parsed);
           }
         }
       }
     } catch (e) {}
 
-    // 2. Attempt deletion from Telegram first
-    let tgSuccess = true;
-    if (fileMessageIds.size > 0) {
+    fileToMsgIdsMap.set(file.id, fileMsgIds);
+    for (const msgId of fileMsgIds) {
+      allMsgIds.add(msgId);
+    }
+  }
+
+  // 2. Batch delete message IDs in chunks of up to 100 via Telegram MTProto
+  const failedMsgIds = new Set();
+  const allIdsArray = Array.from(allMsgIds);
+  const TG_BATCH_SIZE = 100;
+  const tgBatches = [];
+
+  for (let i = 0; i < allIdsArray.length; i += TG_BATCH_SIZE) {
+    tgBatches.push(allIdsArray.slice(i, i + TG_BATCH_SIZE));
+  }
+
+  // Concurrency pool to finish 500+ files in ~1-2 seconds without blocking Node event loop
+  const CONCURRENCY = 4;
+  let batchPtr = 0;
+
+  const worker = async () => {
+    while (batchPtr < tgBatches.length) {
+      const currentBatch = tgBatches[batchPtr++];
       try {
-        await telegram.deleteFiles(Array.from(fileMessageIds));
-        console.log(`[Batch Delete] Successfully deleted Telegram message(s) for "${file.name}" (${file.id})`);
-        tgSuccess = true;
+        await telegram.deleteFiles(currentBatch);
+        console.log(`[Batch Delete] Successfully deleted Telegram batch of ${currentBatch.length} message(s)`);
       } catch (tgErr) {
-        console.warn(`[Batch Delete] Telegram deletion error for "${file.name}":`, tgErr.message);
-        warnings.push(`File "${file.name}": ${tgErr.message}`);
-        tgSuccess = false;
+        console.warn(`[Batch Delete] Telegram deletion error for batch of ${currentBatch.length} message(s):`, tgErr.message);
+        warnings.push(`Telegram deletion warning: ${tgErr.message}`);
+        currentBatch.forEach(id => failedMsgIds.add(id));
       }
     }
+  };
 
-    // 3. Only delete from local DB & cache if Telegram confirmed
-    if (tgSuccess) {
+  const workers = [];
+  const workerCount = Math.min(CONCURRENCY, tgBatches.length);
+  for (let w = 0; w < workerCount; w++) {
+    workers.push(worker());
+  }
+  if (workers.length > 0) {
+    await Promise.all(workers);
+  }
+
+  // 3. Determine which files are ready for DB deletion
+  const filesToDelete = [];
+  for (const file of files) {
+    if (!file || !file.id) continue;
+    const msgIds = fileToMsgIdsMap.get(file.id) || new Set();
+    // File is ready for deletion if none of its message IDs failed in Telegram
+    const hasFailedMsg = Array.from(msgIds).some(id => failedMsgIds.has(id));
+    if (!hasFailedMsg) {
+      filesToDelete.push(file);
+    }
+  }
+
+  // 4. Batch clean DB, cache, thumbnails, and broadcast SSE
+  if (filesToDelete.length > 0) {
+    for (const file of filesToDelete) {
       try { db.deleteFileChunks(file.id); } catch (e) {}
       try { db.deleteTranscodeJob(file.id); } catch (e) {}
 
       const cachedPath = path.join(cacheDir, `${file.id}.dec`);
-      await fsPromises.unlink(cachedPath).catch(() => {});
+      fsPromises.unlink(cachedPath).catch(() => {});
       const thumbPath = path.join(thumbnailsDir, `${file.id}.jpg`);
-      await fsPromises.unlink(thumbPath).catch(() => {});
+      fsPromises.unlink(thumbPath).catch(() => {});
 
       db.run('DELETE FROM video_metadata WHERE file_id = ?', [file.id]);
       if (userId) {
@@ -1395,7 +1441,6 @@ async function permanentlyDeleteFilesBatch(files, userId) {
 
       deletedFileIds.push(file.id);
 
-      // Instantly broadcast file_deleted so the frontend vanishes THIS specific file right now
       try {
         eventBroadcaster.broadcast('file_deleted', { fileId: file.id, folderId: file.folder_id, userId });
       } catch (e) {}
