@@ -728,6 +728,23 @@ const Upload = {
     });
   },
 
+  getStatusIcon(status) {
+    if (status === 'uploading') {
+      return '<svg class="upload-spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--accent-color)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor"></path></svg>';
+    }
+    if (status === 'done') {
+      return '<svg class="upload-status-icon done" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#22c55e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12l2.5 2.5L16 9"></path></svg>';
+    }
+    if (status === 'error') {
+      return '<svg class="upload-status-icon error" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ef4444" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+    }
+    if (status === 'cancelled') {
+      return '<svg class="upload-status-icon cancelled" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f59e0b" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>';
+    }
+    // pending / queued
+    return '<svg class="upload-status-icon pending" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9aa0a6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+  },
+
   renderQueue() {
     const body = document.getElementById('upload-panel-body');
     const title = document.getElementById('upload-panel-title');
@@ -740,32 +757,32 @@ const Upload = {
 
     body.innerHTML = this.queue.map(item => {
       const safeName = item.file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      let statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#9aa0a6" style="vertical-align:middle;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
-      if (item.status === 'uploading') {
-        statusIcon = '<svg class="upload-spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent-color);"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-linecap="round"></path></svg>';
-      } else if (item.status === 'done') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#34a853" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
-      } else if (item.status === 'error') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#ea4335" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-      } else if (item.status === 'cancelled') {
-        statusIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
-      }
-
+      const statusIcon = this.getStatusIcon(item.status);
       const partText = item.totalParts && item.totalParts > 1 ? ` (Part ${item.currentPart || 1}/${item.totalParts})` : '';
 
-      // Action buttons with data-action and data-id (clean event delegation)
+      // Action buttons with modern SVGs and data-action / data-id
       let actionBtn = '';
       if (item.status === 'uploading' || item.status === 'pending') {
-        actionBtn = `<button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">✕</button>`;
+        actionBtn = `
+          <button class="upload-action-btn cancel" data-id="${item.id}" data-action="cancel" title="Cancel upload">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        `;
       } else if (item.status === 'cancelled' || item.status === 'error') {
         actionBtn = `
-          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume/Retry">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          <button class="upload-action-btn retry" data-id="${item.id}" data-action="retry" title="Resume / Retry">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path></svg>
           </button>
-          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">✕</button>
+          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         `;
       } else {
-        actionBtn = `<button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">✕</button>`;
+        actionBtn = `
+          <button class="upload-action-btn dismiss" data-id="${item.id}" data-action="dismiss" title="Dismiss">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        `;
       }
 
       // Metrics string (speed, ETA)
@@ -804,17 +821,7 @@ const Upload = {
       const metrics = el.querySelector('.upload-item-metrics');
 
       if (status) {
-        let iconHtml = '<svg class="upload-spin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent-color);"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25"></circle><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-linecap="round"></path></svg>';
-        if (item.status === 'done') {
-          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#34a853" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
-        } else if (item.status === 'error') {
-          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#ea4335" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-        } else if (item.status === 'cancelled') {
-          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b" style="vertical-align:middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31C15.55 19.37 13.85 20 12 20zm6.31-3.1L7.1 5.69C8.45 4.63 10.15 4 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z"/></svg>';
-        } else if (item.status === 'pending') {
-          iconHtml = '<svg viewBox="0 0 24 24" width="14" height="14" fill="#9aa0a6" style="vertical-align:middle;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
-        }
-
+        const iconHtml = this.getStatusIcon(item.status);
         let textPart = '';
         if (customText) {
           textPart = `${customText} (${item.progress}%)`;
@@ -982,8 +989,13 @@ const Upload = {
 
     if (toggleBtn && panelBody) {
       toggleBtn.onclick = () => {
-        panelBody.style.display = panelBody.style.display === 'none' ? 'block' : 'none';
-        toggleBtn.textContent = panelBody.style.display === 'none' ? '▲' : '▼';
+        const isHidden = panelBody.style.display === 'none';
+        panelBody.style.display = isHidden ? 'block' : 'none';
+        const chevron = toggleBtn.querySelector('.chevron-icon');
+        if (chevron) {
+          chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+          chevron.style.transition = 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)';
+        }
       };
     }
     if (closeBtn && panel) {
