@@ -2892,7 +2892,7 @@ input:focus, select:focus, textarea:focus {
   text-decoration: underline;
 }
 
-/* PDF & DOCUMENT VIEWERS (FULL-SCREEN GOOGLE DRIVE STYLE) */
+/* ─── PDF & DOCUMENT VIEWERS (MODERN GOOGLE DRIVE / APPLE STYLE) ─── */
 .preview-content:has(.pdf-viewer-wrap) {
   padding: 0;
   width: 100vw;
@@ -2906,22 +2906,139 @@ input:focus, select:focus, textarea:focus {
   min-height: calc(100vh - 56px);
   display: flex;
   flex-direction: column;
-  background: #323639;
-  border-radius: 0;
+  background: #1e2124;
   overflow: hidden;
-  box-shadow: none;
+}
+
+.pdf-toolbar-modern {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  background: rgba(28, 30, 36, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 10;
+  gap: 12px;
+}
+
+.pdf-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pdf-badge {
+  background: #ea4335;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-title {
+  color: #f1f3f4;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+
+.pdf-toolbar-size {
+  color: #9aa0a6;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.pdf-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #e8eaed;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.pdf-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pdf-btn-primary {
+  background: var(--accent-color, #2563eb);
+  border-color: var(--accent-color, #2563eb);
+  color: #fff;
+}
+
+.pdf-btn-primary:hover {
+  filter: brightness(1.1);
+  background: var(--accent-color, #2563eb);
+}
+
+.pdf-frame-container {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #2b2d30;
+  overflow: hidden;
+}
+
+.pdf-loading-indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #2b2d30;
+  color: #9aa0a6;
+  font-size: 13px;
+  z-index: 5;
+  transition: opacity 0.2s ease;
+}
+
+.pdf-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent-color, #2563eb);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 .pdf-iframe {
-  flex: 1;
+  position: relative;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - 56px);
   border: none;
-  background: #525659;
+  background: #333639;
 }
 
-/* Code Viewer */
+/* ─── CODE VIEWER ─── */
 .code-viewer-wrap {
   width: 85vw;
   max-width: 960px;
@@ -2965,60 +3082,140 @@ input:focus, select:focus, textarea:focus {
   user-select: none;
 }
 
-/* Image Lightbox */
+/* ─── MODERN IMAGE LIGHTBOX & FLOATING CONTROLS ─── */
+.preview-content:has(.img-lightbox-wrap) {
+  padding: 0;
+  width: 100vw;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
 .img-lightbox-wrap {
+  position: relative;
+  width: 100vw;
+  height: calc(100vh - 56px);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  max-width: 90vw;
-  max-height: 84vh;
+  overflow: hidden;
+  user-select: none;
 }
-.img-toolbar {
-  background: rgba(24, 24, 27, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 6px 12px;
-  border-radius: 24px;
+
+.img-viewport {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  z-index: 20;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
 }
-.img-toolbar .icon-btn {
-  color: #f1f3f4;
+
+.img-loading-indicator {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.img-spinner {
   width: 36px;
   height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent-color, #2563eb);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.lightbox-img {
+  max-width: 88vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  transform-origin: center center;
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Modern Floating Pill Toolbar */
+.img-floating-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(18, 20, 26, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 9999px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  z-index: 25;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.img-pill-btn {
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: transparent;
-  transition: background-color 0.15s, transform 0.1s;
+  border: none;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
-.img-toolbar .icon-btn:hover {
+
+.img-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.img-pill-btn:active {
+  transform: scale(0.92);
+}
+
+.img-btn-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.img-zoom-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  min-width: 52px;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.img-zoom-badge:hover {
   background: rgba(255, 255, 255, 0.18);
-  transform: scale(1.06);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
 }
-.img-toolbar .icon-btn:active {
-  transform: scale(0.95);
-}
-.img-viewport {
-  overflow: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lightbox-img {
-  max-width: 80vw;
-  max-height: 70vh;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+.img-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 4px;
 }
 
 /* Unsupported File Card */

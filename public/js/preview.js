@@ -321,49 +321,101 @@ const Preview = {
       `;
       this.initAudioPlayer();
 
-    // ─── 3. PDF: Full-Screen Google Drive Style Viewer ─────────────────
+    // ─── 3. PDF: Modern Google Drive / Apple Preview Style Viewer ─────
     } else if (mime === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'))) {
       contentEl.innerHTML = `
         <div class="pdf-viewer-wrap">
-          <iframe src="${streamUrl}#view=FitH&toolbar=1" class="pdf-iframe" title="${file.name}"></iframe>
+          <div class="pdf-toolbar-modern">
+            <div class="pdf-toolbar-info">
+              <span class="pdf-badge">PDF</span>
+              <span class="pdf-toolbar-title" title="${file.name}">${file.name}</span>
+              <span class="pdf-toolbar-size">${UI.formatFileSize(file.size)}</span>
+            </div>
+            <div class="pdf-toolbar-actions">
+              <button class="pdf-btn" id="pdf-open-newtab" title="Open in Browser Native Viewer">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                <span>Open in Tab</span>
+              </button>
+              <a href="${downloadUrl}" class="pdf-btn pdf-btn-primary" download="${file.name}" title="Download Decrypted PDF">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download PDF</span>
+              </a>
+            </div>
+          </div>
+          <div class="pdf-frame-container">
+            <div class="pdf-loading-indicator" id="pdf-loading-indicator">
+              <div class="pdf-spinner"></div>
+              <span>Rendering PDF Document...</span>
+            </div>
+            <iframe src="${streamUrl}#view=FitH&toolbar=1" class="pdf-iframe" id="pdf-iframe" title="${file.name}"></iframe>
+          </div>
         </div>
       `;
+      this.initPdfViewer();
 
-    // ─── 4. IMAGE: Lightbox with Pan, Zoom & Rotate ────────────────────
+    // ─── 4. IMAGE: Modern Lightbox with Floating Pill, Pan & Zoom ─────
     } else if (cat === 'image') {
       contentEl.innerHTML = `
-        <div class="img-lightbox-wrap">
-          <div class="img-toolbar">
-            <button class="icon-btn" id="img-zoom-in" title="Zoom In (+)" aria-label="Zoom In">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="7"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                <line x1="11" y1="8" x2="11" y2="14"></line>
-                <line x1="8" y1="11" x2="14" y2="11"></line>
+        <div class="img-lightbox-wrap" id="img-lightbox-wrap">
+          <div class="img-viewport" id="img-viewport">
+            <div class="img-loading-indicator" id="img-loading-indicator">
+              <div class="img-spinner"></div>
+            </div>
+            <img src="${streamUrl}" class="lightbox-img" id="lightbox-img" alt="${file.name}" draggable="false">
+          </div>
+
+          <!-- Modern Glassmorphism Floating Pill Toolbar -->
+          <div class="img-floating-toolbar" id="img-floating-toolbar">
+            <button class="img-pill-btn" id="img-zoom-out" title="Zoom Out (- or Scroll Down)" aria-label="Zoom Out">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
             </button>
-            <button class="icon-btn" id="img-zoom-out" title="Zoom Out (-)" aria-label="Zoom Out">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="7"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                <line x1="8" y1="11" x2="14" y2="11"></line>
+            <button class="img-zoom-badge" id="img-zoom-badge" title="Click to Reset (100%)">
+              100%
+            </button>
+            <button class="img-pill-btn" id="img-zoom-in" title="Zoom In (+ or Scroll Up)" aria-label="Zoom In">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
             </button>
-            <button class="icon-btn" id="img-rotate" title="Rotate 90°" aria-label="Rotate">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+            <div class="img-toolbar-sep"></div>
+
+            <button class="img-pill-btn" id="img-fit-screen" title="Fit to Screen (0)" aria-label="Fit to Screen">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+              </svg>
+            </button>
+            <button class="img-pill-btn" id="img-actual-size" title="Original 1:1 Size" aria-label="Original Size">
+              <span class="img-btn-text">1:1</span>
+            </button>
+            <button class="img-pill-btn" id="img-rotate" title="Rotate 90° Clockwise (R)" aria-label="Rotate">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.5 2v6h-6"></path>
                 <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
               </svg>
             </button>
-            <button class="icon-btn" id="img-reset" title="Reset View" aria-label="Reset View">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="img-pill-btn" id="img-flip" title="Flip Horizontal" aria-label="Flip Horizontal">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v18M19 8l-7-5-7 5M19 16l-7 5-7-5"></path>
+              </svg>
+            </button>
+            <button class="img-pill-btn" id="img-reset" title="Reset View" aria-label="Reset View">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
                 <path d="M3 3v5h5"></path>
               </svg>
             </button>
-          </div>
-          <div class="img-viewport" id="img-viewport">
-            <img src="${streamUrl}" class="lightbox-img" id="lightbox-img" alt="${file.name}">
           </div>
         </div>
       `;
@@ -938,55 +990,312 @@ const Preview = {
     }
   },
 
+  // ─── PDF VIEWER CONTROLLER ────────────────────────────────────────
+  initPdfViewer() {
+    const iframe = document.getElementById('pdf-iframe');
+    const spinner = document.getElementById('pdf-loading-indicator');
+    const openNewTabBtn = document.getElementById('pdf-open-newtab');
+
+    if (openNewTabBtn && this.currentFile) {
+      const streamUrl = API.getStreamUrl(this.currentFile.id);
+      openNewTabBtn.onclick = () => window.open(streamUrl, '_blank');
+    }
+
+    if (iframe && spinner) {
+      const hideSpinner = () => {
+        spinner.style.opacity = '0';
+        setTimeout(() => { spinner.style.display = 'none'; }, 200);
+      };
+
+      iframe.onload = hideSpinner;
+      // Fallback timeout in case onload event was already triggered or suppressed
+      setTimeout(hideSpinner, 3000);
+    }
+  },
+
   // ─── IMAGE VIEWER CONTROLS ─────────────────────────────────────────
   initImageControls() {
+    const viewport = document.getElementById('img-viewport');
     const img = document.getElementById('lightbox-img');
+    const spinner = document.getElementById('img-loading-indicator');
     const zoomIn = document.getElementById('img-zoom-in');
     const zoomOut = document.getElementById('img-zoom-out');
+    const zoomBadge = document.getElementById('img-zoom-badge');
+    const fitScreen = document.getElementById('img-fit-screen');
+    const actualSize = document.getElementById('img-actual-size');
     const rotate = document.getElementById('img-rotate');
+    const flip = document.getElementById('img-flip');
     const reset = document.getElementById('img-reset');
 
-    const updateTransform = () => {
-      if (img) {
-        img.style.transform = `scale(${this.zoomLevel}) rotate(${this.rotationAngle}deg)`;
+    this.zoomLevel = 1;
+    this.rotationAngle = 0;
+    this.flipH = false;
+    this.panX = 0;
+    this.panY = 0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let initialPinchDist = 0;
+    let initialZoom = 1;
+
+    // Loading spinner handling
+    if (img && spinner) {
+      if (img.complete) {
+        spinner.style.display = 'none';
+      } else {
+        img.onload = () => {
+          spinner.style.opacity = '0';
+          setTimeout(() => { spinner.style.display = 'none'; }, 200);
+        };
+        img.onerror = () => {
+          spinner.style.display = 'none';
+        };
+      }
+    }
+
+    const updateTransform = (animate = false) => {
+      if (!img) return;
+      img.style.transition = animate ? 'transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
+      const scaleX = (this.flipH ? -1 : 1) * this.zoomLevel;
+      const scaleY = this.zoomLevel;
+      img.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0) scale(${scaleX}, ${scaleY}) rotate(${this.rotationAngle}deg)`;
+
+      if (zoomBadge) {
+        zoomBadge.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+      }
+
+      if (viewport) {
+        if (this.zoomLevel > 1 || this.panX !== 0 || this.panY !== 0) {
+          viewport.classList.add('can-pan');
+          viewport.style.cursor = isDragging ? 'grabbing' : 'grab';
+        } else {
+          viewport.classList.remove('can-pan');
+          viewport.style.cursor = 'default';
+        }
       }
     };
 
+    const resetTransform = () => {
+      this.zoomLevel = 1;
+      this.rotationAngle = 0;
+      this.flipH = false;
+      this.panX = 0;
+      this.panY = 0;
+      updateTransform(true);
+    };
+
+    // Zoom In (+)
     if (zoomIn) {
-      zoomIn.onclick = () => {
-        this.zoomLevel = Math.min(4, this.zoomLevel + 0.25);
-        updateTransform();
+      zoomIn.onclick = (e) => {
+        e.stopPropagation();
+        this.zoomLevel = Math.min(5.0, Number((this.zoomLevel + 0.25).toFixed(2)));
+        updateTransform(true);
       };
     }
+
+    // Zoom Out (-)
     if (zoomOut) {
-      zoomOut.onclick = () => {
-        this.zoomLevel = Math.max(0.5, this.zoomLevel - 0.25);
-        updateTransform();
+      zoomOut.onclick = (e) => {
+        e.stopPropagation();
+        this.zoomLevel = Math.max(0.2, Number((this.zoomLevel - 0.25).toFixed(2)));
+        if (this.zoomLevel <= 1) {
+          this.panX = 0;
+          this.panY = 0;
+        }
+        updateTransform(true);
       };
     }
-    if (rotate) {
-      rotate.onclick = () => {
-        this.rotationAngle = (this.rotationAngle + 90) % 360;
-        updateTransform();
+
+    // Zoom Badge Click -> Toggles 100% / Fit
+    if (zoomBadge) {
+      zoomBadge.onclick = (e) => {
+        e.stopPropagation();
+        if (this.zoomLevel !== 1 || this.panX !== 0 || this.panY !== 0) {
+          this.zoomLevel = 1;
+          this.panX = 0;
+          this.panY = 0;
+        } else {
+          this.zoomLevel = 2;
+        }
+        updateTransform(true);
       };
     }
-    if (reset) {
-      reset.onclick = () => {
+
+    // Fit to Screen
+    if (fitScreen) {
+      fitScreen.onclick = (e) => {
+        e.stopPropagation();
         this.zoomLevel = 1;
-        this.rotationAngle = 0;
-        updateTransform();
+        this.panX = 0;
+        this.panY = 0;
+        updateTransform(true);
       };
     }
+
+    // 1:1 Actual Size
+    if (actualSize) {
+      actualSize.onclick = (e) => {
+        e.stopPropagation();
+        if (img && img.naturalWidth && img.clientWidth) {
+          this.zoomLevel = Math.min(5.0, Math.max(0.2, Number((img.naturalWidth / img.clientWidth).toFixed(2))));
+        } else {
+          this.zoomLevel = 1;
+        }
+        this.panX = 0;
+        this.panY = 0;
+        updateTransform(true);
+      };
+    }
+
+    // Rotate 90° Clockwise
+    if (rotate) {
+      rotate.onclick = (e) => {
+        e.stopPropagation();
+        this.rotationAngle = (this.rotationAngle + 90) % 360;
+        updateTransform(true);
+      };
+    }
+
+    // Flip Horizontal
+    if (flip) {
+      flip.onclick = (e) => {
+        e.stopPropagation();
+        this.flipH = !this.flipH;
+        updateTransform(true);
+      };
+    }
+
+    // Reset All
+    if (reset) {
+      reset.onclick = (e) => {
+        e.stopPropagation();
+        resetTransform();
+      };
+    }
+
+    // Mouse Drag & Pan on Viewport / Image
+    if (viewport) {
+      const onMouseDown = (e) => {
+        // Only primary mouse button
+        if (e.button !== 0) return;
+        isDragging = true;
+        startX = e.clientX - this.panX;
+        startY = e.clientY - this.panY;
+        viewport.style.cursor = 'grabbing';
+      };
+
+      const onMouseMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        this.panX = e.clientX - startX;
+        this.panY = e.clientY - startY;
+        updateTransform(false);
+      };
+
+      const onMouseUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (viewport) {
+          viewport.style.cursor = (this.zoomLevel > 1 || this.panX !== 0 || this.panY !== 0) ? 'grab' : 'default';
+        }
+      };
+
+      viewport.addEventListener('mousedown', onMouseDown);
+      this._addListener(window, 'mousemove', onMouseMove);
+      this._addListener(window, 'mouseup', onMouseUp);
+
+      // Smooth Mouse Wheel Zoom
+      const onWheel = (e) => {
+        e.preventDefault();
+        const delta = e.deltaY;
+        const factor = delta < 0 ? 1.15 : 0.88;
+        const newZoom = Math.min(5.0, Math.max(0.2, Number((this.zoomLevel * factor).toFixed(2))));
+        
+        if (newZoom <= 0.3) {
+          this.zoomLevel = 0.3;
+          this.panX = 0;
+          this.panY = 0;
+        } else {
+          this.zoomLevel = newZoom;
+        }
+        updateTransform(true);
+      };
+      viewport.addEventListener('wheel', onWheel, { passive: false });
+      this._activeListeners.push({ target: viewport, type: 'wheel', handler: onWheel });
+
+      // Double Click / Tap to Toggle Zoom
+      viewport.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        if (this.zoomLevel > 1.05 || this.panX !== 0 || this.panY !== 0) {
+          this.zoomLevel = 1;
+          this.panX = 0;
+          this.panY = 0;
+        } else {
+          this.zoomLevel = 2.0;
+        }
+        updateTransform(true);
+      });
+
+      // Touch Gestures: Single finger drag pan & Two-finger pinch zoom
+      const getTouchDist = (touches) => {
+        return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+      };
+
+      const onTouchStart = (e) => {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX - this.panX;
+          startY = e.touches[0].clientY - this.panY;
+        } else if (e.touches.length === 2) {
+          isDragging = false;
+          initialPinchDist = getTouchDist(e.touches);
+          initialZoom = this.zoomLevel;
+        }
+      };
+
+      const onTouchMove = (e) => {
+        if (e.touches.length === 1 && isDragging) {
+          e.preventDefault();
+          this.panX = e.touches[0].clientX - startX;
+          this.panY = e.touches[0].clientY - startY;
+          updateTransform(false);
+        } else if (e.touches.length === 2 && initialPinchDist > 0) {
+          e.preventDefault();
+          const dist = getTouchDist(e.touches);
+          const scaleFactor = dist / initialPinchDist;
+          this.zoomLevel = Math.min(5.0, Math.max(0.2, Number((initialZoom * scaleFactor).toFixed(2))));
+          updateTransform(false);
+        }
+      };
+
+      const onTouchEnd = (e) => {
+        if (e.touches.length === 0) {
+          isDragging = false;
+          initialPinchDist = 0;
+        }
+      };
+
+      viewport.addEventListener('touchstart', onTouchStart, { passive: false });
+      viewport.addEventListener('touchmove', onTouchMove, { passive: false });
+      viewport.addEventListener('touchend', onTouchEnd);
+      this._activeListeners.push({ target: viewport, type: 'touchstart', handler: onTouchStart });
+      this._activeListeners.push({ target: viewport, type: 'touchmove', handler: onTouchMove });
+      this._activeListeners.push({ target: viewport, type: 'touchend', handler: onTouchEnd });
+    }
+
+    // Initial transform setup
+    updateTransform(false);
   }
 };
 
-// Global Keyboard Shortcuts (YouTube standard: Space/K, Left/Right/J/L, F, M, Up/Down)
+// Global Keyboard Shortcuts (YouTube standard + Enhanced Image Viewer navigation)
 window.addEventListener('keydown', (e) => {
   const overlay = document.getElementById('preview-overlay');
   if (!overlay || overlay.style.display !== 'flex') return;
 
   const vid = document.getElementById('main-video');
   const aud = document.getElementById('main-audio');
+  const img = document.getElementById('lightbox-img');
   const target = vid || aud;
 
   // Don't intercept keyboard shortcuts if focusing input or textarea
@@ -1003,12 +1312,49 @@ window.addEventListener('keydown', (e) => {
   } else if ((e.key === 'ArrowRight' || e.key.toLowerCase() === 'l') && target) {
     e.preventDefault();
     target.currentTime = Math.min(target.duration || 0, target.currentTime + 10);
+  } else if (img && (e.key === '+' || e.key === '=')) {
+    e.preventDefault();
+    const zoomInBtn = document.getElementById('img-zoom-in');
+    if (zoomInBtn) zoomInBtn.click();
+  } else if (img && (e.key === '-' || e.key === '_')) {
+    e.preventDefault();
+    const zoomOutBtn = document.getElementById('img-zoom-out');
+    if (zoomOutBtn) zoomOutBtn.click();
+  } else if (img && e.key === '0') {
+    e.preventDefault();
+    const resetBtn = document.getElementById('img-reset');
+    if (resetBtn) resetBtn.click();
+  } else if (img && (e.key.toLowerCase() === 'r')) {
+    e.preventDefault();
+    const rotateBtn = document.getElementById('img-rotate');
+    if (rotateBtn) rotateBtn.click();
   } else if (e.key === 'ArrowLeft' && !target) {
     e.preventDefault();
-    Preview.navigate('prev');
+    if (img && Preview.zoomLevel > 1) {
+      // Pan left when zoomed
+      Preview.panX += 60;
+      const zoomBadge = document.getElementById('img-zoom-badge');
+      if (img) img.style.transform = `translate3d(${Preview.panX}px, ${Preview.panY}px, 0) scale(${(Preview.flipH ? -1 : 1) * Preview.zoomLevel}, ${Preview.zoomLevel}) rotate(${Preview.rotationAngle}deg)`;
+    } else {
+      Preview.navigate('prev');
+    }
   } else if (e.key === 'ArrowRight' && !target) {
     e.preventDefault();
-    Preview.navigate('next');
+    if (img && Preview.zoomLevel > 1) {
+      // Pan right when zoomed
+      Preview.panX -= 60;
+      if (img) img.style.transform = `translate3d(${Preview.panX}px, ${Preview.panY}px, 0) scale(${(Preview.flipH ? -1 : 1) * Preview.zoomLevel}, ${Preview.zoomLevel}) rotate(${Preview.rotationAngle}deg)`;
+    } else {
+      Preview.navigate('next');
+    }
+  } else if (e.key === 'ArrowUp' && img && Preview.zoomLevel > 1) {
+    e.preventDefault();
+    Preview.panY += 60;
+    if (img) img.style.transform = `translate3d(${Preview.panX}px, ${Preview.panY}px, 0) scale(${(Preview.flipH ? -1 : 1) * Preview.zoomLevel}, ${Preview.zoomLevel}) rotate(${Preview.rotationAngle}deg)`;
+  } else if (e.key === 'ArrowDown' && img && Preview.zoomLevel > 1) {
+    e.preventDefault();
+    Preview.panY -= 60;
+    if (img) img.style.transform = `translate3d(${Preview.panX}px, ${Preview.panY}px, 0) scale(${(Preview.flipH ? -1 : 1) * Preview.zoomLevel}, ${Preview.zoomLevel}) rotate(${Preview.rotationAngle}deg)`;
   } else if (e.key.toLowerCase() === 'm' && target) {
     e.preventDefault();
     target.muted = !target.muted;

@@ -771,10 +771,17 @@
         img.alt = data.name;
         previewBody.appendChild(img);
       } else if (mime === 'application/pdf' || ext === 'pdf') {
-        const iframe = document.createElement('iframe');
-        iframe.className = 'preview-media-pdf';
-        iframe.src = streamUrl;
-        previewBody.appendChild(iframe);
+        previewBody.style.display = 'flex';
+        previewBody.style.flexDirection = 'column';
+        previewBody.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:rgba(0,0,0,0.2); border-bottom:1px solid var(--border); font-size:13px;">
+            <span style="font-weight:600; color:var(--text);">${data.name}</span>
+            <a href="${streamUrl}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:500; display:inline-flex; align-items:center; gap:4px;">
+              <span>Open in Native Viewer</span> &nearr;
+            </a>
+          </div>
+          <iframe src="${streamUrl}#view=FitH&toolbar=1" class="preview-media-pdf" style="height:620px; width:100%; border:none;"></iframe>
+        `;
       } else if (isCodeOrText) {
         previewBody.style.background = 'var(--card-bg)';
         const codeWrap = document.createElement('div');
