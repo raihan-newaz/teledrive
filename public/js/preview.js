@@ -355,7 +355,7 @@ const Preview = {
               <div class="pdf-spinner"></div>
               <span>Rendering PDF Document...</span>
             </div>
-            <iframe src="${streamUrl}#view=Fit&toolbar=1" class="pdf-iframe" id="pdf-iframe" title="${file.name}"></iframe>
+            <iframe src="${streamUrl}#page=1&zoom=100&toolbar=1" class="pdf-iframe" id="pdf-iframe" title="${file.name}"></iframe>
           </div>
         </div>
       `;
