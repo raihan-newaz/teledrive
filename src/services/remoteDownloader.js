@@ -268,7 +268,15 @@ class RemoteDownloader {
 
     // Fetch user encryption key and file prefix
     const user = db.getUserById(userId);
-    const userKey = user && user.encryption_key ? user.encryption_key : (process.env.ENCRYPTION_KEY || 'default-encryption-key');
+    const masterKey = process.env.ENCRYPTION_KEY || 'default-encryption-key';
+    let userKey = jobRecord.user_key || masterKey;
+    if (user && user.encryption_key) {
+      try {
+        userKey = cryptoModule.unwrapUserKey(user.encryption_key, masterKey);
+      } catch (e) {
+        userKey = masterKey;
+      }
+    }
     const userPrefix = user && user.file_prefix ? user.file_prefix : '';
 
     const abortController = new AbortController();
